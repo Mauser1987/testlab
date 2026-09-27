@@ -1,0 +1,33 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TestLab{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'testlab/base.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}">TestLab</a>
+    {% if user.is_authenticated %}
+      <nav><a href="{% url 'projects:list' %}">Projects</a></nav>
+      <div class="user">
+        <span>{{ user.get_full_name|default:user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="link">Log out</button>
+        </form>
+      </div>
+    {% endif %}
+  </header>
+  {% block breadcrumbs %}{% endblock %}
+  <main>
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

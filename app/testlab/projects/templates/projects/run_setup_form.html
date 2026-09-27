@@ -1,0 +1,112 @@
+{% comment %}Shared run setup form (M1 spec §6). Expects `editor` (RunSetupEditor).{% endcomment %}
+{% if editor.show_errors %}{{ editor.form.non_field_errors }}{% endif %}
+
+<section class="setup-section">
+  <h2>1. Test Run Description</h2>
+  {{ editor.form.run_description }}
+  {% if editor.show_errors %}{{ editor.form.run_description.errors }}{% endif %}
+</section>
+
+<section class="setup-section">
+  <h2>2. Seal Information</h2>
+  <div class="panels">
+    <fieldset class="panel">
+      <legend>Seal under test</legend>
+      <div class="field">
+        <label>Seal arrangement</label>
+        {{ editor.form.arrangement }}
+        {% if editor.show_errors %}{{ editor.form.arrangement.errors }}{% endif %}
+      </div>
+      <div class="field">
+        {{ editor.form.reference_drawing.label_tag }} {{ editor.form.reference_drawing }}
+        {% if editor.show_errors %}{{ editor.form.reference_drawing.errors }}{% endif %}
+      </div>
+      <table class="grid">
+        <thead><tr><th></th>{% for heading, form in editor.seal_under_test_columns %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for label, fields in editor.position_rows %}
+            <tr><th>{{ label }}</th>{% for field in fields %}<td>{{ field }}{% if editor.show_errors %}{{ field.errors }}{% endif %}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </fieldset>
+
+    <fieldset class="panel">
+      <legend>Plug Seal (process-side test equipment)</legend>
+      <p class="hint">Optional simulation/test equipment on the same shaft; not part of the seal arrangement.</p>
+      <div class="field">{{ editor.form.plug_seal_present }} {{ editor.form.plug_seal_present.label_tag }}</div>
+      {% if editor.plug_seal_form %}
+        <table class="grid">
+          <tbody>
+            {% for field in editor.plug_seal_form %}
+              <tr><th>{{ field.label }}</th><td>{{ field }}{% if editor.show_errors %}{{ field.errors }}{% endif %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </fieldset>
+  </div>
+  {% for form in editor.hidden_position_forms %}{% for field in form %}{{ field.as_hidden }}{% endfor %}{% endfor %}
+</section>
+
+<section class="setup-section">
+  <h2>3. Test Conditions</h2>
+  <fieldset class="panel">
+    <legend>Common to the Test Run</legend>
+    <p class="hint">Speed applies to the whole shaft, including the Plug Seal.</p>
+    <span class="inline-field">{{ editor.form.test_unit.label_tag }} {{ editor.form.test_unit }}</span>
+    <span class="inline-field">{{ editor.form.duration.label_tag }} {{ editor.form.duration }} hours</span>
+    <span class="inline-field">{{ editor.form.speed.label_tag }} {{ editor.form.speed }} rpm</span>
+    {% if editor.show_errors %}{{ editor.form.test_unit.errors }}{{ editor.form.duration.errors }}{{ editor.form.speed.errors }}{% endif %}
+  </fieldset>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th></th>
+        {% for heading, fields in editor.condition_columns %}
+          <th>{{ heading }}{% if forloop.counter == 2 and editor.arrangement == "single" %} <span class="hint">(optional, e.g. Plan 23)</span>{% endif %}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for label, fields in editor.condition_rows %}
+        <tr><th>{{ label }}</th>{% for field in fields %}<td>{{ field }}{% if editor.show_errors %}{{ field.errors }}{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% for field in editor.hidden_condition_fields %}{{ field.as_hidden }}{% endfor %}
+</section>
+
+<section class="setup-section">
+  <h2>4. Parameters to log</h2>
+  <div class="parameter-groups">
+    {% for title, items in editor.parameter_groups %}
+      <fieldset class="panel">
+        <legend>{{ title }}</legend>
+        {% for code, label, checked in items %}
+          <label class="check"><input type="checkbox" name="monitored_parameters" value="{{ code }}"{% if checked %} checked{% endif %}> {{ label }}</label>
+        {% endfor %}
+      </fieldset>
+    {% endfor %}
+  </div>
+  {% for code in editor.hidden_parameters %}<input type="hidden" name="monitored_parameters" value="{{ code }}">{% endfor %}
+  {% if editor.show_errors %}{{ editor.form.monitored_parameters.errors }}{% endif %}
+</section>
+
+{% with discards=editor.discards %}
+  {% if discards %}
+    <div class="discard{% if editor.confirmation_required %} required{% endif %}">
+      <p>Saving this configuration will discard:</p>
+      <ul>{% for item in discards %}<li>{{ item }}</li>{% endfor %}</ul>
+      <label class="check"><input type="checkbox" name="confirm_discard" value="1"> Discard this data</label>
+      {% if editor.confirmation_required %}<p class="error">Tick “Discard this data” to save, or change the configuration back.</p>{% endif %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<script>
+  // Re-render the form for a new arrangement / Plug Seal choice (same as pressing Update).
+  document.querySelectorAll("[data-reconfigure]").forEach(function (input) {
+    input.addEventListener("change", function () { document.getElementById("update-button").click(); });
+  });
+</script>

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Projects · TestLab{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <h1>Projects</h1>
+    <a class="button" href="{% url 'projects:create' %}">New project</a>
+  </div>
+  <form method="get" class="search">
+    <input type="search" name="q" value="{{ query }}" placeholder="Project no., description or customer" size="40">
+    <button type="submit">Search</button>
+    {% if query %}<a href="{% url 'projects:list' %}">Clear</a>{% endif %}
+  </form>
+  {% if projects %}
+    <table class="list">
+      <thead><tr><th>Project no.</th><th>Description</th><th>Customer</th><th></th></tr></thead>
+      <tbody>
+        {% for project in projects %}
+          <tr>
+            <td><a href="{% url 'projects:edit' project.pk %}">{{ project.project_no }}</a></td>
+            <td>{{ project.description }}</td>
+            <td>{{ project.customer }}</td>
+            <td><a href="{% url 'projects:defaults' project.pk %}">Defaults</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% elif query %}
+    <p>No projects match “{{ query }}”.</p>
+  {% else %}
+    <p>No projects yet.</p>
+  {% endif %}
+{% endblock %}

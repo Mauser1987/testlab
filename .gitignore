@@ -1,0 +1,8 @@
+# Local development data (SQLite database, file storage)
+data/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+staticfiles/
+*.egg-info/

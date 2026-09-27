@@ -1,0 +1,114 @@
+"""TestLab settings, driven by TESTLAB_* environment variables.
+
+Development defaults: DEBUG on, SQLite file in <repo>/data/.
+Production: set TESTLAB_DEBUG=0, TESTLAB_SECRET_KEY, TESTLAB_ALLOWED_HOSTS
+and TESTLAB_DATABASE_URL (PostgreSQL). SQLite is for development/tests only.
+"""
+
+import os
+from pathlib import Path
+
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
+
+APP_DIR = Path(__file__).resolve().parent.parent
+REPO_DIR = APP_DIR.parent
+
+
+def env_bool(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def env_list(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEBUG = env_bool("TESTLAB_DEBUG", True)
+
+SECRET_KEY = os.environ.get("TESTLAB_SECRET_KEY", "")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured("TESTLAB_SECRET_KEY must be set when TESTLAB_DEBUG is off.")
+    SECRET_KEY = "dev-only-insecure-key"
+
+ALLOWED_HOSTS = env_list("TESTLAB_ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
+
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "testlab",
+    "testlab.projects",
+]
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Every page requires login unless the view is marked login_not_required.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "config.urls"
+WSGI_APPLICATION = "config.wsgi.application"
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ],
+        },
+    },
+]
+
+DATA_DIR = Path(os.environ.get("TESTLAB_DATA_DIR", REPO_DIR / "data"))
+
+DATABASES = {
+    "default": dj_database_url.parse(
+        os.environ.get("TESTLAB_DATABASE_URL", f"sqlite:///{DATA_DIR / 'testlab.sqlite3'}"),
+        conn_max_age=60,
+    )
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "home"
+LOGOUT_REDIRECT_URL = "login"
+
+LANGUAGE_CODE = "en-gb"
+TIME_ZONE = os.environ.get("TESTLAB_TIME_ZONE", "Europe/Amsterdam")
+USE_I18N = False
+USE_TZ = True
+
+STATIC_URL = "static/"
+STATIC_ROOT = os.environ.get("TESTLAB_STATIC_ROOT", REPO_DIR / "staticfiles")
+
+# Usual project-number format. A mismatch only gives a warning (M1 spec V1).
+TESTLAB_PROJECT_NO_PATTERN = os.environ.get("TESTLAB_PROJECT_NO_PATTERN", r"^\d{4}RSD\d{2}TL$")
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

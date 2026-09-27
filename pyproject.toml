@@ -1,0 +1,24 @@
+[project]
+name = "testlab"
+version = "0.1.0"
+description = "TestLab — Test Lifecycle Management for the wet-seal test laboratory"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<5.3",
+    "dj-database-url>=2.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-django>=4.9"]
+postgres = ["psycopg[binary]>=3.2"]
+
+[tool.setuptools]
+# Application, not a library: the install only pulls in dependencies.
+# The code runs from app/ (manage.py, pytest pythonpath).
+packages = []
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["app"]
+testpaths = ["app"]
+python_files = ["test_*.py"]

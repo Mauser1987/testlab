@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ project.project_no }} defaults · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> ›
+    <a href="{% url 'projects:edit' project.pk %}">{{ project.project_no }}</a> › Project defaults
+  </nav>
+{% endblock %}
+{% block content %}
+  <h1>Project defaults — {{ project.project_no }}</h1>
+  <p class="hint">New TCNs created from project defaults start with these values. Changing them never alters an existing TCN.</p>
+  <form method="post" class="setup">
+    {% csrf_token %}
+    {% include "projects/run_setup_form.html" %}
+    <div class="actions">
+      <button type="submit" name="action" value="save">Save</button>
+      <button type="submit" name="action" value="update" id="update-button" formnovalidate>Update</button>
+      <a href="{% url 'projects:list' %}">Cancel</a>
+    </div>
+  </form>
+{% endblock %}
