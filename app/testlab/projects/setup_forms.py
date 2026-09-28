@@ -1,5 +1,5 @@
-"""Shared run setup form (M1 spec §6): project defaults (S5) and, from
-commit 6, TCN drafts (S7).
+"""Shared run setup form (M1 spec §6): project defaults (S5) and TCN
+drafts (S7).
 
 All four seal positions and the Plug Seal conditions are always part of the
 posted form; the ones that do not apply to the chosen configuration are kept

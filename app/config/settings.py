@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "testlab",
     "testlab.projects",
+    "testlab.tcn",
 ]
 
 MIDDLEWARE = [
@@ -107,6 +108,20 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.environ.get("TESTLAB_STATIC_ROOT", REPO_DIR / "staticfiles")
+
+# Server-side file storage: issued documents under projects/<project_no>/…
+# (M1 spec §9.4). Development default inside the git-ignored data directory.
+TESTLAB_FILE_ROOT = Path(os.environ.get("TESTLAB_FILE_ROOT", DATA_DIR / "files"))
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": TESTLAB_FILE_ROOT},
+    },
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
+# Word templates of generated documents (M1 spec §9.1).
+TESTLAB_TEMPLATE_DIR = Path(os.environ.get("TESTLAB_TEMPLATE_DIR", APP_DIR / "doc_templates"))
 
 # Usual project-number format. A mismatch only gives a warning (M1 spec V1).
 TESTLAB_PROJECT_NO_PATTERN = os.environ.get("TESTLAB_PROJECT_NO_PATTERN", r"^\d{4}RSD\d{2}TL$")

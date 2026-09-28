@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "django>=5.2,<5.3",
     "dj-database-url>=2.1",
+    "docxtpl>=0.20",
 ]
 
 [project.optional-dependencies]

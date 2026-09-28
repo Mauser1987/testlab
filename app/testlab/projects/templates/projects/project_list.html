@@ -12,13 +12,15 @@
   </form>
   {% if projects %}
     <table class="list">
-      <thead><tr><th>Project no.</th><th>Description</th><th>Customer</th><th></th></tr></thead>
+      <thead><tr><th>Project no.</th><th>Description</th><th>Customer</th><th>No. of TCNs</th><th>Last TCN created</th><th></th></tr></thead>
       <tbody>
         {% for project in projects %}
           <tr>
-            <td><a href="{% url 'projects:edit' project.pk %}">{{ project.project_no }}</a></td>
+            <td><a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a></td>
             <td>{{ project.description }}</td>
             <td>{{ project.customer }}</td>
+            <td>{{ project.tcn_count }}</td>
+            <td>{{ project.last_tcn_at|date:"d-M-Y" }}</td>
             <td><a href="{% url 'projects:defaults' project.pk %}">Defaults</a></td>
           </tr>
         {% endfor %}

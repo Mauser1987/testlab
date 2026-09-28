@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> ›
+    <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> › {{ tcn }}
+  </nav>
+{% endblock %}
+{% block content %}
+  <div class="tcn-head">
+    <h1>{{ tcn }} <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display|upper }}</span></h1>
+  </div>
+
+  <div class="banner banner-{{ tcn.status }}">
+    {% if tcn.status == "issued" %}
+      Issued {{ tcn.issued_at|date:"d-M-Y H:i" }} by {{ tcn.issued_by.get_full_name|default:tcn.issued_by.username }}.
+      An issued TCN cannot be changed; changes require a new revision.
+    {% elif tcn.status == "superseded" %}
+      Superseded{% if superseded_by %} by <a href="{% url 'tcn:edit' superseded_by.pk %}">{{ superseded_by }}</a>{% endif %}.
+      Issued {{ tcn.issued_at|date:"d-M-Y H:i" }} by {{ tcn.issued_by.get_full_name|default:tcn.issued_by.username }}.
+    {% elif tcn.status == "cancelled" %}
+      Cancelled {{ tcn.cancelled_at|date:"d-M-Y H:i" }}: {{ tcn.cancel_reason }}
+    {% endif %}
+  </div>
+
+  <div class="actions">
+    {% if tcn.issued_document %}<a class="button" href="{% url 'tcn:document' tcn.pk %}">Download issued DOCX</a>{% endif %}
+    <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
+  </div>
+
+  {% if snapshot %}
+    <section class="setup-section">
+      <h2>Issued content</h2>
+      <p class="hint">As printed in the issued document.</p>
+      <table class="list summary">
+        <tbody>
+          <tr><th>Project No. / Run/TCN No.</th><td>{{ snapshot.project_no }} / {{ snapshot.tcn_no }}</td></tr>
+          <tr><th>Project Description</th><td>{{ snapshot.project_description }}</td></tr>
+          <tr><th>Test Run Description</th>
+            <td>{% for line in snapshot.run_description_lines %}<div class="rd-level-{{ line.level }}">{% if line.text %}{{ line.text }}{% else %}&nbsp;{% endif %}</div>{% endfor %}</td></tr>
+          <tr><th>Reference Drawing</th><td>{{ snapshot.reference_drawing }}</td></tr>
+          <tr><th>Test Unit / Duration / Speed</th><td>{{ snapshot.test_unit }} / {{ snapshot.duration }} / {{ snapshot.speed }}</td></tr>
+          <tr><th>Prepared by / Created</th><td>{{ snapshot.prepared_by }} / {{ snapshot.created_date }}</td></tr>
+        </tbody>
+      </table>
+      <h3>Seal Information</h3>
+      <table class="list">
+        <thead><tr><th></th>{% for col in snapshot.seal_columns %}<th>{{ col.heading }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          <tr><th>Seal Type and Size</th>{% for col in snapshot.seal_columns %}<td>{{ col.seal_type_size }}</td>{% endfor %}</tr>
+          <tr><th>Stationary Seal Face</th>{% for col in snapshot.seal_columns %}<td>{{ col.stationary_face }}</td>{% endfor %}</tr>
+          <tr><th>Rotating Seal Face</th>{% for col in snapshot.seal_columns %}<td>{{ col.rotating_face }}</td>{% endfor %}</tr>
+          <tr><th>Spring(s)</th>{% for col in snapshot.seal_columns %}<td>{{ col.springs }}</td>{% endfor %}</tr>
+        </tbody>
+      </table>
+      <h3>Test Conditions</h3>
+      <table class="list">
+        <thead><tr><th></th>{% for col in snapshot.condition_columns %}<th>{{ col.heading }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          <tr><th>Test Medium</th>{% for col in snapshot.condition_columns %}<td>{{ col.medium }}</td>{% endfor %}</tr>
+          <tr><th>Pressure</th>{% for col in snapshot.condition_columns %}<td>{{ col.pressure }}</td>{% endfor %}</tr>
+          <tr><th>Inlet Temperature</th>{% for col in snapshot.condition_columns %}<td>{{ col.inlet_temperature }}</td>{% endfor %}</tr>
+          <tr><th>Flow</th>{% for col in snapshot.condition_columns %}<td>{{ col.flow }}</td>{% endfor %}</tr>
+        </tbody>
+      </table>
+    </section>
+  {% else %}
+    <p class="hint">No issued document is stored for this TCN.</p>
+  {% endif %}
+
+  <section class="setup-section">
+    <h2>Revisions of Run {{ tcn.test_run.display_no }}</h2>
+    <table class="list">
+      <thead><tr><th>Rev</th><th>Status</th><th>Created</th><th>Issued</th><th>Issued by</th><th>Reason</th><th></th></tr></thead>
+      <tbody>
+        {% for revision in revisions %}
+          <tr{% if revision.pk == tcn.pk %} class="current"{% endif %}>
+            <td><a href="{% url 'tcn:edit' revision.pk %}">{{ revision.revision }}</a></td>
+            <td><span class="status status-{{ revision.status }}">{{ revision.get_status_display }}</span></td>
+            <td>{{ revision.created_date|date:"d-M-Y" }}</td>
+            <td>{{ revision.issued_at|date:"d-M-Y H:i" }}</td>
+            <td>{% if revision.issued_by %}{{ revision.issued_by.get_full_name|default:revision.issued_by.username }}{% endif %}</td>
+            <td>{{ revision.revision_reason }}{% if revision.cancel_reason %} Cancelled: {{ revision.cancel_reason }}{% endif %}</td>
+            <td>{% if revision.issued_document %}<a href="{% url 'tcn:document' revision.pk %}">Download</a>{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

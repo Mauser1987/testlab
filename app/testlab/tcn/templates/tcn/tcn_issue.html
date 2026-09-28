@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Issue {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> ›
+    <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+    <a href="{% url 'tcn:edit' tcn.pk %}">{{ tcn }}</a> › Issue
+  </nav>
+{% endblock %}
+{% block content %}
+  <h1>Issue {{ tcn }}</h1>
+
+  {% if conflict %}<p class="error conflict">{{ conflict }}</p>{% endif %}
+
+  {% if errors %}
+    <div class="issue-errors">
+      <p><strong>{{ tcn }} cannot be issued yet:</strong></p>
+      <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+      <p><a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a></p>
+    </div>
+  {% else %}
+    <table class="list summary">
+      <tbody>
+        <tr><th>Project No.</th><td>{{ project.project_no }}</td></tr>
+        <tr><th>Run/TCN No.</th><td>{{ tcn.tcn_no }}</td></tr>
+        <tr><th>Project description</th><td>{{ tcn.project_description }}</td></tr>
+        <tr><th>Source</th><td>{% if tcn.source_tcn %}{{ tcn.get_source_kind_display }}: {{ tcn.source_tcn }}{% else %}Project defaults{% endif %}</td></tr>
+        <tr><th>Prepared by</th><td>{{ tcn.prepared_by }}</td></tr>
+        <tr><th>Created</th><td>{{ tcn.created_date|date:"d-M-Y" }}</td></tr>
+        {% if tcn.revision %}<tr><th>Reason for revision</th><td class="value">{{ tcn.revision_reason }}</td></tr>{% endif %}
+        <tr><th>Issued by</th><td>{{ user.get_full_name|default:user.username }} (you), now</td></tr>
+      </tbody>
+    </table>
+
+    {% include "tcn/_changes.html" %}
+
+    <p class="notice">An issued TCN cannot be changed; changes require a new revision.
+      The saved draft is issued exactly as shown in <a href="{% url 'tcn:preview' tcn.pk %}">Preview DOCX</a>, without the draft marking.</p>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="row_version" value="{{ tcn.row_version }}">
+      <div class="actions">
+        <button type="submit">Confirm issue</button>
+        <a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
+      </div>
+    </form>
+  {% endif %}
+{% endblock %}

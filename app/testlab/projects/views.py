@@ -1,11 +1,14 @@
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Max, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse
 from django.views import View
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
+from testlab.tcn.models import TcnRevision
+
+from .arrangements import seal_support_label
 from .forms import ProjectForm
 from .models import Project, project_no_format_warning
 from .setup_forms import RunSetupEditor
@@ -16,7 +19,13 @@ class ProjectListView(ListView):
     context_object_name = "projects"
 
     def get_queryset(self):
-        projects = super().get_queryset()
+        # Explicit order: Meta.ordering is not applied to aggregated querysets.
+        projects = (
+            super()
+            .get_queryset()
+            .annotate(tcn_count=Count("test_runs"), last_tcn_at=Max("test_runs__created_at"))
+            .order_by("-project_no")
+        )
         self.query = self.request.GET.get("q", "").strip()
         if self.query:
             projects = projects.filter(
@@ -30,11 +39,37 @@ class ProjectListView(ListView):
         return super().get_context_data(query=self.query, **kwargs)
 
 
+class ProjectDetailView(DetailView):
+    """S4: project identity, defaults summary and TCN register."""
+
+    model = Project
+    context_object_name = "project"
+
+    def get_context_data(self, **kwargs):
+        runs = self.object.test_runs.prefetch_related(
+            Prefetch("revisions", queryset=TcnRevision.objects.select_related("setup"))
+        )
+        register = []
+        for run in runs:
+            current = run.current_revision()
+            draft = next((r for r in run.revisions.all() if r.status == TcnRevision.Status.DRAFT), None)
+            register.append(
+                {
+                    "tcn": current,
+                    "setup": current.setup,
+                    "seal_support_label": seal_support_label(current.setup.arrangement),
+                    "pending_draft": draft if draft != current else None,
+                }
+            )
+        return super().get_context_data(register=register, **kwargs)
+
+
 class ProjectFormMixin:
     model = Project
     form_class = ProjectForm
-    # Until the project page exists (commit 6), saving returns to the project list.
-    success_url = reverse_lazy("projects:list")
+
+    def get_success_url(self):
+        return reverse("projects:detail", args=[self.object.pk])
 
     def form_valid(self, form):
         if form.instance.pk is None:

@@ -5,7 +5,23 @@ from django.urls import reverse
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/", "/projects/", "/projects/new/", "/projects/1/edit/", "/projects/1/defaults/", "/accounts/password_change/"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/",
+        "/projects/",
+        "/projects/new/",
+        "/projects/1/",
+        "/projects/1/edit/",
+        "/projects/1/defaults/",
+        "/projects/1/tcn/new/",
+        "/tcn/1/",
+        "/tcn/1/preview/",
+        "/tcn/1/issue/",
+        "/tcn/1/document/",
+        "/accounts/password_change/",
+    ],
+)
 def test_anonymous_request_redirects_to_login(client, path):
     response = client.get(path)
     assert response.status_code == 302

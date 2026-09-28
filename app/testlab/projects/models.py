@@ -65,13 +65,31 @@ class Project(models.Model):
     class Meta:
         ordering = ["-project_no"]
 
+    PROJECT_NO_LOCKED = "The project number cannot be changed: a TCN of this project has been issued."
+
     def __str__(self):
         return self.project_no
+
+    def project_no_locked(self):
+        """V2: locked once any TCN of the project has been issued, whatever its later status."""
+        return self.pk is not None and self.test_runs.filter(revisions__issued_at__isnull=False).exists()
+
+    def _project_no_changed(self):
+        stored = Project.objects.filter(pk=self.pk).values_list("project_no", flat=True).first()
+        return stored is not None and stored != normalize_project_no(self.project_no)
+
+    def clean(self):
+        super().clean()
+        if self._project_no_changed() and self.project_no_locked():
+            raise ValidationError({"project_no": self.PROJECT_NO_LOCKED})
 
     def save(self, *args, **kwargs):
         self.project_no = normalize_project_no(self.project_no)
         self.description = self.description.strip()
         self.customer = self.customer.strip()
+        # V2 enforced here too, not only in the form: issued TCNs carry this number.
+        if self.pk is not None and self._project_no_changed() and self.project_no_locked():
+            raise ValidationError({"project_no": self.PROJECT_NO_LOCKED})
         with transaction.atomic():
             if self.default_setup_id is None:
                 self.default_setup = RunSetup.create_with_positions()
@@ -85,10 +103,10 @@ def _text(verbose_name, max_length):
 class RunSetup(models.Model):
     """The copyable technical block of a Test Run (M1 spec §1.2).
 
-    Used as a project's defaults (Project.default_setup) and, from commit 5,
-    as each TCN revision's own copy. Holds the seal arrangement under test,
-    the optional Plug Seal, and the run conditions grouped by circuit
-    (see conditions.py).
+    Used as a project's defaults (Project.default_setup) and as each TCN
+    revision's own copy (TcnRevision.setup, made with clone()). Holds the
+    seal arrangement under test, the optional Plug Seal, and the run
+    conditions grouped by circuit (see conditions.py).
     """
 
     arrangement = models.CharField(
@@ -143,6 +161,24 @@ class RunSetup(models.Model):
             for role in setup.applicable_roles():
                 setup.positions.create(role=role)
         return setup
+
+    def clone(self):
+        """Deep copy of this block and its seal positions.
+
+        The copy shares nothing with the original, so a TCN revision holding
+        a clone of the project defaults (or of another TCN's setup) is not
+        affected by later edits of its source. Copies the stored record, not
+        unsaved (or stale) in-memory values.
+        """
+        with transaction.atomic():
+            stored = RunSetup.objects.get(pk=self.pk)
+            fields = {f.attname: getattr(stored, f.attname) for f in self._meta.concrete_fields if not f.primary_key}
+            clone = RunSetup.objects.create(**fields)
+            for position in stored.positions.all():
+                position.pk = None
+                position.setup = clone
+                position.save()
+        return clone
 
     def applicable_roles(self):
         return applicable_roles(self.arrangement, self.plug_seal_present)

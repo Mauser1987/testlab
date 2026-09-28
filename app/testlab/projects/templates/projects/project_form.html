@@ -3,7 +3,7 @@
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
-    {% if object %}{{ object.project_no }}{% else %}New project{% endif %}
+    {% if object %}<a href="{% url 'projects:detail' object.pk %}">{{ object.project_no }}</a> › Edit{% else %}New project{% endif %}
   </nav>
 {% endblock %}
 {% block content %}
@@ -21,6 +21,6 @@
       </div>
     {% endfor %}
     <button type="submit">Save</button>
-    <a href="{% url 'projects:list' %}">Cancel</a>
+    <a href="{% if object %}{% url 'projects:detail' object.pk %}{% else %}{% url 'projects:list' %}{% endif %}">Cancel</a>
   </form>
 {% endblock %}

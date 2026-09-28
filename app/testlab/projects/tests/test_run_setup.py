@@ -195,3 +195,21 @@ def test_seal_position_text_trimmed():
     position.refresh_from_db()
     assert position.seal_type_size == "UHTW 4.750"
     assert not position.is_empty()
+
+
+def test_clone_copies_stored_values_and_positions():
+    setup = RunSetup.create_with_positions(
+        arrangement=Arrangement.SINGLE, speed="2980", monitored_parameters=["test_leakage"]
+    )
+    setup.positions.update(seal_type_size="UHTW 4.750")
+    stale = RunSetup.objects.get(pk=setup.pk)
+    RunSetup.objects.filter(pk=setup.pk).update(speed="1500")
+    stale.test_unit = "unsaved"
+
+    clone = stale.clone()
+    assert clone.pk != setup.pk
+    assert (clone.arrangement, clone.speed, clone.test_unit) == (Arrangement.SINGLE, "1500", "")
+    assert clone.monitored_parameters == ["test_leakage"]
+    (position,) = clone.positions.all()
+    assert (position.role, position.seal_type_size) == ("test", "UHTW 4.750")
+    assert position.pk != setup.positions.get().pk

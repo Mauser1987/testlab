@@ -1,0 +1,42 @@
+Test Change Notice
+Project No.: 2026RSD03TL
+Run/TCN No.: 001
+Project Description:
+ADNOC BAB UHTW/UHTW 4.750/4.750
+Test Run Description:
+• Pre-test work required on stationary and rotating seal faces.
+- Waviness measurement on 1 location
+- Taper measurement on 2 locations
+- Roughness measurement
+- Profile measurement
+- Height stationary face (only carbon and SIC30)
+• Install mechanical seals per drawing listed above
+- OB: #1 and #2 / IB: #3 and #4
+- when possible install thermocouple at IB and OB seal stationary face.
+• Pressurize to indicated pressure, measure break-out torque. Repeat torque measurements after 10 minutes.
+• Start Test Unit
+• Stop test unit and measure break-out torque. Repeat torque measurements after 10 minutes.
+• Post-test work Job and plug seal, required on stationary and rotating seal faces.
+- Waviness measurement on 1 location
+- Taper measurement on 2 locations
+- Roughness measurement
+- Profile measurement
+- Height stationary face (only carbon and SIC30)
+Seal Information:
+Reference Drawing: F00321662 / D0527190-2 revB
+Inboard Seal Outboard Seal
+Seal Type and Size: UHTW 4.750 UHTW 4.750
+Stationary Seal Face C100603033 (SIC30) C100603033 (SIC30)
+Rotating Seal Face: C100603035 (SL WAVY) C100603038 (SL WAVY)
+Spring(s): 668838NL (9) 668838NL (10)
+Test Conditions:
+Test Unit: B
+Duration: min 75 hours
+Speed: 2980 rpm
+Process Fluid Barrier Fluid
+Test Medium: NA Water
+Pressure: NA 70 barg
+Inlet Temperature: NA 60°C
+Flow: NA TBD l/min
+Prepared by: MG
+Created: 6/16/2026

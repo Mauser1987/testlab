@@ -58,8 +58,8 @@ Five tables plus Django's `auth_user`. All text is stored as typed
 
 ### 1.2 `RunSetup` (app `projects`) — the copyable technical block
 Used twice: as **project defaults** (`Project.default_setup`) and as each
-TCN revision's **own copy** (`Tcn.setup`). One RunSetup is owned by exactly
-one Project *or* one Tcn.
+TCN revision's **own copy** (`TcnRevision.setup`). One RunSetup is owned by exactly
+one Project *or* one TcnRevision.
 
 | Field | Type | Excel column | Printed on TCN as |
 |---|---|---|---|
@@ -131,7 +131,10 @@ Exactly the applicable roles exist (§5.1).
 
 Thin parent so that M2 Results attach to the run, not to one revision.
 
-### 1.5 `Tcn` (app `tcn`) — one row per TCN revision
+### 1.5 `TcnRevision` (app `tcn`) — one row per TCN revision
+
+(Named `Tcn` in rev. 2 of this spec; renamed in Commit 5 to make the
+TestRun 1–* revision boundary explicit. Fields unchanged.)
 
 | Field | Type | Rules |
 |---|---|---|
@@ -145,7 +148,7 @@ Thin parent so that M2 Results attach to the run, not to one revision.
 | created_date | date | set once at creation (Excel `TCNCreate`); printed "Created:" |
 | revision_reason | text | required to issue when revision ≥ 1 |
 | source_kind | varchar(20): `project_defaults` / `tcn_copy` / `new_revision` | (a `legacy_import` value is added with the post-M1 importer, §12) |
-| source_tcn | FK → Tcn, null, PROTECT | set for `tcn_copy` and `new_revision` |
+| source_tcn | FK → TcnRevision, null, PROTECT | set for `tcn_copy` and `new_revision` |
 | issued_at | datetime, null | set at issue |
 | issued_by | FK user, null | set at issue (required when status ≠ draft) |
 | issued_document | file, null | DOCX generated at issue; never replaced |
@@ -156,24 +159,44 @@ Thin parent so that M2 Results attach to the run, not to one revision.
 | row_version | int, default 1 | optimistic locking for draft edits |
 | created_at, created_by, updated_at, updated_by | | |
 
+Identity and audit fields (PO clarification before Commit 9):
+`created_by` = the authenticated user who creates the draft, `created_at` =
+automatic creation timestamp; `prepared_by` = the engineer responsible for
+preparing the TCN, defaulted from the current user's initials and editable
+while draft; `issued_by` = the authenticated user performing the Issue
+action (never entered manually), `issued_at` = automatic issue timestamp.
+Once issued, all of them are immutable with the rest of the record.
+
 Database constraints (portable Django `UniqueConstraint` with `condition`,
 supported by SQLite and PostgreSQL):
 - one `draft` per test_run;
 - one `issued` per test_run (the current revision).
 
+Further check constraints (Commit 5): status and source_kind values;
+source_tcn null exactly for `project_defaults`; revision ≥ 1 exactly for
+`new_revision`; issued_at/by set exactly when status ≠ draft; cancelled
+fields set (with a non-empty reason) exactly when cancelled; TestRun
+run_no 1–999. Model-level rules: a revision is created as a draft with
+revision = highest + 1; a new revision's source is in the same run; the
+setup is never a project's default setup; test_run, revision, setup,
+source and created fields never change; locked revisions, their setup and
+seal positions cannot be saved or deleted; a TestRun's run_no/project is
+fixed once a revision has been issued; deleting a draft deletes its setup,
+and deleting the last one (rev 0) deletes the TestRun.
+
 ## 2. Relationships
 
 ```
 auth_user
-Project 1 ──── 1 RunSetup (default_setup)
-Project 1 ──── * TestRun (run_no unique per project)
-TestRun 1 ──── 1..* Tcn (revision 0, 1, …)
-Tcn     1 ──── 1 RunSetup (own copy)
-RunSetup 1 ─── 1..3 SealPosition (applicable roles only)
-Tcn     * ──── 0..1 Tcn (source_tcn: copied from / revised from)
+Project     1 ──── 1 RunSetup (default_setup)
+Project     1 ──── * TestRun (run_no unique per project)
+TestRun     1 ──── 1..* TcnRevision (revision 0, 1, …)
+TcnRevision 1 ──── 1 RunSetup (own copy)
+RunSetup    1 ──── 1..3 SealPosition (applicable roles only)
+TcnRevision * ──── 0..1 TcnRevision (source_tcn: copied from / revised from)
 ```
 Future attachment points (not built): TestResult → TestRun (M2);
-PlannedTest → Tcn source (M3); ConditionStep → RunSetup (M2/M3).
+PlannedTest → TcnRevision source (M3); ConditionStep → RunSetup (M2/M3).
 
 ## 3. Project defaults vs TCN snapshots
 
@@ -182,7 +205,7 @@ PlannedTest → Tcn source (M3); ConditionStep → RunSetup (M2/M3).
 | project_no | master | read via TestRun→Project; frozen in issued_snapshot and file name | correctable until the first TCN of the project is issued, then blocked (V2) → issued TCNs stay correct |
 | project description | master | **copied at creation**, editable in draft | as in Excel (per-run field); later project edits don't touch TCNs |
 | customer | master | – | not on TCN |
-| arrangement, Plug Seal presence, positions, drawing, unit, speed, duration, process / seal-support / Plug Seal conditions, run description, monitored parameters | **defaults** (Project.default_setup) | **own copy** (Tcn.setup) | copied when the TCN is created from defaults or from another TCN; afterwards independent |
+| arrangement, Plug Seal presence, positions, drawing, unit, speed, duration, process / seal-support / Plug Seal conditions, run description, monitored parameters | **defaults** (Project.default_setup) | **own copy** (TcnRevision.setup) | copied when the TCN is created from defaults or from another TCN; afterwards independent |
 | prepared_by, created_date | – | TCN only | set at creation |
 | revision, status, issue data, DOCX, snapshot | – | TCN only | frozen at issue |
 
@@ -219,11 +242,11 @@ Rules:
 | Action | Allowed when | Effect |
 |---|---|---|
 | Edit | status = draft | save with row_version check |
-| Delete draft | status = draft | rev 0 → deletes Tcn, its RunSetup and the TestRun; rev ≥ 1 → deletes only that draft revision |
+| Delete draft | status = draft | rev 0 → deletes TcnRevision, its RunSetup and the TestRun; rev ≥ 1 → deletes only that draft revision |
 | Issue | status = draft and issue validation passes (§10) | in one DB transaction: render DOCX, store file + hashes + snapshot, set issued_at/by, status = issued; previous issued revision → superseded. Any failure rolls back everything; TCN stays draft |
 | New revision | TCN is the current issued revision; run not cancelled; no draft exists for this run | creates revision n+1 as draft: deep copy of setup + project_description + prepared_by (current user), source_kind = new_revision, source_tcn = issued rev |
 | Cancel | current issued revision, reason required | status = cancelled; run shows as cancelled; no new revisions; may still be used as a copy source |
-| Copy to new TCN | any Tcn (any status) | §7 |
+| Copy to new TCN | any TcnRevision (any status) of the **same project** | §7 |
 
 Approval: none in M1 (PO). Any logged-in user may issue.
 Execution deviations are **not** entered on the TCN (they belong to the M2 Result).
@@ -332,7 +355,7 @@ All pages require login (Django auth). Django admin: user management only
 | S3 | Project form (create/edit) | project_no (read-only once a TCN has been issued; a non-RSD-format number shows a warning but can be saved), description, customer. On create → continue to S5 (defaults) |
 | S4 | Project page | Identity block (Edit). Project defaults summary (Edit). **TCN register**: Run/TCN · Rev · Status · Created · Prepared by · Test unit · Arrangement (+ Plug Seal) · Speed · Barrier/Buffer/Flush pressure · actions (Open · Copy to new TCN · Download DOCX). **New TCN** |
 | S5 | Project defaults form | Shared *Run setup form* (below) without TCN header fields |
-| S6 | New TCN | Run no. (proposed, editable). Source: ◉ Copy of TCN [select, default = current revision of highest run in this project; other projects listed below] ○ Project defaults (default when the project has no TCN yet). **Create** → S7 |
+| S6 | New TCN | Run no. (proposed, editable). Source: ◉ Copy of TCN [select, revisions of this project only; default = current revision of highest run] ○ Project defaults (default when the project has no TCN yet). **Create** → S7 |
 | S7 | TCN edit (draft) | Header: project no., Run/TCN no., rev, status DRAFT, source ("copied from TCN001 rev 0"). Fields: project description, prepared by, revision reason (rev ≥ 1). **Run setup form**. Fields differing from the source show "changed — was: …". Buttons: **Save** · **Preview DOCX** · **Test Data Sheet** · **Issue…** · Delete draft |
 | S8 | Issue confirmation | Issue-validation errors, or: summary, list of changes vs source, notice "An issued TCN cannot be changed; changes require a new revision". **Confirm issue** |
 | S9 | TCN view (issued / superseded / cancelled) | Read-only content, status banner. **Download issued DOCX** · Test Data Sheet · Copy to new TCN · New revision (current issued only) · Cancel TCN. Revision history of the run: rev, status, created, issued at/by, reason, download |
@@ -365,7 +388,7 @@ as in Excel, Plug Seal unchecked, no parameters ticked as in Excel "Add new").
 
 **Create TCN001** (S4 → S6 → S7):
 1. Source = project defaults (only option when no TCN exists); run no. 1.
-2. System creates TestRun(1) + Tcn rev 0 draft with a deep copy of the
+2. System creates TestRun(1) + TcnRevision rev 0 draft with a deep copy of the
    default RunSetup and positions; project_description ← Project.description;
    prepared_by ← user initials (first letters of first and last name,
    upper-case, editable); created_date ← today; source_kind = project_defaults.
@@ -381,9 +404,10 @@ as in Excel, Plug Seal unchecked, no parameters ticked as in Excel "Add new").
    engineer edits only what differs; changed fields are marked.
 4. Preview → Issue. TCN001's record, DOCX file and hash are untouched.
 
-Copy from another project's TCN is allowed (Excel allowed copying any row
-of its table): identical, except the project-dependent values come from
-the target project.
+A TCN copy (`tcn_copy`) must come from a TCN of the **same project**
+(PO, after Commit 5; enforced in the model). Reusing a TCN of another
+project is not a TCN copy in M1; it may later become a separate
+template/project-copy feature.
 
 **Formal change of an issued TCN**: S9 → New revision → draft rev 1
 (copy) → edit → reason → issue → rev 0 becomes superseded; both DOCX kept.
@@ -531,7 +555,7 @@ Draft mapping (`manage.py import_legacy_tcn <xlsm> [--dry-run]`). Source: hidden
 | Excel | TestLab |
 |---|---|
 | ProjNo | Project.project_no (created if missing) |
-| ProjName | Project.description (from the highest run no.) and Tcn.project_description |
+| ProjName | Project.description (from the highest run no.) and TcnRevision.project_description |
 | RunNo (`"004"`) | TestRun.run_no = 4 |
 | Arrangement 1 | single + plug; IB* columns → Plug position, OB* columns → Test position; IB/OB face temp & leak flags → plug_/test_ codes |
 | Arrangement 2 / 3 | dual_unpressurized / dual_pressurized, no plug; IB*→inboard, OB*→outboard |
@@ -566,7 +590,7 @@ testlab/
 │   ├── testlab/
 │   │   ├── projects/            models (Project, RunSetup, SealPosition), arrangements.py
 │   │   │                        (§5 tables), forms, views, templates/, tests/
-│   │   ├── tcn/                 models (TestRun, Tcn), services.py (create, copy, issue,
+│   │   ├── tcn/                 models (TestRun, TcnRevision), services.py (create, copy, issue,
 │   │   │                        revise, cancel, delete), diff.py, forms, views, templates/, tests/
 │   │   ├── documents/           tcn_context.py, render.py, test_data_sheet.py, tests/
 │   │   └── templates/           base.html, registration/login.html
@@ -585,7 +609,7 @@ testlab/
 | 2 | Project model & screens | Project + list/create/edit (S2, S3), V1, V3 (V2 lock wired in commit 9, when issuing exists) | tests |
 | 3 | Run setup model & arrangement rules | RunSetup, SealPosition, `arrangements.py` (§5 tables), V5–V8 unit tests | tests |
 | 4 | Project defaults form | shared run setup form, switching with discard confirmation (S5) | AT-9 (defaults) |
-| 5 | TestRun/Tcn models | models, constraints, immutability guard | AT-6 (model part) |
+| 5 | TestRun/TcnRevision models | models, constraints, immutability guard | AT-6 (model part) |
 | 6 | Create & copy TCN | services, S4 register, S6, S7 edit, optimistic locking | AT-8, AT-14 |
 | 7 | Differences vs source | diff.py + markers in S7/S8 | AT-5 (diff part) |
 | 8 | TCN Word template & preview | tcn.docx, tcn_context, render, Preview DOCX | AT-2, AT-3, AT-16 (document part) |

@@ -1,0 +1,20 @@
+{% comment %}Differences from the source TCN (commit 7). Expects `tcn` and `change_list`.{% endcomment %}
+  {% if change_list is not None %}
+    <details class="changes"{% if change_list %} open{% endif %}>
+      <summary>
+        {% if change_list %}{{ change_list|length }} difference{{ change_list|length|pluralize }} from {{ tcn.source_tcn }}
+        {% else %}No differences from {{ tcn.source_tcn }} yet{% endif %}
+        <span class="hint">(saved values)</span>
+      </summary>
+      {% if change_list %}
+        <table class="list">
+          <thead><tr><th>Field</th><th>{{ tcn.source_tcn }}</th><th>{{ tcn }}</th></tr></thead>
+          <tbody>
+            {% for change in change_list %}
+              <tr><td>{{ change.label }}</td><td class="value">{{ change.old|default:"(empty)" }}</td><td class="value">{{ change.new|default:"(empty)" }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </details>
+  {% endif %}

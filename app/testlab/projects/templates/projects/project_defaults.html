@@ -3,7 +3,7 @@
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
-    <a href="{% url 'projects:edit' project.pk %}">{{ project.project_no }}</a> › Project defaults
+    <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> › Project defaults
   </nav>
 {% endblock %}
 {% block content %}
@@ -15,7 +15,7 @@
     <div class="actions">
       <button type="submit" name="action" value="save">Save</button>
       <button type="submit" name="action" value="update" id="update-button" formnovalidate>Update</button>
-      <a href="{% url 'projects:list' %}">Cancel</a>
+      <a href="{% url 'projects:detail' project.pk %}">Close</a>
     </div>
   </form>
 {% endblock %}

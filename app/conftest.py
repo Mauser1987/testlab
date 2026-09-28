@@ -2,6 +2,16 @@ import pytest
 from django.contrib.auth.models import User
 
 
+@pytest.fixture(autouse=True)
+def file_storage(settings, tmp_path):
+    """Tests never write into the development file store."""
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": tmp_path}},
+    }
+    return tmp_path
+
+
 @pytest.fixture
 def user(db):
     return User.objects.create_user(
