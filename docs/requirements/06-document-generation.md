@@ -3,6 +3,12 @@
 > The M1 TCN template, render context, formatting rules and issue storage
 > are specified in 11-m1-specification.md §9. Uploading an edited final
 > DOCX (§4 below) is not part of M1.
+>
+> **Amended 2026-09-29 (11 §17 S1):** the TCN is a controlled document —
+> it is issued, stored and downloaded as a **PDF** generated from the Word
+> template (template → temporary DOCX → PDF, LibreOffice headless). The
+> DOCX is never offered, and §4 (engineer editing) does not apply to TCNs.
+> Other document types are decided with their milestones.
 
 ## 1. Principle
 

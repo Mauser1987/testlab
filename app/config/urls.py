@@ -6,7 +6,8 @@ urlpatterns = [
     path("", RedirectView.as_view(pattern_name="projects:list"), name="home"),
     path("projects/", include("testlab.projects.urls")),
     path("", include("testlab.tcn.urls")),
+    path("accounts/", include("testlab.accounts.urls")),
     path("accounts/", include("django.contrib.auth.urls")),
-    # Admin is for user management by superusers only.
+    # Admin: user management and approval of registered accounts (superusers).
     path("admin/", admin.site.urls),
 ]

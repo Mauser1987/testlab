@@ -13,7 +13,7 @@
     <p>
       Project No.: <strong>{{ project.project_no }}</strong> ·
       Run/TCN No.: <strong>{{ tcn.tcn_no }}</strong> ·
-      {% if tcn.source_tcn %}copied from {{ tcn.source_tcn }}{% else %}from project defaults{% endif %} ·
+      {% if tcn.source_kind == "new_revision" %}new revision of {{ tcn.source_tcn }}{% elif tcn.source_tcn %}copied from {{ tcn.source_tcn }}{% else %}from project defaults{% endif %} ·
       created {{ tcn.created_date|date:"d-M-Y" }}
     </p>
   </div>
@@ -40,10 +40,11 @@
     <div class="actions">
       <button type="submit" name="action" value="save">Save</button>
       <button type="submit" name="action" value="update" id="update-button" formnovalidate>Update</button>
-      <a class="button" href="{% url 'tcn:preview' tcn.pk %}">Preview DOCX</a>
-      <a class="button" href="{% url 'tcn:issue' tcn.pk %}">Issue…</a>
+      <a class="button" href="{% url 'tcn:preview' tcn.pk %}" target="_blank" rel="noopener">Preview PDF</a>
+      {% if can_issue %}<a class="button" href="{% url 'tcn:issue' tcn.pk %}">Issue…</a>{% endif %}
       <span class="hint">Preview and Issue use the saved values — save first.</span>
       <a href="{% url 'projects:detail' project.pk %}">Close</a>
+      <a href="{% url 'tcn:delete' tcn.pk %}">Delete draft</a>
     </div>
   </form>
 {% endblock %}

@@ -8,7 +8,7 @@ from django.db.models import ProtectedError
 
 from testlab.documents.render import template_path
 from testlab.documents.tcn_context import build_tcn_context
-from testlab.documents.tests.docx_text import docx_lines
+from testlab.documents.tests.pdf_text import pdf_lines
 from testlab.projects.forms import ProjectForm
 from testlab.projects.models import Project
 from testlab.tcn.models import ImmutableTcnError, TcnRevision
@@ -79,7 +79,7 @@ def test_at16_issue_without_plug_medium_refused(project, user, file_storage):
         issue(tcn, user)
     assert excinfo.value.errors == ["Plug Seal medium is required."]
     assert TcnRevision.objects.get(pk=tcn.pk).status == Status.DRAFT
-    assert not list(file_storage.rglob("*.docx"))
+    assert not [path for path in file_storage.rglob("*") if path.is_file()]
 
     tcn.setup.plug_medium = "Water"
     tcn.setup.save()
@@ -107,14 +107,14 @@ def test_issue_stores_document_hashes_snapshot_and_identity(project, user, other
     assert (issued.created_by, issued.prepared_by, issued.issued_by) == (user, "MT", other_user)
     assert issued.issued_at is not None and issued.issued_at >= issued.created_at
 
-    assert issued.issued_document.name == "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.docx"
+    assert issued.issued_document.name == "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.pdf"
     assert (file_storage / issued.issued_document.name).is_file()
     content = stored_bytes(issued)
     assert issued.issued_document_sha256 == hashlib.sha256(content).hexdigest()
     assert issued.template_sha256 == hashlib.sha256(template_path("tcn.docx").read_bytes()).hexdigest()
     assert issued.issued_snapshot == expected_context
 
-    lines = docx_lines(content)
+    lines = pdf_lines(content)
     assert "DRAFT — not issued" not in lines
     assert "Prepared by: MT" in " ".join(lines)
 
@@ -126,7 +126,7 @@ def test_issue_refused_when_draft_changed_since_review(project, user, file_stora
     with pytest.raises(StaleDraftError):
         issue_tcn(tcn, reviewed_version, user)
     assert TcnRevision.objects.get(pk=tcn.pk).status == Status.DRAFT
-    assert not list(file_storage.rglob("*.docx"))
+    assert not [path for path in file_storage.rglob("*") if path.is_file()]
 
 
 def test_issue_validation_failure_changes_nothing(project, user, file_storage):
@@ -135,12 +135,12 @@ def test_issue_validation_failure_changes_nothing(project, user, file_storage):
         issue(tcn, user)
     after = TcnRevision.objects.get(pk=tcn.pk)
     assert (after.status, after.row_version, after.issued_at) == (Status.DRAFT, 1, None)
-    assert not list(file_storage.rglob("*.docx"))
+    assert not [path for path in file_storage.rglob("*") if path.is_file()]
 
 
 def test_v15_existing_file_is_never_overwritten(project, user, file_storage):
     tcn = ready_tcn(project, user)
-    path = file_storage / "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.docx"
+    path = file_storage / "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.pdf"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"earlier file")
     with pytest.raises(IssueError, match="already exists"):
@@ -164,7 +164,7 @@ def test_failure_after_writing_removes_file_and_keeps_draft(project, user, file_
     monkeypatch.undo()
     after = TcnRevision.objects.get(pk=tcn.pk)
     assert (after.status, after.issued_document.name, after.row_version) == (Status.DRAFT, "", 1)
-    assert not list(file_storage.rglob("*.docx"))
+    assert not [path for path in file_storage.rglob("*") if path.is_file()]
 
 
 def test_issued_tcn_cannot_be_issued_again(project, user):
@@ -187,9 +187,9 @@ def test_issuing_revision_supersedes_previous_and_keeps_its_file(project, user, 
 
     rev_0 = TcnRevision.objects.get(pk=rev_0.pk)
     assert (rev_0.status, rev_1.status) == (Status.SUPERSEDED, Status.ISSUED)
-    assert rev_1.issued_document.name == "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001-rev1.docx"
+    assert rev_1.issued_document.name == "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001-rev1.pdf"
     assert rev_1.issued_snapshot["tcn_no"] == "001 rev 1"
-    assert "Run/TCN No.: 001 rev 1" in " ".join(docx_lines(stored_bytes(rev_1)))
+    assert "Run/TCN No.: 001 rev 1" in " ".join(pdf_lines(stored_bytes(rev_1)))
     # Rev 0 stays exactly as issued.
     assert stored_bytes(rev_0) == rev_0_file
     assert rev_0.issued_document_sha256 == hashlib.sha256(rev_0_file).hexdigest()

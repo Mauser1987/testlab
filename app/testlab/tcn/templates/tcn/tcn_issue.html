@@ -35,7 +35,7 @@
     {% include "tcn/_changes.html" %}
 
     <p class="notice">An issued TCN cannot be changed; changes require a new revision.
-      The saved draft is issued exactly as shown in <a href="{% url 'tcn:preview' tcn.pk %}">Preview DOCX</a>, without the draft marking.</p>
+      The saved draft is issued exactly as shown in <a href="{% url 'tcn:preview' tcn.pk %}" target="_blank" rel="noopener">Preview PDF</a>, without the draft marking.</p>
 
     <form method="post">
       {% csrf_token %}

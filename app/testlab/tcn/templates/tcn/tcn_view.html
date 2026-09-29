@@ -24,8 +24,16 @@
   </div>
 
   <div class="actions">
-    {% if tcn.issued_document %}<a class="button" href="{% url 'tcn:document' tcn.pk %}">Download issued DOCX</a>{% endif %}
+    {% if tcn.issued_document %}<a class="button" href="{% url 'tcn:document' tcn.pk %}">Download issued PDF</a>{% endif %}
     <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
+    {% if can_revise %}
+      <form method="post" action="{% url 'tcn:new_revision' tcn.pk %}">
+        {% csrf_token %}<button type="submit">New revision</button>
+      </form>
+    {% elif pending_draft %}
+      <a href="{% url 'tcn:edit' pending_draft.pk %}">Open draft {{ pending_draft }}</a>
+    {% endif %}
+    {% if can_cancel %}<a href="{% url 'tcn:cancel' tcn.pk %}">Cancel TCN</a>{% endif %}
   </div>
 
   {% if snapshot %}

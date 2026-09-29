@@ -2,7 +2,9 @@
 
 Status: **approved in principle** (PO, `/answers_n2.md`, 2026-09-27) with the
 corrections incorporated below; implementation started with Commit 1 (§14).
-Date: 2026-09-27 (rev. 2; rev. 1 2026-09-26)
+Date: 2026-09-27 (rev. 2; rev. 1 2026-09-26). Amended 2026-09-29 by the
+post-Commit-10 stabilization decisions (§17): the controlled TCN document
+is a **PDF**; registration with approval by an administrator.
 Inputs: 01–10 in this folder, `/answers_n1.md` (PO decisions round 1),
 `/answers_n2.md` (PO corrections round 2),
 `reference/Testlab Data Program 2026RSD06TL.xlsm`, `reference/tcn/TCN001.pdf`.
@@ -17,7 +19,7 @@ central TestLab web application. An engineer can:
 3. create TCN001 from the project defaults;
 4. configure the seal arrangement and optional plug seal;
 5. define the run conditions and instructions;
-6. generate the TCN document (DOCX);
+6. generate the TCN document (PDF, §17 S1);
 7. issue/lock the TCN;
 8. create TCN002 by copying TCN001 (or any other TCN);
 9. change only what differs;
@@ -35,7 +37,7 @@ round 2: the data model is first validated on real new projects; see §12),
 Test Program, Results, Test Summary, Final Report, DCS, P&ID,
 attachments, component lifecycle tracking, condition steps, catalogues
 (rigs/materials/parameters as tables), a full API piping-plan model,
-approval workflow, PDF output,
+approval workflow,
 field-level change log, the Excel "Add test results"/"Print test results"
 functions (unused in practice — all result columns empty).
 
@@ -151,8 +153,8 @@ TestRun 1–* revision boundary explicit. Fields unchanged.)
 | source_tcn | FK → TcnRevision, null, PROTECT | set for `tcn_copy` and `new_revision` |
 | issued_at | datetime, null | set at issue |
 | issued_by | FK user, null | set at issue (required when status ≠ draft) |
-| issued_document | file, null | DOCX generated at issue; never replaced |
-| issued_document_sha256 | char(64) | |
+| issued_document | file, null | **PDF** generated at issue — the controlled artifact (§17 S1); never replaced |
+| issued_document_sha256 | char(64) | SHA-256 of the stored PDF |
 | issued_snapshot | JSON, null | exact render context used (§9) |
 | template_sha256 | char(64) | hash of the template file used |
 | cancelled_at, cancelled_by, cancel_reason | | only for `cancelled` |
@@ -207,7 +209,7 @@ PlannedTest → TcnRevision source (M3); ConditionStep → RunSetup (M2/M3).
 | customer | master | – | not on TCN |
 | arrangement, Plug Seal presence, positions, drawing, unit, speed, duration, process / seal-support / Plug Seal conditions, run description, monitored parameters | **defaults** (Project.default_setup) | **own copy** (TcnRevision.setup) | copied when the TCN is created from defaults or from another TCN; afterwards independent |
 | prepared_by, created_date | – | TCN only | set at creation |
-| revision, status, issue data, DOCX, snapshot | – | TCN only | frozen at issue |
+| revision, status, issue data, issued PDF, snapshot | – | TCN only | frozen at issue |
 
 Rules:
 - **Editing project defaults never changes any existing TCN** (draft or issued).
@@ -215,7 +217,7 @@ Rules:
   layer (a save or delete that changes content raises an error), not just
   hidden in the UI. Allowed transitions only: issued → superseded,
   issued → cancelled.
-- The issued DOCX and snapshot are the record of what was issued; they
+- The issued PDF and snapshot are the record of what was issued; they
   are never regenerated.
 
 ## 4. Numbering, status, issue, lock and revision rules
@@ -226,7 +228,8 @@ Rules:
   Input accepts `4`, `04`, `004`. Display always `%03d`.
 - TCN number shown as `TCN001`; revision ≥ 1 shown as `TCN001 rev 1`.
 - Document header: "Run/TCN No.: 001" (rev 0) or "Run/TCN No.: 001 rev 1".
-- File name: `<project_no>-TCN001.docx`, `<project_no>-TCN001-rev1.docx`.
+- File name: `<project_no>-TCN001.pdf`, `<project_no>-TCN001-rev1.pdf`
+  (draft preview: `…-DRAFT.pdf`).
 
 ### Status machine
 
@@ -243,12 +246,13 @@ Rules:
 |---|---|---|
 | Edit | status = draft | save with row_version check |
 | Delete draft | status = draft | rev 0 → deletes TcnRevision, its RunSetup and the TestRun; rev ≥ 1 → deletes only that draft revision |
-| Issue | status = draft and issue validation passes (§10) | in one DB transaction: render DOCX, store file + hashes + snapshot, set issued_at/by, status = issued; previous issued revision → superseded. Any failure rolls back everything; TCN stays draft |
+| Issue | status = draft and issue validation passes (§10) | in one DB transaction: render the PDF (template → temporary DOCX → PDF), store the PDF + hashes + snapshot, set issued_at/by, status = issued; previous issued revision → superseded. Any failure — including a failed PDF conversion — rolls back everything; TCN stays draft |
 | New revision | TCN is the current issued revision; run not cancelled; no draft exists for this run | creates revision n+1 as draft: deep copy of setup + project_description + prepared_by (current user), source_kind = new_revision, source_tcn = issued rev |
 | Cancel | current issued revision, reason required | status = cancelled; run shows as cancelled; no new revisions; may still be used as a copy source |
 | Copy to new TCN | any TcnRevision (any status) of the **same project** | §7 |
 
-Approval: none in M1 (PO). Any logged-in user may issue.
+Approval: none in M1 (PO). Any logged-in (active) user may issue; the
+check is kept in one place so this can be restricted later (§17 S3).
 Execution deviations are **not** entered on the TCN (they belong to the M2 Result).
 
 ## 5. Seal arrangement + optional Plug Seal
@@ -345,20 +349,22 @@ or calculations. Plug Seal leakage uses the existing `plug_leakage` code.
 
 Top bar: **TestLab** · Projects · user name · Log out.
 Breadcrumbs: Projects › 2026RSD03TL › TCN001 rev 0.
-All pages require login (Django auth). Django admin: user management only
-(superusers).
+All pages require login (Django auth), except Login and Register. Django
+admin: user management and approval of registered accounts (superusers;
+§17 S2).
 
 | # | Screen | Content / actions |
 |---|---|---|
-| S1 | Login | Django login form |
+| S1 | Login | "Log in \| Register"; email address + password (a bootstrap username also works); pending accounts are told they await approval |
+| S1a | Register | first name, last name, corporate email address, password, confirmation; only approved domains; account created inactive (§17 S2) |
 | S2 | Project list | Search (project no., description, customer). Table: Project no. · Description · Customer · No. of TCNs · last TCN created. **New project** |
 | S3 | Project form (create/edit) | project_no (read-only once a TCN has been issued; a non-RSD-format number shows a warning but can be saved), description, customer. On create → continue to S5 (defaults) |
-| S4 | Project page | Identity block (Edit). Project defaults summary (Edit). **TCN register**: Run/TCN · Rev · Status · Created · Prepared by · Test unit · Arrangement (+ Plug Seal) · Speed · Barrier/Buffer/Flush pressure · actions (Open · Copy to new TCN · Download DOCX). **New TCN** |
+| S4 | Project page | Identity block (Edit). Project defaults summary (Edit). **TCN register**: Run/TCN · Rev · Status · Created · Prepared by · Test unit · Arrangement (+ Plug Seal) · Speed · Barrier/Buffer/Flush pressure · actions (Open · Copy to new TCN · Download PDF). **New TCN** |
 | S5 | Project defaults form | Shared *Run setup form* (below) without TCN header fields |
 | S6 | New TCN | Run no. (proposed, editable). Source: ◉ Copy of TCN [select, revisions of this project only; default = current revision of highest run] ○ Project defaults (default when the project has no TCN yet). **Create** → S7 |
-| S7 | TCN edit (draft) | Header: project no., Run/TCN no., rev, status DRAFT, source ("copied from TCN001 rev 0"). Fields: project description, prepared by, revision reason (rev ≥ 1). **Run setup form**. Fields differing from the source show "changed — was: …". Buttons: **Save** · **Preview DOCX** · **Test Data Sheet** · **Issue…** · Delete draft |
+| S7 | TCN edit (draft) | Header: project no., Run/TCN no., rev, status DRAFT, source ("copied from TCN001 rev 0"). Fields: project description, prepared by, revision reason (rev ≥ 1). **Run setup form**. Fields differing from the source show "changed — was: …". Buttons: **Save** · **Preview PDF** · **Test Data Sheet** · **Issue…** · Delete draft |
 | S8 | Issue confirmation | Issue-validation errors, or: summary, list of changes vs source, notice "An issued TCN cannot be changed; changes require a new revision". **Confirm issue** |
-| S9 | TCN view (issued / superseded / cancelled) | Read-only content, status banner. **Download issued DOCX** · Test Data Sheet · Copy to new TCN · New revision (current issued only) · Cancel TCN. Revision history of the run: rev, status, created, issued at/by, reason, download |
+| S9 | TCN view (issued / superseded / cancelled) | Read-only content, status banner. **Download issued PDF** · Test Data Sheet · Copy to new TCN · New revision (current issued only) · Cancel TCN. Revision history of the run: rev, status, created, issued at/by, reason, download |
 | S10 | Cancel TCN | reason (required), confirm |
 
 **Run setup form** (used by S5 and S7), in the order of the TCN document:
@@ -392,8 +398,8 @@ as in Excel, Plug Seal unchecked, no parameters ticked as in Excel "Add new").
    default RunSetup and positions; project_description ← Project.description;
    prepared_by ← user initials (first letters of first and last name,
    upper-case, editable); created_date ← today; source_kind = project_defaults.
-3. Engineer completes/edits fields (S7), **Preview DOCX**, optionally
-   **Test Data Sheet**, then **Issue** (S8) → issued DOCX stored; TCN001 locked.
+3. Engineer completes/edits fields (S7), **Preview PDF**, optionally
+   **Test Data Sheet**, then **Issue** (S8) → issued PDF stored; TCN001 locked.
 
 **Create TCN002 (next TCN)** (S4 → "Copy to new TCN" on TCN001, or New TCN):
 1. Run no. proposed 2; source preselected = TCN001 (current revision).
@@ -402,7 +408,7 @@ as in Excel, Plug Seal unchecked, no parameters ticked as in Excel "Add new").
    description** (not the source's); prepared_by ← current user; created_date ← today.
 3. S7 shows the form; every field initially equals the source. The
    engineer edits only what differs; changed fields are marked.
-4. Preview → Issue. TCN001's record, DOCX file and hash are untouched.
+4. Preview → Issue. TCN001's record, PDF file and hash are untouched.
 
 A TCN copy (`tcn_copy`) must come from a TCN of the **same project**
 (PO, after Commit 5; enforced in the model). Reusing a TCN of another
@@ -410,7 +416,7 @@ project is not a TCN copy in M1; it may later become a separate
 template/project-copy feature.
 
 **Formal change of an issued TCN**: S9 → New revision → draft rev 1
-(copy) → edit → reason → issue → rev 0 becomes superseded; both DOCX kept.
+(copy) → edit → reason → issue → rev 0 becomes superseded; both PDFs kept.
 
 ## 8. Business logic migrated from Excel/VBA
 
@@ -437,7 +443,12 @@ Not migrated: silent overwrite (`Knop13`), permanent delete (`Button15`),
 results form & photo paths (`Knop4`, `Knop7`, `Results_*`) → M2;
 DataBase import → post-M1 (§12).
 
-## 9. DOCX template-generation architecture
+## 9. Document generation architecture (Word template → PDF)
+
+Pipeline (§17 S1): TCN snapshot (render context) → Word template rendered
+with docxtpl → temporary DOCX → PDF conversion (LibreOffice headless) →
+PDF previewed, or stored and served at issue. The DOCX is an internal
+intermediate: it is never stored or offered for download.
 
 ### 9.1 Components
 - `app/doc_templates/tcn.docx` — Word file with docxtpl tags; contains all
@@ -447,10 +458,16 @@ DataBase import → post-M1 (§12).
 - `documents/tcn_context.py` — `build_tcn_context(tcn) -> dict`: the only
   place that knows labels, units, NA rule, column sets. Returns **plain
   strings/lists** so the template has no logic beyond loops.
-- `documents/render.py` — `render_docx(template_path, context) -> bytes`
-  (docxtpl), used by preview and issue.
+- `documents/render.py` — `render_pdf(template, context) -> bytes`, used by
+  preview and issue: `render_docx` (docxtpl, internal) followed by
+- `documents/pdf.py` — `docx_to_pdf(docx) -> bytes`: LibreOffice headless
+  (`soffice --convert-to pdf`) in a separate process with a temporary
+  profile and a timeout (`TESTLAB_SOFFICE`, `TESTLAB_PDF_TIMEOUT`); any
+  failure raises `PdfConversionError`. `manage.py check` warns when
+  LibreOffice is not found (testlab.W001). No Microsoft Office involved.
 - Template location configurable (`TESTLAB_TEMPLATE_DIR`); SHA-256 of the
-  template file stored with every issued TCN.
+  Word template file stored with every issued TCN (`template_sha256`),
+  besides the SHA-256 of the issued PDF.
 
 ### 9.2 Context (shape)
 ```
@@ -478,14 +495,16 @@ Seal and condition tables use docxtpl column loops (`{%tc for … %}`), so
   literally (•, -); leading whitespace → indent level (0: none, 1: 1–4
   spaces or a tab, 2: more) using three paragraph styles in the template.
 - Date format `dd-Mmm-yyyy` (§15 Q-D).
-- Draft preview: header shows "DRAFT — not issued"; preview files are
-  not stored.
+- Draft preview: a PDF opened in the browser, header shows "DRAFT — not
+  issued"; preview files are not stored.
 
 ### 9.4 Issue
-Render → store under `<FILE_ROOT>/projects/<project_no>/tcn/<file name>`
-(refuse if the file exists) → store SHA-256 of file and template, the
-context as `issued_snapshot` → commit. Download of an issued TCN always
-serves the stored file.
+Render the PDF → store under `<FILE_ROOT>/projects/<project_no>/tcn/<file name>`
+(refuse if the file exists) → verify the stored bytes → store SHA-256 of the
+stored PDF and of the template, the context as `issued_snapshot` → commit.
+A failed conversion stops the issue before anything is stored; any later
+failure removes the written file; the TCN stays draft. Download of an
+issued TCN always serves the stored PDF (only a stored `.pdf` is served).
 
 ### 9.5 Test Data Sheet (XLSX, openpyxl)
 Generated on request for any TCN; not archived (blank form).
@@ -523,12 +542,12 @@ Automated (pytest) unless marked **manual**. Reference files are read, never mod
 | # | Test | Pass criteria |
 |---|---|---|
 | AT-1 | *(withdrawn — legacy import moved out of M1, §12)* | – |
-| AT-2 | **TCN001 regression** — 2026RSD03TL TCN001 entered through the services from a test fixture transcribing the workbook DataBase row, then rendered | DOCX text (python-docx extraction, whitespace-normalised) equals fixture `tcn001_expected.txt` transcribed from `reference/tcn/TCN001.pdf`, except the documented differences: date `16-Jun-2026` vs `6/16/2026`; paper size (§15 Q-C). Key strings: "Project No.: 2026RSD03TL", "Run/TCN No.: 001", "ADNOC BAB UHTW/UHTW 4.750/4.750", "F00321662 / D0527190-2 revB", "Inboard Seal", "Outboard Seal", "C100603035 (SL WAVY)", "668838NL (10)", "min 75 hours", "2980 rpm", "Process Fluid", "Barrier Fluid", "NA", "70 barg", "60°C", "TBD l/min", "Prepared by: MG" |
+| AT-2 | **TCN001 regression** — 2026RSD03TL TCN001 entered through the services from a test fixture transcribing the workbook DataBase row, then rendered | Text of the rendered Word template (python-docx extraction, whitespace-normalised — the layout source of the PDF) equals fixture `tcn001_expected.txt` transcribed from `reference/tcn/TCN001.pdf`, except the documented differences: date `16-Jun-2026` vs `6/16/2026`; paper size (§15 Q-C). Key strings: "Project No.: 2026RSD03TL", "Run/TCN No.: 001", "ADNOC BAB UHTW/UHTW 4.750/4.750", "F00321662 / D0527190-2 revB", "Inboard Seal", "Outboard Seal", "C100603035 (SL WAVY)", "668838NL (10)", "min 75 hours", "2980 rpm", "Process Fluid", "Barrier Fluid", "NA", "70 barg", "60°C", "TBD l/min", "Prepared by: MG". The real PDF conversion is checked for the key strings separately (tests marked `libreoffice`) |
 | AT-3 | Single + Plug Seal regression — 2025RSD02TL TCN001 from a fixture (product temperature typed as `40°C`, as in the workbook) | headings "Plug Seal" / "Test Seal"; plug: DHTW 4.750, C0625623AP, C0625624SL - WAVY, 668818NL (18); test: …, 668818NL (16); "Process Fluid" column: Water / 80 barg / **40°C** (not "40°C°C") / TBD l/min; no Flush column (seal-support empty); "Plug Seal Fluid" column printed with the fixture's plug values (NA where empty); "50 hours"; "1100 rpm" |
-| AT-4 | **M1 success criteria 1–10** on a new project `2099RSD01TL` | project + defaults created; TCN001 from defaults; plug seal toggled; conditions & instructions entered; DOCX previewed; issued; TCN002 copied; one field changed; TCN002 issued; TCN001 record, file SHA-256 and snapshot unchanged |
+| AT-4 | **M1 success criteria 1–10** on a new project `2099RSD01TL` | project + defaults created; TCN001 from defaults; plug seal toggled; conditions & instructions entered; PDF previewed; issued; TCN002 copied; one field changed; TCN002 issued; TCN001 record, file SHA-256 and snapshot unchanged |
 | AT-5 | Re-create 2026RSD03TL TCN002–004 by copying (fresh project) | only these edits needed: 002 ← 001: run description; 003 ← 002: run description, prepared by MT, IB/OB stationary & rotating faces (C0618722SL, C0619339SL, C0618722SL, C0618723SL); 004 ← 003: run description, barrier temp `60 - 40`. Each result equals the workbook row; diff markers show exactly those fields |
 | AT-6 | Immutability | editing an issued TCN via form, ORM save and delete all fail; file unchanged |
-| AT-7 | Revision | rev 1 of TCN002 needs a reason; after issue rev 0 = superseded, rev 1 = issued, header "002 rev 1", both files downloadable |
+| AT-7 | Revision | rev 1 of TCN002 needs a reason; after issue rev 0 = superseded, rev 1 = issued, header "002 rev 1", both PDFs downloadable |
 | AT-8 | Project defaults edit | after TCN001/002 exist, changing defaults alters no TCN (draft or issued); a new TCN from defaults uses the new values |
 | AT-9 | Arrangement switching | dual → single with IB/OB data requires discard confirmation; afterwards positions = Test (+Plug), **seal-support values unchanged** and labelled Flush, IB/OB codes removed; single → dual + Plug Seal gives Plug, Inboard, Outboard; removing the Plug Seal with plug conditions filled requires confirmation and empties plug_* |
 | AT-10 | Validation | `4` → 004; duplicate rejected with "Run number already used!"; duplicate project_no (any case) rejected; `2099-TEST` saved with a format warning; `A/B` rejected; unit stripping cases of V8 (incl. plug_* fields) |
@@ -537,7 +556,9 @@ Automated (pytest) unless marked **manual**. Reference files are read, never mod
 | AT-13 | PostgreSQL | full suite passes with `TESTLAB_DATABASE_URL` pointing to PostgreSQL |
 | AT-14 | Concurrency | two sessions edit the same draft; second save refused (V10) |
 | AT-15 | Access | anonymous requests redirect to login |
-| AT-16 | Plug Seal conditions | dual pressurized + Plug Seal with distinct process, barrier and plug medium/pressure/temperature/flow: DOCX shows three condition columns with each circuit's own values, one speed; issue without plug_medium refused (V11) |
+| AT-16 | Plug Seal conditions | dual pressurized + Plug Seal with distinct process, barrier and plug medium/pressure/temperature/flow: the document shows three condition columns with each circuit's own values, one speed; issue without plug_medium refused (V11) |
+| AT-18 | Controlled PDF (§17 S1) | preview returns a PDF; issue stores a PDF whose SHA-256 matches the stored bytes; download returns the stored PDF; no DOCX stored or served; failed conversion leaves the TCN draft with nothing stored; superseded and cancelled revisions keep serving their own PDF |
+| AT-19 | Registration and approval (§17 S2) | Login \| Register; allowed domain(s) only, case-insensitive, server-side; external address rejected with a clear message and no account; account inactive until approved in Django admin; then login with the email address; bootstrap superuser still works |
 | AT-17 | Project number lock | project_no editable while only draft TCNs exist; after TCN001 is issued the form field is read-only and a model-level change is rejected; still locked after that TCN is superseded or cancelled |
 
 ## 12. Legacy import — **not in M1** (PO, round 2)
@@ -569,7 +590,7 @@ Draft mapping (`manage.py import_legacy_tcn <xlsm> [--dry-run]`). Source: hidden
 | – | status issued, revision 0, source_kind legacy_import, legacy_source, issued_by null |
 
 Conversions: numbers → text without trailing `.0` (70.0 → `70`); empty
-string → blank; V8 unit stripping (`40°C` → `40`). Issued DOCX for imported
+string → blank; V8 unit stripping (`40°C` → `40`). Issued PDFs for imported
 TCNs is generated during import with the M1 template and flagged in
 `issued_snapshot.meta.regenerated_from_legacy = true` (the original Excel
 printouts remain the historical record). Project default setup = copy of
@@ -582,7 +603,7 @@ ignored.
 testlab/
 ├── CLAUDE.md  Projectprompt.md  answers_n1.md  answers_n2.md
 ├── README.md                    how to run, configure, test
-├── pyproject.toml               django, docxtpl, openpyxl, dj-database-url, pytest-django; psycopg (optional "postgres" extra)
+├── pyproject.toml               django, docxtpl, openpyxl, dj-database-url, pytest-django, pypdf (dev); psycopg (optional "postgres" extra); LibreOffice as a system dependency
 ├── .gitignore                   data/, .venv/, __pycache__/
 ├── app/
 │   ├── manage.py
@@ -592,7 +613,8 @@ testlab/
 │   │   │                        (§5 tables), forms, views, templates/, tests/
 │   │   ├── tcn/                 models (TestRun, TcnRevision), services.py (create, copy, issue,
 │   │   │                        revise, cancel, delete), diff.py, forms, views, templates/, tests/
-│   │   ├── documents/           tcn_context.py, render.py, test_data_sheet.py, tests/
+│   │   ├── accounts/            registration, email login backend, user admin (approval) (§17 S2)
+│   │   ├── documents/           tcn_context.py, render.py, pdf.py, checks.py, test_data_sheet.py, tests/
 │   │   └── templates/           base.html, registration/login.html
 │   ├── doc_templates/           tcn.docx, README.md (tag reference)
 │   └── tests/fixtures/          tcn001_expected.txt
@@ -612,9 +634,10 @@ testlab/
 | 5 | TestRun/TcnRevision models | models, constraints, immutability guard | AT-6 (model part) |
 | 6 | Create & copy TCN | services, S4 register, S6, S7 edit, optimistic locking | AT-8, AT-14 |
 | 7 | Differences vs source | diff.py + markers in S7/S8 | AT-5 (diff part) |
-| 8 | TCN Word template & preview | tcn.docx, tcn_context, render, Preview DOCX | AT-2, AT-3, AT-16 (document part) |
+| 8 | TCN Word template & preview | tcn.docx, tcn_context, render, Preview DOCX (PDF since §17) | AT-2, AT-3, AT-16 (document part) |
 | 9 | Issue & lock | S8, S9, storage, hashes, snapshot, download; project-number lock (V2) | AT-4, AT-6, AT-17 |
 | 10 | Revisions, cancel, delete draft | S9 actions, S10 | AT-7 |
+| 10a | Stabilization (§17) | controlled PDF, registration + approval, authorization groundwork | AT-18, AT-19 |
 | 11 | Test Data Sheet | XLSX export | AT-11 |
 | 12 | PostgreSQL & deployment notes | PostgreSQL run of the suite, backup/restore notes, server run instructions | AT-13 |
 | 13 | PO acceptance checklist | manual test script for AT-4/AT-5/AT-12 | PO sign-off |
@@ -652,3 +675,65 @@ change the schema only add to it without breaking it:
 - The post-M1 legacy importer adds a `source_kind` value and a `legacy_source` field.
 
 Everything else in §15 affects labels, layout or deployment only.
+
+## 17. Post-Commit-10 stabilization decisions (PO, 2026-09-29)
+
+Approved after Commit 10, from hands-on testing and the intended corporate
+environment. The TCN lifecycle (draft → issue → revision / supersede /
+cancel) is unchanged.
+
+**S1 — The controlled TCN document is a PDF.** An issued TCN is a
+controlled instruction, not to be edited outside TestLab. Therefore:
+- Preview PDF (drafts, marked "DRAFT — not issued", not stored) and
+  Download issued PDF; no DOCX is offered anywhere in the application.
+- The issued artifact stored at issue is the PDF; `issued_document_sha256`
+  is the SHA-256 of the stored PDF. The Word template stays the layout
+  source (`template_sha256` still identifies it); the rendered DOCX exists
+  only temporarily during the conversion.
+- Conversion: LibreOffice headless on the server (Linux production; Windows
+  development supported with a normal LibreOffice install). No Microsoft
+  Word automation, no Microsoft Office requirement.
+- Fail-safe: a TCN becomes issued only when the PDF was generated and
+  stored; on any failure the TCN stays draft and nothing is kept.
+- Revision, supersede, cancel and historical downloads work as before,
+  each revision serving its own stored PDF.
+- Model fields keep their names (`issued_document`, `issued_document_sha256`)
+  — they are format-neutral; no schema migration was needed. The
+  development database held no issued TCNs, so no DOCX record exists; a
+  stored non-PDF would not be served.
+- This decision covers the TCN. Other generated documents (Test Program,
+  Summary, Report) are decided when their milestones are specified; the
+  "upload final edited DOCX" idea of 06 §4 does not apply to TCNs.
+
+**S2 — Registration with administrator approval.** `createsuperuser` is for
+bootstrap only. The login page offers "Log in | Register":
+- Register collects first name, last name, corporate email address,
+  password and confirmation (Django password validators). The email
+  address (lower-case) is the login identity; it is stored as both username
+  and email of Django's standard User model, so no custom user model or
+  authentication-model rewrite was needed. Bootstrap/admin-made accounts
+  may still log in with their username.
+- Only addresses of the domains in `TESTLAB_ALLOWED_EMAIL_DOMAINS`
+  (comma-separated, e.g. `example.com`; several allowed) may register —
+  exact domain match, case-insensitive, checked server-side; no domain is
+  hard-coded. Other addresses get a clear message and no account is
+  created. With no domain configured, registration is closed.
+- New accounts are inactive ("awaiting administrator approval") until an
+  administrator activates them in Django admin (action "Approve selected
+  accounts", filter "Awaiting approval", or the Active checkbox).
+
+**S3 — Authorization groundwork.** No role system in M1: every active user
+may issue and cancel (§4). The checks for these controlled actions are made
+in one module (`tcn/permissions.py`), so ordinary engineers, users allowed
+to issue controlled TCNs, and administrators can be distinguished later
+(e.g. with Django groups/permissions) without changing views, services or
+the domain model.
+
+**S4 — Corporate SSO is future work.** Microsoft Entra ID / LDAP / SSO is
+not implemented. It can replace or augment local authentication later as
+a Django authentication backend; the TestRun/TCN domain refers to users
+only through foreign keys (created_by, issued_by, cancelled_by, …) and
+does not change.
+
+**S5 — Scope.** Further usability findings from testing are collected
+separately and are not part of this change.

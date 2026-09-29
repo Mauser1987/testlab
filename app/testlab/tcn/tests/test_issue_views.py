@@ -6,7 +6,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
-from testlab.documents.tests.docx_text import docx_lines
+from testlab.documents.tests.pdf_text import pdf_lines
 from testlab.projects.arrangements import Arrangement
 from testlab.projects.models import Project
 from testlab.projects.tests.test_defaults_form import post_data
@@ -140,7 +140,7 @@ def test_download_serves_the_stored_file(logged_in, project, user, file_storage)
     tcn = issue(ready_tcn(project, user), user)
     response = logged_in.get(document_url(tcn))
     assert response.status_code == 200
-    assert response["Content-Disposition"] == 'attachment; filename="2026RSD03TL-TCN001.docx"'
+    assert response["Content-Disposition"] == 'attachment; filename="2026RSD03TL-TCN001.pdf"'
     assert b"".join(response.streaming_content) == stored_bytes(tcn)
 
     # Never regenerated: a missing file is an error, not a new render.
@@ -156,7 +156,7 @@ def test_register_offers_download_of_issued_tcn(logged_in, project, user):
     tcn = issue(ready_tcn(project, user), user)
     ready_tcn(project, user, run_no=2)
     content = logged_in.get(reverse("projects:detail", args=[project.pk])).content.decode()
-    assert content.count("Download DOCX") == 1 and document_url(tcn) in content
+    assert content.count("Download PDF") == 1 and document_url(tcn) in content
 
 
 # --- AT-4: M1 success criteria 1–10 -----------------------------------------------------------
@@ -205,7 +205,7 @@ def test_at4_m1_success_criteria(logged_in, user):
     assert response.status_code == 302
 
     # 6. Generate (preview) the TCN document.
-    preview = docx_lines(logged_in.get(reverse("tcn:preview", args=[tcn001.pk])).content)
+    preview = pdf_lines(logged_in.get(reverse("tcn:preview", args=[tcn001.pk])).content)
     assert "DRAFT — not issued" in preview and "Plug Seal Inboard Seal Outboard Seal" in preview
 
     # 7. Issue / lock.
@@ -233,10 +233,10 @@ def test_at4_m1_success_criteria(logged_in, user):
     logged_in.post(issue_url(tcn002), {"row_version": tcn002.row_version})
     tcn002 = TcnRevision.objects.get(pk=tcn002.pk)
     assert tcn002.status == TcnRevision.Status.ISSUED
-    assert "Speed: 1500 rpm" in docx_lines(stored_bytes(tcn002))
+    assert "Speed: 1500 rpm" in pdf_lines(stored_bytes(tcn002))
 
     tcn001 = TcnRevision.objects.get(pk=tcn001.pk)
     assert TcnRevision.objects.filter(pk=tcn001.pk).values().get() == record
     assert hashlib.sha256(stored_bytes(tcn001)).hexdigest() == file_hash
     assert tcn001.issued_snapshot["speed"] == "2980 rpm"
-    assert "Speed: 2980 rpm" in docx_lines(stored_bytes(tcn001))
+    assert "Speed: 2980 rpm" in pdf_lines(stored_bytes(tcn001))

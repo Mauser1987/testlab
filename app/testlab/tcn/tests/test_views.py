@@ -4,7 +4,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
-from testlab.documents.tests.docx_text import docx_lines
+from testlab.documents.tests.pdf_text import pdf_lines
 from testlab.projects.arrangements import Arrangement
 from testlab.projects.tests.test_defaults_form import post_data
 from testlab.tcn.models import TcnRevision, TestRun
@@ -374,24 +374,24 @@ def test_no_comparison_for_tcn_from_defaults_or_on_defaults_page(logged_in, proj
     assert 'class="was"' not in content and "difference" not in content
 
 
-# --- Preview DOCX (commit 8) --------------------------------------------------------
+# --- Preview PDF (commit 8; PDF since stabilization S1) --------------------------------------------------------
 
 
 def preview_url(tcn):
     return reverse("tcn:preview", args=[tcn.pk])
 
 
-def test_preview_draft_docx(logged_in, project, user):
+def test_preview_draft_pdf(logged_in, project, user):
     tcn = create_tcn(project, 1, user)
     logged_in.post(edit_url(tcn), edit_data(tcn, speed="2980"))
     before = TcnRevision.objects.filter(pk=tcn.pk).values().get()
 
     response = logged_in.get(preview_url(tcn))
     assert response.status_code == 200
-    assert response["Content-Type"] == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    assert response["Content-Disposition"] == 'attachment; filename="2026RSD03TL-TCN001-DRAFT.docx"'
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"] == 'inline; filename="2026RSD03TL-TCN001-DRAFT.pdf"'
     assert response["Cache-Control"] == "no-store"
-    lines = docx_lines(response.content)
+    lines = pdf_lines(response.content)
     assert "DRAFT — not issued" in lines and "Speed: 2980 rpm" in lines
 
     # Nothing is stored or changed by a preview.
@@ -403,7 +403,7 @@ def test_preview_uses_saved_draft_not_project_defaults(logged_in, project, user)
     defaults = project.default_setup
     defaults.speed = "1500"
     defaults.save()
-    lines = docx_lines(logged_in.get(preview_url(tcn)).content)
+    lines = pdf_lines(logged_in.get(preview_url(tcn)).content)
     assert not any("1500" in line for line in lines)
 
 

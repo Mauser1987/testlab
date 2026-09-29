@@ -1,5 +1,5 @@
-"""Test helpers. Status changes are made directly on the model here; the
-create/copy/issue/revise/cancel services arrive in later commits."""
+"""Test helpers. Status changes are made directly on the model here, bypassing
+the services, to test the model-level rules on their own."""
 
 from django.utils import timezone
 

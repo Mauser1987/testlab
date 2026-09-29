@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "testlab",
+    "testlab.accounts",
     "testlab.projects",
     "testlab.tcn",
 ]
@@ -97,6 +98,18 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Normal users log in with their corporate email address; the username of
+# a bootstrap account made with createsuperuser also works (accounts/backends.py).
+AUTHENTICATION_BACKENDS = ["testlab.accounts.backends.EmailOrUsernameBackend"]
+
+# Self-registration (stabilization decision S2): only these email domains may
+# register, e.g. TESTLAB_ALLOWED_EMAIL_DOMAINS=example.com,example.org. Empty:
+# registration is closed. New accounts are inactive until an administrator
+# activates them in Django admin.
+TESTLAB_ALLOWED_EMAIL_DOMAINS = [
+    domain.lower().lstrip("@") for domain in env_list("TESTLAB_ALLOWED_EMAIL_DOMAINS", [])
+]
+
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"
@@ -122,6 +135,12 @@ STORAGES = {
 
 # Word templates of generated documents (M1 spec §9.1).
 TESTLAB_TEMPLATE_DIR = Path(os.environ.get("TESTLAB_TEMPLATE_DIR", APP_DIR / "doc_templates"))
+
+# PDF conversion with LibreOffice headless (documents/pdf.py). TESTLAB_SOFFICE:
+# path of soffice (soffice.com on Windows); empty = look on PATH and in the
+# usual install locations. TESTLAB_PDF_TIMEOUT: seconds per conversion.
+TESTLAB_SOFFICE = os.environ.get("TESTLAB_SOFFICE", "")
+TESTLAB_PDF_TIMEOUT = int(os.environ.get("TESTLAB_PDF_TIMEOUT", "120"))
 
 # Usual project-number format. A mismatch only gives a warning (M1 spec V1).
 TESTLAB_PROJECT_NO_PATTERN = os.environ.get("TESTLAB_PROJECT_NO_PATTERN", r"^\d{4}RSD\d{2}TL$")

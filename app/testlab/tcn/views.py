@@ -1,24 +1,31 @@
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
-from testlab.documents.render import render_docx, template_path
+from testlab.documents.pdf import PDF_CONTENT_TYPE, PdfConversionError
+from testlab.documents.render import render_pdf, template_path
 from testlab.documents.tcn_context import build_tcn_context, tcn_file_name
 from testlab.projects.models import Project
 from testlab.projects.setup_forms import RunSetupEditor
 
 from .diff import source_changes
-from .forms import NewTcnForm, TcnHeaderForm
+from .forms import CancelTcnForm, NewTcnForm, TcnHeaderForm
 from .models import ImmutableTcnError, TcnRevision, TcnRuleError, TestRun
+from .permissions import can_cancel_tcn, can_issue_tcn
 from .services import (
     IssueError,
     StaleDraftError,
+    cancel_error,
+    cancel_tcn,
+    create_revision,
     create_tcn,
     default_copy_source,
+    delete_draft,
     issue_errors,
     issue_tcn,
+    new_revision_error,
     save_draft,
 )
 
@@ -125,26 +132,29 @@ class TcnEditView(DraftTcnMixin, View):
             "conflict": conflict,
             "change_list": changes,
             "changes": {change.key: change for change in changes or []},
+            "can_issue": can_issue_tcn(request.user),
         }
         return render(request, self.template_name, context)
 
 
-DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-
 class TcnPreviewView(DraftTcnMixin, View):
-    """Preview DOCX of a draft (§6 S7, §9.3): rendered from the saved draft, marked DRAFT, not stored.
+    """Preview PDF of a draft (§6 S7, §9.3): rendered from the saved draft, marked DRAFT, not stored.
 
-    Only drafts: an issued TCN's document is the stored file, never re-rendered (§9.4).
+    Only drafts: an issued TCN's document is the stored PDF, never re-rendered (§9.4).
     """
 
     def get(self, request, pk):
         tcn = self.get_tcn(pk)
         if tcn.is_locked:
             return self.refuse_locked(request, tcn)
-        content = render_docx(template_path("tcn.docx"), build_tcn_context(tcn))
-        response = HttpResponse(content, content_type=DOCX_CONTENT_TYPE)
-        response["Content-Disposition"] = f'attachment; filename="{tcn_file_name(tcn, draft=True)}"'
+        try:
+            content = render_pdf(template_path("tcn.docx"), build_tcn_context(tcn))
+        except PdfConversionError as error:
+            messages.error(request, f"The PDF preview could not be generated. {error}")
+            return redirect("tcn:edit", pk=tcn.pk)
+        response = HttpResponse(content, content_type=PDF_CONTENT_TYPE)
+        # Opened in the browser's PDF viewer; saving it gives the -DRAFT file name.
+        response["Content-Disposition"] = f'inline; filename="{tcn_file_name(tcn, draft=True)}"'
         response["Cache-Control"] = "no-store"
         return response
 
@@ -164,6 +174,9 @@ def render_issued(request, tcn):
         "snapshot": tcn.issued_snapshot,
         "revisions": revisions,
         "superseded_by": superseded_by,
+        "pending_draft": revisions.filter(status=TcnRevision.Status.DRAFT).first(),
+        "can_revise": new_revision_error(tcn) is None,
+        "can_cancel": cancel_error(tcn) is None and can_cancel_tcn(request.user),
     }
     return render(request, "tcn/tcn_view.html", context)
 
@@ -172,6 +185,11 @@ class TcnIssueView(DraftTcnMixin, View):
     """S8: issue confirmation. Issues the saved draft as it was reviewed on this page."""
 
     template_name = "tcn/tcn_issue.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not can_issue_tcn(request.user):
+            raise PermissionDenied("You are not allowed to issue TCNs.")
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk):
         tcn = self.get_tcn(pk)
@@ -210,18 +228,121 @@ class TcnIssueView(DraftTcnMixin, View):
 
 
 class TcnDocumentView(View):
-    """Download of the issued DOCX: always the stored file, never re-rendered (§9.4)."""
+    """Download of the issued PDF: always the stored file, never re-rendered (§9.4).
+
+    Only a stored PDF is served; the controlled document is never offered in
+    an editable format.
+    """
 
     def get(self, request, pk):
         tcn = get_object_or_404(TcnRevision.objects.select_related("test_run__project"), pk=pk)
-        if not tcn.is_locked or not tcn.issued_document:
-            raise Http404("This TCN has no issued document.")
+        name = tcn.issued_document.name if tcn.issued_document else ""
+        if not tcn.is_locked or not name.lower().endswith(".pdf"):
+            raise Http404("This TCN has no issued PDF.")
         storage = tcn.issued_document.storage
-        if not storage.exists(tcn.issued_document.name):
-            raise Http404("The issued document file is missing from the file store.")
+        if not storage.exists(name):
+            raise Http404("The issued PDF is missing from the file store.")
         return FileResponse(
-            storage.open(tcn.issued_document.name, "rb"),
+            storage.open(name, "rb"),
             as_attachment=True,
-            filename=tcn.issued_document.name.rsplit("/", 1)[-1],
-            content_type=DOCX_CONTENT_TYPE,
+            filename=name.rsplit("/", 1)[-1],
+            content_type=PDF_CONTENT_TYPE,
         )
+
+
+class TcnNewRevisionView(View):
+    """S9 "New revision": draft rev n+1 of the current issued revision (V13)."""
+
+    def post(self, request, pk):
+        tcn = get_object_or_404(TcnRevision, pk=pk)
+        try:
+            revision = create_revision(tcn, request.user)
+        except TcnRuleError as error:
+            messages.error(request, str(error))
+            return redirect("tcn:edit", pk=tcn.pk)
+        messages.success(request, f"{revision} created as draft (new revision of {tcn}).")
+        return redirect("tcn:edit", pk=revision.pk)
+
+
+class TcnCancelView(View):
+    """S10: cancel the current issued revision with a reason (V14)."""
+
+    template_name = "tcn/tcn_cancel.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not can_cancel_tcn(request.user):
+            raise PermissionDenied("You are not allowed to cancel TCNs.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, pk):
+        tcn = get_object_or_404(TcnRevision.objects.select_related("test_run__project"), pk=pk)
+        if refusal := self.refusal(request, tcn):
+            return refusal
+        return self.render(request, tcn, CancelTcnForm())
+
+    def post(self, request, pk):
+        tcn = get_object_or_404(TcnRevision.objects.select_related("test_run__project"), pk=pk)
+        if refusal := self.refusal(request, tcn):
+            return refusal
+        form = CancelTcnForm(request.POST)
+        if form.is_valid():
+            try:
+                tcn = cancel_tcn(tcn, form.cleaned_data["reason"], request.user)
+            except ValidationError as error:
+                form.add_error(None, error)
+            except TcnRuleError as error:
+                messages.error(request, str(error))
+                return redirect("tcn:edit", pk=tcn.pk)
+            else:
+                messages.success(request, f"{tcn} cancelled.")
+                return redirect("tcn:edit", pk=tcn.pk)
+        return self.render(request, tcn, form)
+
+    def refusal(self, request, tcn):
+        error = cancel_error(tcn)
+        if error:
+            messages.error(request, error)
+            return redirect("tcn:edit", pk=tcn.pk)
+        return None
+
+    def render(self, request, tcn, form):
+        return render(request, self.template_name, {"tcn": tcn, "project": tcn.test_run.project, "form": form})
+
+
+class TcnDeleteView(DraftTcnMixin, View):
+    """Delete draft (S7): confirmation, then removed without trace (§4)."""
+
+    template_name = "tcn/tcn_delete.html"
+
+    def get(self, request, pk):
+        tcn = self.get_tcn(pk)
+        if tcn.is_locked:
+            return self.refuse_locked(request, tcn)
+        return self.render(request, tcn)
+
+    def post(self, request, pk):
+        tcn = self.get_tcn(pk)
+        if tcn.is_locked:
+            return self.refuse_locked(request, tcn)
+        try:
+            row_version = int(request.POST.get("row_version", ""))
+        except ValueError:
+            return self.render(request, tcn, error="The confirmation data was incomplete; confirm again.")
+        name, run, project = str(tcn), tcn.test_run, tcn.test_run.project
+        try:
+            delete_draft(tcn, row_version, request.user)
+        except StaleDraftError as error:
+            return self.render(request, self.get_tcn(pk), error=f"{error} Review it again before deleting.")
+        except ImmutableTcnError:
+            return self.refuse_locked(request, self.get_tcn(pk))
+        except TcnRuleError as error:
+            return self.render(request, tcn, error=str(error))
+        messages.success(request, f"Draft {name} deleted.")
+        remaining = run.current_revision() if TestRun.objects.filter(pk=run.pk).exists() else None
+        if remaining:
+            return redirect("tcn:edit", pk=remaining.pk)
+        return redirect("projects:detail", pk=project.pk)
+
+    def render(self, request, tcn, error=None):
+        context = {"tcn": tcn, "project": tcn.test_run.project, "error": error}
+        return render(request, self.template_name, context)

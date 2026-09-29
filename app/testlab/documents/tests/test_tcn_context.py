@@ -67,8 +67,8 @@ def test_units_only_with_a_value():
 def test_date_and_file_names(project, user):
     assert format_date(datetime.date(2026, 6, 16)) == "16-Jun-2026"
     tcn = issue(tcn_with(project, user), user)
-    assert tcn_file_name(tcn) == "2099RSD01TL-TCN001.docx"
-    assert tcn_file_name(new_revision(tcn, user), draft=True) == "2099RSD01TL-TCN001-rev1-DRAFT.docx"
+    assert tcn_file_name(tcn) == "2099RSD01TL-TCN001.pdf"
+    assert tcn_file_name(new_revision(tcn, user), draft=True) == "2099RSD01TL-TCN001-rev1-DRAFT.pdf"
 
 
 def test_run_description_levels():

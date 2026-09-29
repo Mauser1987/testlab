@@ -75,3 +75,9 @@ class TcnHeaderForm(forms.ModelForm):
 
     def clean_prepared_by(self):
         return self.cleaned_data["prepared_by"].upper()
+
+
+class CancelTcnForm(forms.Form):
+    """S10: reason for cancelling an issued TCN (V14)."""
+
+    reason = forms.CharField(label="Reason for cancelling", widget=forms.Textarea(attrs={"rows": 3, "cols": 80}))

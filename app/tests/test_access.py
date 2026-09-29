@@ -19,7 +19,11 @@ from django.urls import reverse
         "/tcn/1/preview/",
         "/tcn/1/issue/",
         "/tcn/1/document/",
+        "/tcn/1/new-revision/",
+        "/tcn/1/cancel/",
+        "/tcn/1/delete/",
         "/accounts/password_change/",
+        "/admin/auth/user/",
     ],
 )
 def test_anonymous_request_redirects_to_login(client, path):
@@ -56,7 +60,7 @@ def test_login_then_home_shows_user(client, user):
 def test_wrong_password_is_rejected(client, user):
     response = client.post(reverse("login"), {"username": "mgeerts", "password": "wrong"})
     assert response.status_code == 200
-    assert b"didn't match" in response.content
+    assert b"did not match" in response.content
     assert client.get(reverse("home")).status_code == 302
 
 

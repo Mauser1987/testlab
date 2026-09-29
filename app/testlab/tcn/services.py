@@ -1,5 +1,6 @@
 """TCN workflows (M1 spec §4, §7, §9.4): create from project defaults or by
-copy, save a draft with optimistic locking (V10), and issue.
+copy, save a draft with optimistic locking (V10), issue, new revision,
+cancel and delete a draft.
 
 The domain rules themselves (snapshot ownership, same-project copies,
 immutability) live in models.py; these functions only combine them into
@@ -12,10 +13,11 @@ import io
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, ProtectedError
 from django.utils import timezone
 
-from testlab.documents.render import render_docx, template_path
+from testlab.documents.pdf import PdfConversionError
+from testlab.documents.render import render_pdf, template_path
 from testlab.documents.tcn_context import build_tcn_context, tcn_file_name
 from testlab.projects.arrangements import SealRole
 
@@ -142,19 +144,20 @@ def issue_errors(tcn):
 
 
 def issued_document_name(tcn):
-    """Storage path of the issued DOCX: projects/<project_no>/tcn/<file name> (§9.4)."""
+    """Storage path of the issued PDF: projects/<project_no>/tcn/<file name> (§9.4)."""
     return f"projects/{tcn.test_run.project.project_no}/tcn/{tcn_file_name(tcn)}"
 
 
 def issue_tcn(tcn, expected_row_version, user):
-    """Issue a draft: the stored DOCX and snapshot become the record of the instruction.
+    """Issue a draft: the stored PDF and snapshot become the record of the instruction.
 
-    In one transaction: V11 check on the saved draft, render without the draft
-    marking, store the file (refused if it exists, V15), store the file and
-    template hashes and the render context, set issued_at/issued_by (the
+    In one transaction: V11 check on the saved draft, render the PDF without
+    the draft marking (Word template → temporary DOCX → PDF), store it
+    (refused if the file exists, V15), store the SHA-256 of the stored PDF
+    and of the template and the render context, set issued_at/issued_by (the
     user performing the issue) and supersede the previously issued revision
-    of the run. On any failure nothing is kept: the TCN stays a draft and a
-    file already written is removed.
+    of the run. On any failure — including a failed PDF conversion — nothing
+    is kept: the TCN stays a draft and a file already written is removed.
     """
     storage = TcnRevision._meta.get_field("issued_document").storage
     written = None
@@ -165,11 +168,16 @@ def issue_tcn(tcn, expected_row_version, user):
             errors = issue_errors(tcn)
             if errors:
                 raise IssueError(errors)
+            if tcn.test_run.revisions.filter(status=TcnRevision.Status.CANCELLED).exists():
+                raise IssueError([f"TCN{tcn.test_run.display_no} has been cancelled; nothing was issued."])
 
             context = build_tcn_context(tcn)
             context["is_draft"] = False
             template = template_path("tcn.docx").read_bytes()
-            content = render_docx(io.BytesIO(template), context)
+            try:
+                content = render_pdf(io.BytesIO(template), context)
+            except PdfConversionError as error:
+                raise IssueError([f"The PDF could not be generated; nothing was issued. {error}"]) from error
 
             name = issued_document_name(tcn)
             if storage.exists(name):
@@ -177,6 +185,9 @@ def issue_tcn(tcn, expected_row_version, user):
             written = storage.save(name, ContentFile(content))
             if written != name:  # created concurrently: the storage picked another name
                 raise IssueError([f"The file {name} already exists; nothing was issued."])
+            with storage.open(written, "rb") as stored:  # the hash must describe the stored file
+                if stored.read() != content:
+                    raise IssueError([f"The file {name} was not stored correctly; nothing was issued."])
 
             previous = tcn.test_run.revisions.filter(status=TcnRevision.Status.ISSUED).exclude(pk=tcn.pk)
             for revision in previous:  # at most one (database constraint)
@@ -198,3 +209,100 @@ def issue_tcn(tcn, expected_row_version, user):
             storage.delete(written)
         raise
     return tcn
+
+
+# --- New revision, cancel, delete draft (§4, V13, V14) ----------------------------------------
+
+
+def new_revision_error(tcn):
+    """V13: why no new revision can be made from `tcn` (None: allowed)."""
+    run = tcn.test_run
+    if run.revisions.filter(status=TcnRevision.Status.CANCELLED).exists():
+        return f"TCN{run.display_no} has been cancelled; it cannot be revised."
+    if tcn.status != TcnRevision.Status.ISSUED:
+        return f"{tcn} is not the current issued revision; only that one can be revised."
+    draft = run.revisions.filter(status=TcnRevision.Status.DRAFT).first()
+    if draft:
+        return f"{draft} is already in preparation as a draft."
+    return None
+
+
+def create_revision(tcn, user):
+    """New revision of the current issued revision `tcn`: draft rev n+1, an independent copy.
+
+    Copies the run setup and project description of `tcn`; prepared by is the
+    current user. `tcn` itself is not changed until the new revision is issued.
+    """
+    try:
+        with transaction.atomic():
+            # Lock the source so concurrent revise/cancel requests are serialised.
+            tcn = TcnRevision.objects.select_for_update().select_related("test_run", "setup").get(pk=tcn.pk)
+            error = new_revision_error(tcn)
+            if error:
+                raise TcnRuleError(error)
+            return TcnRevision.objects.create(
+                test_run=tcn.test_run,
+                revision=tcn.test_run.next_revision_no(),
+                setup=tcn.setup.clone(),
+                project_description=tcn.project_description,
+                prepared_by=initials(user),
+                source_kind=TcnRevision.SourceKind.NEW_REVISION,
+                source_tcn=tcn,
+                created_by=user,
+                updated_by=user,
+            )
+    except IntegrityError:
+        # Another user created the draft revision at the same time (one draft per run).
+        draft = tcn.test_run.revisions.filter(status=TcnRevision.Status.DRAFT).first()
+        if draft:
+            raise TcnRuleError(f"{draft} is already in preparation as a draft.")
+        raise
+
+
+def cancel_error(tcn):
+    """V14 (and no pending draft): why `tcn` cannot be cancelled (None: allowed)."""
+    if tcn.status != TcnRevision.Status.ISSUED:
+        return f"{tcn} is not the current issued revision; only that one can be cancelled."
+    draft = tcn.test_run.revisions.filter(status=TcnRevision.Status.DRAFT).first()
+    if draft:
+        return f"{draft} is in preparation; delete that draft before cancelling {tcn}."
+    return None
+
+
+def cancel_tcn(tcn, reason, user):
+    """Cancel the current issued revision (S10). Its record, document and snapshot are kept."""
+    reason = reason.strip()
+    if not reason:
+        raise ValidationError({"reason": "A reason for cancelling is required."})
+    with transaction.atomic():
+        tcn = TcnRevision.objects.select_for_update().select_related("test_run").get(pk=tcn.pk)
+        error = cancel_error(tcn)
+        if error:
+            raise TcnRuleError(error)
+        tcn.status = TcnRevision.Status.CANCELLED
+        tcn.cancelled_at = timezone.now()
+        tcn.cancelled_by = user
+        tcn.cancel_reason = reason
+        tcn.updated_by = user
+        tcn.save()
+    return tcn
+
+
+def delete_draft(tcn, expected_row_version, user):
+    """Delete a draft without trace (§4). Rev 0 takes its TestRun with it.
+
+    Refused when the draft was saved by someone else since it was reviewed
+    (V10), when it is no longer a draft, or when another TCN was copied from it.
+    """
+    with transaction.atomic():
+        _claim_draft(tcn, expected_row_version, user)
+        tcn = TcnRevision.objects.select_related("test_run").get(pk=tcn.pk)
+        derived = list(tcn.derived_revisions.all())
+        if derived:
+            names = ", ".join(str(d) for d in derived)
+            verb = "was" if len(derived) == 1 else "were"
+            raise TcnRuleError(f"{tcn} cannot be deleted: {names} {verb} copied from it.")
+        try:
+            tcn.delete()  # the model removes its setup and, for rev 0, the TestRun
+        except ProtectedError as error:  # a copy made concurrently
+            raise TcnRuleError(f"{tcn} cannot be deleted: another TCN was copied from it.") from error

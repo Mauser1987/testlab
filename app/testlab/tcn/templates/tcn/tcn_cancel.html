@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Cancel {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> ›
+    <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+    <a href="{% url 'tcn:edit' tcn.pk %}">{{ tcn }}</a> › Cancel
+  </nav>
+{% endblock %}
+{% block content %}
+  <h1>Cancel {{ tcn }}</h1>
+
+  <p class="notice">A cancelled TCN cannot be revised or issued again. Its record and issued document are kept,
+    and it can still be copied to a new TCN.</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="field">
+      {{ form.reason.label_tag }}<br>{{ form.reason }}
+      {{ form.reason.errors }}
+    </div>
+    <div class="actions">
+      <button type="submit">Confirm cancel</button>
+      <a href="{% url 'tcn:edit' tcn.pk %}">Back to {{ tcn }}</a>
+    </div>
+  </form>
+{% endblock %}

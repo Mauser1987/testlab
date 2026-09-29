@@ -1,4 +1,9 @@
-"""Render a Word template with docxtpl (M1 spec §9.1). Used by preview and, from commit 9, issue."""
+"""Render the TCN document (M1 spec §9.1, stabilization decision S1).
+
+Pipeline: context → Word template (docxtpl) → temporary DOCX → PDF
+(LibreOffice, pdf.py). The PDF is the document users see and the one
+stored at issue; the DOCX is an internal intermediate and is never served.
+"""
 
 import io
 from pathlib import Path
@@ -7,13 +12,26 @@ from django.conf import settings
 from docxtpl import DocxTemplate
 from lxml import etree
 
+from . import pdf
+
 
 def template_path(name):
     return Path(settings.TESTLAB_TEMPLATE_DIR) / name
 
 
+def render_pdf(template, context):
+    """Render `template` with `context` and convert it; returns the PDF as bytes.
+
+    Raises pdf.PdfConversionError when the PDF cannot be generated.
+    """
+    return pdf.docx_to_pdf(render_docx(template, context))
+
+
 def render_docx(template, context):
-    """Render `template` (a path or a file object) with `context`; returns the DOCX as bytes."""
+    """Render `template` (a path or a file object) with `context`; returns the DOCX as bytes.
+
+    Internal step of render_pdf; also used by the layout regression tests.
+    """
     document = _Template(template)
     document.render(context, autoescape=True)
     output = io.BytesIO()

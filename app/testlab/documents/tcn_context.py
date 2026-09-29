@@ -40,10 +40,10 @@ def build_tcn_context(tcn):
 
 
 def tcn_file_name(tcn, draft=False):
-    """e.g. 2026RSD03TL-TCN001.docx, 2026RSD03TL-TCN001-rev1.docx (§4); previews end in -DRAFT."""
+    """e.g. 2026RSD03TL-TCN001.pdf, 2026RSD03TL-TCN001-rev1.pdf (§4); previews end in -DRAFT."""
     revision = f"-rev{tcn.revision}" if tcn.revision else ""
     suffix = "-DRAFT" if draft else ""
-    return f"{tcn.test_run.project.project_no}-TCN{tcn.test_run.display_no}{revision}{suffix}.docx"
+    return f"{tcn.test_run.project.project_no}-TCN{tcn.test_run.display_no}{revision}{suffix}.pdf"
 
 
 def format_date(value):

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> ›
+    <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+    <a href="{% url 'tcn:edit' tcn.pk %}">{{ tcn }}</a> › Delete draft
+  </nav>
+{% endblock %}
+{% block content %}
+  <h1>Delete draft {{ tcn }}</h1>
+
+  {% if error %}<p class="error conflict">{{ error }}</p>{% endif %}
+
+  <p class="notice">
+    {% if tcn.revision %}The draft revision {{ tcn.revision }} is deleted; the issued revisions of
+      Run {{ tcn.test_run.display_no }} are not affected.
+    {% else %}The draft and Run {{ tcn.test_run.display_no }} are deleted; the run number becomes free again.{% endif %}
+    This cannot be undone.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="row_version" value="{{ tcn.row_version }}">
+    <div class="actions">
+      <button type="submit">Delete draft</button>
+      <a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
+    </div>
+  </form>
+{% endblock %}

@@ -31,7 +31,7 @@ Source material: `/reference` (read-only)
 | [03-domain-model.md](03-domain-model.md) | C — domain model, reusable entities, entity/relationship schema (tasks 5, 6, 14) |
 | [04-architecture.md](04-architecture.md) | D — application architecture & technology stack (task 13) |
 | [05-ui-and-workflow.md](05-ui-and-workflow.md) | E — navigation, main screens, end-to-end workflow (tasks 7, 8) |
-| [06-document-generation.md](06-document-generation.md) | F — DOCX template generation (task 15) |
+| [06-document-generation.md](06-document-generation.md) | F — Word template generation (task 15); TCN output is PDF (11 §17) |
 | [07-excel-vba-legacy.md](07-excel-vba-legacy.md) | What the existing Excel/VBA TCN generator does and what must be preserved (task 9) |
 | [08-edge-cases.md](08-edge-cases.md) | Edge cases, inconsistencies and ambiguities found in the documents (task 11) |
 | [09-scope-and-milestones.md](09-scope-and-milestones.md) | G, H, J — MVP/V1 scope, later phases, milestones, recommended next step (task 12) |

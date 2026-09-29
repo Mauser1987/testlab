@@ -7,6 +7,11 @@ tags; edit them in Word. TestLab never sets fonts, margins or colours.
 The directory is configurable with `TESTLAB_TEMPLATE_DIR` (default: this
 directory).
 
+The Word file rendered from a template is an internal step: TestLab
+converts it to PDF with LibreOffice (`documents/pdf.py`) and only the PDF
+is previewed, issued and downloaded (M1 spec §17 S1). Check a template
+change in Preview PDF — LibreOffice renders the Word layout.
+
 ## `tcn.docx` — Test Change Notice
 
 Layout of `reference/tcn/TCN001.pdf` (the Excel TCN print), on A4, Calibri 11.

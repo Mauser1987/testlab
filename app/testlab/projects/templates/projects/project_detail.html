@@ -57,7 +57,7 @@
               <td>
                 <a href="{% url 'tcn:edit' tcn.pk %}">Open</a> ·
                 <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
-                {% if tcn.issued_document %} · <a href="{% url 'tcn:document' tcn.pk %}">Download DOCX</a>{% endif %}
+                {% if tcn.issued_document %} · <a href="{% url 'tcn:document' tcn.pk %}">Download PDF</a>{% endif %}
               </td>
             </tr>
           {% endwith %}

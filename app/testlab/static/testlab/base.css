@@ -10,7 +10,8 @@ main { padding: 16px; max-width: 1200px; }
 .messages li { padding: 8px 12px; margin-bottom: 8px; background: #eef3f8; border-left: 4px solid #1f3a5a; }
 .messages li.warning { background: #fff6e0; border-color: #c98a00; }
 .messages li.error, .error { color: #a4161a; }
-form.login label { display: inline-block; min-width: 90px; }
+form.login label { display: inline-block; min-width: 190px; }
+.auth-switch { margin: 0 0 8px; }
 .breadcrumbs { padding: 8px 16px; background: #eef1f4; font-size: 14px; }
 .breadcrumbs a { color: #1f3a5a; }
 .page-head { display: flex; align-items: center; justify-content: space-between; }
@@ -41,6 +42,7 @@ label.check { display: block; font-weight: normal; }
 .discard { border: 1px solid #c98a00; background: #fff6e0; padding: 8px 12px; margin: 12px 0; }
 .discard.required { border-color: #a4161a; }
 .actions { margin-top: 12px; display: flex; gap: 12px; align-items: center; }
+.actions form { margin: 0; }
 .status { font-size: 12px; padding: 1px 6px; border-radius: 3px; background: #eef1f4; font-weight: 600; }
 .status-draft { background: #fff6e0; color: #7a5300; }
 .status-issued { background: #e3f1e6; color: #1f5f2e; }

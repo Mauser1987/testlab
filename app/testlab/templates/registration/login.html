@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Log in · TestLab{% endblock %}
 {% block content %}
+  <p class="auth-switch"><strong>Log in</strong> | <a href="{% url 'register' %}">Register</a></p>
   <h1>Log in</h1>
-  {% if form.errors %}
-    <p class="error">Your username and password didn't match. Please try again.</p>
+  {% if form.non_field_errors %}
+    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
   {% endif %}
   <form method="post" action="{% url 'login' %}" class="login">
     {% csrf_token %}

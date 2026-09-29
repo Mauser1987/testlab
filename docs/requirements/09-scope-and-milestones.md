@@ -21,14 +21,14 @@ works acceptably in Word for now.
   instructions text
 - Differences vs source highlighted
 - Issue/lock; new revision with reason; no hard delete of issued TCNs
-- Generate TCN DOCX from Word template
+- Generate the TCN as a PDF from the Word template (controlled document, 11 §17)
 - Test Data Sheet export (XLSX, replaces Excel "Create Test Data Sheet")
-- Django authentication; PostgreSQL-ready; backup procedure
+- Django authentication; registration with corporate email domain and administrator approval (11 §17); PostgreSQL-ready; backup procedure
 
 Deliberately **not** in M1: legacy Excel import (post-M1, after the
 data model is validated on new projects), condition steps (multi-phase stays in text as
 today), catalogues for rigs/parameters/materials, field-level change log,
-PDF output, Excel "test results" functions (unused), approvals.
+Excel "test results" functions (unused), approvals, corporate SSO.
 
 **Acceptance tests:** 11-m1-specification.md §11.
 
