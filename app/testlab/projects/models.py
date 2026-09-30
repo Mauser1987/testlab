@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models, transaction
+from django.db.models import Q
 
 from . import conditions
 from .arrangements import (
@@ -12,6 +13,7 @@ from .arrangements import (
     applicable_monitored_parameters,
     applicable_roles,
     canonical_order,
+    plug_seal_required,
     seal_under_test_roles,
 )
 
@@ -96,6 +98,13 @@ class Project(models.Model):
             super().save(*args, **kwargs)
 
 
+SINGLE_WITHOUT_PLUG_SEAL = "A single seal cannot be tested alone: the Plug Seal is required."
+PROCESS_WITHOUT_PLUG_SEAL = (
+    "Process conditions are filled in but no Plug Seal is installed "
+    "(the process conditions are established with the Plug Seal)."
+)
+
+
 def _text(verbose_name, max_length):
     return models.CharField(verbose_name, max_length=max_length, blank=True)
 
@@ -105,14 +114,15 @@ class RunSetup(models.Model):
 
     Used as a project's defaults (Project.default_setup) and as each TCN
     revision's own copy (TcnRevision.setup, made with clone()). Holds the
-    seal arrangement under test, the optional Plug Seal, and the run
-    conditions grouped by circuit (see conditions.py).
+    seal arrangement under test, the Plug Seal (required for single), and
+    the run conditions grouped by circuit (see conditions.py).
     """
 
     arrangement = models.CharField(
         "Seal arrangement", max_length=24, choices=Arrangement.choices, default=Arrangement.DUAL_PRESSURIZED
     )
-    # Plug Seal: process-side test equipment, not part of the arrangement.
+    # Plug Seal: test equipment that establishes the process conditions, not
+    # part of the arrangement. Required for single (V16), optional for dual.
     plug_seal_present = models.BooleanField("Plug Seal installed", default=False)
     reference_drawing = _text("Reference drawing", 200)
     run_description = models.TextField("Test Run description", blank=True)
@@ -122,7 +132,7 @@ class RunSetup(models.Model):
     duration = _text("Duration", 50)
     speed = _text("Speed", 50)
 
-    # Process / test side
+    # Process Conditions, established with the Plug Seal (only when plug_seal_present, V6)
     process_medium = _text("Process medium", 100)
     process_pressure = _text("Process pressure", 50)
     process_inlet_temperature = _text("Process inlet temperature", 50)
@@ -134,12 +144,6 @@ class RunSetup(models.Model):
     seal_support_inlet_temperature = _text("Seal-support inlet temperature", 50)
     seal_support_flow = _text("Seal-support flow", 50)
 
-    # Plug Seal circuit (only when plug_seal_present)
-    plug_medium = _text("Plug Seal medium", 100)
-    plug_pressure = _text("Plug Seal pressure", 50)
-    plug_inlet_temperature = _text("Plug Seal inlet temperature", 50)
-    plug_flow = _text("Plug Seal flow", 50)
-
     monitored_parameters = models.JSONField("Parameters to log", default=list, blank=True)
 
     TEXT_FIELDS = (
@@ -147,11 +151,37 @@ class RunSetup(models.Model):
         + conditions.COMMON_FIELDS
         + conditions.PROCESS_FIELDS
         + conditions.SEAL_SUPPORT_FIELDS
-        + conditions.PLUG_FIELDS
     )
 
+    class Meta:
+        constraints = [
+            # V16: single ⇒ Plug Seal.
+            models.CheckConstraint(
+                condition=~Q(arrangement="single") | Q(plug_seal_present=True),
+                name="single_seal_requires_plug_seal",
+                violation_error_message=SINGLE_WITHOUT_PLUG_SEAL,
+            ),
+            # V6: no process conditions without the Plug Seal.
+            models.CheckConstraint(
+                condition=Q(plug_seal_present=True)
+                | Q(process_medium="", process_pressure="", process_inlet_temperature="", process_flow=""),
+                name="process_conditions_require_plug_seal",
+                violation_error_message=PROCESS_WITHOUT_PLUG_SEAL,
+            ),
+        ]
+
     def __str__(self):
-        return f"RunSetup {self.pk} ({self.get_arrangement_display()}{' + Plug Seal' if self.plug_seal_present else ''})"
+        return f"RunSetup {self.pk} ({self.configuration_display})"
+
+    @property
+    def configuration_display(self):
+        """e.g. "Single", "Dual Pressurized + Plug Seal".
+
+        The Plug Seal is only named where it is optional: a single seal is
+        always tested with it, and "Single + Plug" is not an arrangement.
+        """
+        optional_plug = self.plug_seal_present and not plug_seal_required(self.arrangement)
+        return self.get_arrangement_display() + (" + Plug Seal" if optional_plug else "")
 
     @classmethod
     def create_with_positions(cls, **fields):
@@ -215,12 +245,13 @@ class RunSetup(models.Model):
     def clean(self):
         self.normalization_notices = self.normalize()
         errors = {}
-        # V6: Plug Seal conditions only exist with a Plug Seal. Seal-support
+        # V16: a single seal is only tested with the Plug Seal.
+        if plug_seal_required(self.arrangement) and not self.plug_seal_present:
+            errors["plug_seal_present"] = SINGLE_WITHOUT_PLUG_SEAL
+        # V6: process conditions only exist with the Plug Seal. Seal-support
         # values are valid for every arrangement, including single.
-        if not self.plug_seal_present:
-            filled = [f for f in conditions.PLUG_FIELDS if getattr(self, f)]
-            if filled:
-                errors["plug_seal_present"] = "Plug Seal conditions are filled in but no Plug Seal is installed."
+        elif not self.plug_seal_present and any(getattr(self, f) for f in conditions.PROCESS_FIELDS):
+            errors["plug_seal_present"] = PROCESS_WITHOUT_PLUG_SEAL
         # V7
         if not isinstance(self.monitored_parameters, list):
             errors["monitored_parameters"] = "Must be a list of parameter codes."
@@ -238,8 +269,7 @@ class RunSetup(models.Model):
         actual = sorted(self.positions.values_list("role", flat=True))
         if actual != sorted(expected):
             raise ValidationError(
-                f"Seal positions {actual} do not match {self.get_arrangement_display()}"
-                f"{' + Plug Seal' if self.plug_seal_present else ''} (expected {sorted(expected)})."
+                f"Seal positions {actual} do not match {self.configuration_display} (expected {sorted(expected)})."
             )
 
     def save(self, *args, **kwargs):
@@ -251,9 +281,9 @@ class SealPosition(models.Model):
     """One seal of a RunSetup (M1 spec §1.3).
 
     Roles test / inboard / outboard belong to the mechanical seal arrangement
-    under test. Role plug is the Plug Seal: process-side simulation/test
-    equipment, not a stage of a dual seal; it shares this table only because
-    it is described by the same four fields.
+    under test. Role plug is the Plug Seal: the test equipment that
+    establishes the process conditions, not a stage of a dual seal; it shares
+    this table only because it is described by the same four fields.
     """
 
     setup = models.ForeignKey(RunSetup, on_delete=models.CASCADE, related_name="positions")

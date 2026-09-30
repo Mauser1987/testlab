@@ -30,7 +30,7 @@ contains labels, units and "NA", so the template only places values.
 | `{%tc for col in seal_columns %}` … `{%tc endfor %}` | One column per seal: Plug Seal (if installed), then Test Seal or Inboard + Outboard Seal | |
 | `col.heading`, `col.seal_type_size`, `col.stationary_face`, `col.rotating_face`, `col.springs` | Seal column values | `Inboard Seal`, `UHTW 4.750` |
 | `{{ test_unit }}`, `{{ duration }}`, `{{ speed }}` | Common Test Run conditions, with unit | `B`, `min 75 hours`, `2980 rpm` |
-| `{%tc for col in condition_columns %}` … `{%tc endfor %}` | One column per circuit: Process Fluid, Barrier/Buffer/Flush Fluid, Plug Seal Fluid | |
+| `{%tc for col in condition_columns %}` … `{%tc endfor %}` | One column per circuit: Process Fluid (established with the Plug Seal; NA without it), Barrier/Buffer/Flush Fluid | |
 | `col.heading`, `col.medium`, `col.pressure`, `col.inlet_temperature`, `col.flow` | Circuit values, with unit; `NA` or blank when empty (M1 spec §9.3) | `Barrier Fluid`, `70 barg`, `60°C`, `TBD l/min` |
 | `{{ prepared_by }}`, `{{ created_date }}` | Footer | `MG`, `16-Jun-2026` |
 

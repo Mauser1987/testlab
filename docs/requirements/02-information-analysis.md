@@ -69,9 +69,11 @@
 - Arrangement — **PO decision:** exactly Single, Dual Pressurized,
   Dual Unpressurized (face-to-face / face-to-back is descriptive detail, not a
   separate arrangement)
-- **Plug Seal: optional and modelled separately** from the arrangement
-  (Single ± Plug, Dual Pressurized ± Plug, Dual Unpressurized ± Plug)
-- Seal positions: Test seal (single) or IB & OB (dual), plus Plug seal when present
+- **Plug Seal: modelled separately** from the arrangement; it establishes
+  the process conditions. Required for Single (a single seal cannot be
+  tested alone), optional for Dual Pressurized / Dual Unpressurized
+  (corrected 2026-09-30; its conditions are the Process Conditions)
+- Seal positions: Plug + Test seal (single) or IB & OB (dual), plus Plug seal when present
 - Per position: seal type & size, stationary face (part no., balance %,
   material), rotating face (part no., material), spring(s) (part no. + qty),
   sleeve, gaskets/secondary seals, material code

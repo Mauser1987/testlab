@@ -14,7 +14,6 @@ from dataclasses import dataclass
 
 from testlab.projects import conditions
 from testlab.projects.arrangements import (
-    PLUG_SEAL_CIRCUIT_PARAMETERS,
     PROCESS_PARAMETERS,
     ROLE_SHORT_LABELS,
     SEAL_SUPPORT_PARAMETERS,
@@ -33,7 +32,6 @@ SETUP_FIELDS = (
     + conditions.COMMON_FIELDS
     + conditions.PROCESS_FIELDS
     + conditions.SEAL_SUPPORT_FIELDS
-    + conditions.PLUG_FIELDS
     + ["monitored_parameters"]
 )
 
@@ -97,8 +95,6 @@ def _parameter_name(code, support_label):
         group = "Process"
     elif code in SEAL_SUPPORT_PARAMETERS:
         group = support_label
-    elif code in PLUG_SEAL_CIRCUIT_PARAMETERS:
-        group = "Plug Seal"
     else:
         group = next(ROLE_SHORT_LABELS[role] for role in SealRole if code in role_parameters(role))
     return f"{group} {parameter_label(code)}"

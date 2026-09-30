@@ -86,14 +86,16 @@ def seal_columns(setup):
 
 
 def condition_columns(setup):
-    """Test Conditions columns: Process, seal support, Plug Seal (§5.2, §9.3)."""
+    """Test Conditions columns: Process, then seal support (§5.2, §9.3).
+
+    The Process Fluid column holds the conditions established with the Plug
+    Seal; without a Plug Seal it prints NA, as the Excel TCN did.
+    """
     columns = [_condition_column("Process Fluid", setup, conditions.PROCESS_FIELDS, empty="NA")]
     support_filled = any(getattr(setup, field) for field in conditions.SEAL_SUPPORT_FIELDS)
     if setup.arrangement != Arrangement.SINGLE or support_filled:
         heading = f"{seal_support_label(setup.arrangement)} Fluid"
         columns.append(_condition_column(heading, setup, conditions.SEAL_SUPPORT_FIELDS, empty=""))
-    if setup.plug_seal_present:
-        columns.append(_condition_column("Plug Seal Fluid", setup, conditions.PLUG_FIELDS, empty="NA"))
     return columns
 
 

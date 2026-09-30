@@ -68,6 +68,7 @@ def test_seal_support_label_follows_arrangement(copy):
     assert change.label == "Barrier pressure"
 
     setup.arrangement = Arrangement.SINGLE
+    setup.plug_seal_present = True
     setup.save()
     labels = {c.key: c.label for c in source_changes(copy)}
     assert labels["seal_support_pressure"] == "Flush pressure"
@@ -77,9 +78,11 @@ def test_seal_support_label_follows_arrangement(copy):
 def test_arrangement_switch_reports_removed_positions_with_data(copy):
     setup = copy.setup
     setup.arrangement = Arrangement.SINGLE
+    setup.plug_seal_present = True
     setup.monitored_parameters = ["seal_support_pressure"]
     setup.save()
     setup.positions.all().delete()
+    setup.positions.create(role="plug")
     setup.positions.create(role="test")
 
     changes = {c.key: c for c in source_changes(copy)}
@@ -87,6 +90,7 @@ def test_arrangement_switch_reports_removed_positions_with_data(copy):
     assert changes["inboard-seal_type_size"].new == "" and changes["inboard-stationary_face"].old == "C100603033"
     # Empty positions on either side are not differences.
     assert "outboard-seal_type_size" not in changes and "test-seal_type_size" not in changes
+    assert changes["plug_seal_present"].new == "Installed"
     assert changes["monitored_parameters"] == Change(
         "monitored_parameters", "Parameters to log", "Flush Pressure [barg], IB Leakage [ml]", "Flush Pressure [barg]"
     )
@@ -95,13 +99,16 @@ def test_arrangement_switch_reports_removed_positions_with_data(copy):
 def test_plug_seal_added(copy):
     setup = copy.setup
     setup.plug_seal_present = True
-    setup.plug_medium = "Water"
+    setup.process_medium = "Water"
+    setup.monitored_parameters = ["process_pressure", "plug_leakage"]
     setup.save()
     setup.positions.create(role="plug", seal_type_size="DHTW 4.750")
     changes = {c.key: c for c in source_changes(copy)}
     assert changes["plug_seal_present"].old == "Not installed" and changes["plug_seal_present"].new == "Installed"
-    assert changes["plug_medium"] == Change("plug_medium", "Plug Seal medium", "", "Water")
+    assert changes["process_medium"] == Change("process_medium", "Process medium", "", "Water")
     assert changes["plug-seal_type_size"].new == "DHTW 4.750"
+    assert changes["monitored_parameters"].new == "Process Pressure [barg], Plug Leakage [ml]"
+    assert not [key for key in changes if key.startswith("plug_") and key != "plug_seal_present"]
 
 
 def test_new_revision_compares_with_issued_revision(source, user):

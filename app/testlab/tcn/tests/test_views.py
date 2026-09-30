@@ -187,7 +187,8 @@ def test_arrangement_switch_on_draft_asks_before_discarding(logged_in, project, 
     response = logged_in.post(edit_url(tcn), dict(data, confirm_discard="1"))
     assert response.status_code == 302
     tcn.setup.refresh_from_db()
-    assert sorted(tcn.setup.positions.values_list("role", flat=True)) == ["test"]
+    assert sorted(tcn.setup.positions.values_list("role", flat=True)) == ["plug", "test"]
+    assert tcn.setup.plug_seal_present  # required for single, installed without asking
     assert tcn.setup.seal_support_pressure == "70"  # kept, now labelled Flush
 
 

@@ -21,7 +21,7 @@
       <fieldset class="panel">
         <legend>Project defaults</legend>
         <p>
-          {{ setup.get_arrangement_display }}{% if setup.plug_seal_present %} + Plug Seal{% endif %}
+          {{ setup.configuration_display }}
           {% if setup.test_unit %} · {{ setup.test_unit }}{% endif %}
           {% if setup.speed %} · {{ setup.speed }} rpm{% endif %}
           {% if setup.duration %} · {{ setup.duration }} hours{% endif %}
@@ -51,7 +51,7 @@
               <td>{{ tcn.created_date|date:"d-M-Y" }}</td>
               <td>{{ tcn.prepared_by }}</td>
               <td>{{ setup.test_unit }}</td>
-              <td>{{ setup.get_arrangement_display }}{% if setup.plug_seal_present %} + Plug Seal{% endif %}</td>
+              <td>{{ setup.configuration_display }}</td>
               <td>{% if setup.speed %}{{ setup.speed }} rpm{% endif %}</td>
               <td>{% if setup.seal_support_pressure %}{{ row.seal_support_label }}: {{ setup.seal_support_pressure }} barg{% endif %}</td>
               <td>

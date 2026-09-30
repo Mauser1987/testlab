@@ -39,8 +39,16 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
 
     <fieldset class="panel">
       <legend>Plug Seal (process-side test equipment)</legend>
-      <p class="hint">Optional simulation/test equipment on the same shaft; not part of the seal arrangement.</p>
-      <div class="field">{{ editor.form.plug_seal_present }} {{ editor.form.plug_seal_present.label_tag }} {{ editor.form.plug_seal_present|was:changes }}</div>
+      <p class="hint">Test equipment on the same shaft that establishes the process conditions; not part of the seal arrangement.</p>
+      {% if editor.plug_seal_required %}
+        <div class="field">
+          <input type="checkbox" id="id_plug_seal_present" checked disabled><input type="hidden" name="plug_seal_present" value="on">
+          <label for="id_plug_seal_present">{{ editor.form.plug_seal_present.label }}</label> — required: a single seal is tested with the Plug Seal.
+          {{ editor.form.plug_seal_present|was:changes }}
+        </div>
+      {% else %}
+        <div class="field">{{ editor.form.plug_seal_present }} {{ editor.form.plug_seal_present.label_tag }} <span class="hint">(optional for a dual seal)</span> {{ editor.form.plug_seal_present|was:changes }}</div>
+      {% endif %}
       {% if editor.plug_seal_form %}
         <table class="grid">
           <tbody>
@@ -69,8 +77,8 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
     <thead>
       <tr>
         <th></th>
-        {% for heading, fields in editor.condition_columns %}
-          <th>{{ heading }}{% if forloop.counter == 2 and editor.arrangement == "single" %} <span class="hint">(optional, e.g. Plan 23)</span>{% endif %}</th>
+        {% for heading, hint, fields in editor.condition_columns %}
+          <th>{{ heading }}{% if hint %} <span class="hint">({{ hint }})</span>{% endif %}</th>
         {% endfor %}
       </tr>
     </thead>
@@ -80,6 +88,7 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
       {% endfor %}
     </tbody>
   </table>
+  {% if not editor.plug_seal_present %}<p class="hint">No process conditions: they are established with the Plug Seal, which is not installed.</p>{% endif %}
   {% for field in editor.hidden_condition_fields %}{{ field.as_hidden }}{% endfor %}
 </section>
 
@@ -113,6 +122,7 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
 
 <script>
   // Re-render the form for a new arrangement / Plug Seal choice (same as pressing Update).
+  // Choosing single installs the Plug Seal (required); the re-rendered form shows it.
   document.querySelectorAll("[data-reconfigure]").forEach(function (input) {
     input.addEventListener("change", function () { document.getElementById("update-button").click(); });
   });

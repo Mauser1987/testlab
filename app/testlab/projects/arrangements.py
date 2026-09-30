@@ -4,11 +4,16 @@ Two separate things are configured on a RunSetup:
 
 * the **seal arrangement under test** — single (Test seal) or dual
   pressurized / unpressurized (Inboard + Outboard seal); and
-* optionally a **Plug Seal** — process-side simulation/test equipment on the
-  same shaft with its own operating circuit. It is *not* a stage of a dual
-  seal and is therefore never an arrangement value. It is stored as a
-  SealPosition with role ``plug`` only because it has the same descriptive
-  fields.
+* the **Plug Seal** — test equipment on the same shaft that establishes the
+  process-side conditions for the seal under test. Its operating fluid,
+  pressure, temperature and flow *are* the Process Conditions; it has no
+  condition group of its own. It is not a stage of a dual seal and is
+  therefore never an arrangement value. It is stored as a SealPosition with
+  role ``plug`` only because it has the same descriptive fields.
+
+A single seal cannot be tested alone: the Plug Seal is required for single
+(an engineering constraint, not a default). For dual arrangements it is
+optional.
 """
 
 from django.db import models
@@ -51,6 +56,14 @@ SEAL_SUPPORT_LABELS = {
 }
 
 
+# Arrangements that can only be tested with the Plug Seal.
+PLUG_SEAL_REQUIRED = {Arrangement.SINGLE}
+
+
+def plug_seal_required(arrangement):
+    return arrangement in PLUG_SEAL_REQUIRED
+
+
 def seal_under_test_roles(arrangement):
     return list(SEAL_UNDER_TEST_ROLES[Arrangement(arrangement)])
 
@@ -68,7 +81,12 @@ def seal_support_label(arrangement):
 
 
 # Monitored parameters (§5.4). Canonical order: circuits (process, seal
-# support, Plug Seal), then per seal position; within each, Excel log order.
+# support), then per seal position; within each, Excel log order.
+# Process parameters exist only with the Plug Seal, which establishes the
+# process conditions: the pressure, temperature and flow the DCS/LabVIEW
+# system logs while operating the Plug Seal use these codes. Plug Seal face
+# temperature and leakage are measurements of the Plug Seal itself (role
+# codes plug_face_temp, plug_leakage).
 PROCESS_PARAMETERS = ["process_pressure", "process_inlet_temp", "process_outlet_temp", "process_flow"]
 SEAL_SUPPORT_PARAMETERS = [
     "seal_support_pressure",
@@ -76,10 +94,6 @@ SEAL_SUPPORT_PARAMETERS = [
     "seal_support_outlet_temp",
     "seal_support_flow",
 ]
-
-# Plug Seal circuit, normally logged continuously by the DCS/LabVIEW system.
-# Codes only: they identify the parameter for the log sheet and later results.
-PLUG_SEAL_CIRCUIT_PARAMETERS = ["plug_pressure", "plug_inlet_temp", "plug_flow"]
 
 
 def role_parameters(role):
@@ -89,7 +103,6 @@ def role_parameters(role):
 ALL_MONITORED_PARAMETERS = (
     PROCESS_PARAMETERS
     + SEAL_SUPPORT_PARAMETERS
-    + PLUG_SEAL_CIRCUIT_PARAMETERS
     + [code for role in SealRole for code in role_parameters(role)]
 )
 
@@ -97,9 +110,9 @@ ALL_MONITORED_PARAMETERS = (
 def applicable_monitored_parameters(arrangement, plug_seal_present):
     """Codes that may be ticked for a configuration, in canonical order."""
     roles = applicable_roles(arrangement, plug_seal_present)
-    plug_codes = PLUG_SEAL_CIRCUIT_PARAMETERS if plug_seal_present else []
+    process_codes = PROCESS_PARAMETERS if plug_seal_present else []
     role_codes = [code for role in SealRole if role in roles for code in role_parameters(role)]
-    return PROCESS_PARAMETERS + SEAL_SUPPORT_PARAMETERS + plug_codes + role_codes
+    return process_codes + SEAL_SUPPORT_PARAMETERS + role_codes
 
 
 _PARAMETER_LABELS = {
@@ -113,7 +126,7 @@ _PARAMETER_LABELS = {
 
 
 def parameter_label(code):
-    """Checkbox label of a code within its group, e.g. "plug_inlet_temp" → "Inlet temp. [°C]"."""
+    """Checkbox label of a code within its group, e.g. "process_inlet_temp" → "Inlet temp. [°C]"."""
     for suffix, label in _PARAMETER_LABELS.items():
         if code.endswith("_" + suffix):
             return label

@@ -31,12 +31,15 @@ What works today:
   convention (warning only).
 - **Project defaults** — the run setup new TCNs will start from:
   - seal arrangement under test: Single, Dual Pressurized or Dual Unpressurized;
-  - optional **Plug Seal** (process-side test equipment, not part of the
-    arrangement) with its own seal data and conditions;
-  - conditions per circuit: common (test unit, duration, speed) · process ·
-    seal support (Barrier / Buffer / Flush — a single seal may have a flush
-    circuit) · Plug Seal;
-  - parameters to log (incl. Plug Seal pressure, inlet temperature, flow);
+  - **Plug Seal** (test equipment that establishes the process conditions,
+    not part of the arrangement) with its own seal data — required for a
+    single seal, optional for dual;
+  - conditions per circuit: common (test unit, duration, speed) · process
+    (the Plug Seal operating conditions; only with a Plug Seal) · seal
+    support (Barrier / Buffer / Flush — a single seal may have a flush
+    circuit);
+  - parameters to log (process pressure, temperature and flow are logged
+    with the Plug Seal; Plug Seal face temperature and leakage);
   - switching arrangement or Plug Seal asks for confirmation before any
     non-empty data is discarded; seal-support values are never cleared.
 - **Project page and TCN register** — one row per Test Run (its current
@@ -151,7 +154,7 @@ commands.
 1. Log in and choose **New project**: project no., description (printed on
    the TCN as "Project Description"), customer.
 2. Saving continues to **Project defaults**. Choose the arrangement and
-   whether a Plug Seal is installed (the form redraws; the **Update** button
+   whether a Plug Seal is installed — always for Single (the form redraws; the **Update** button
    does the same without JavaScript), fill in seals, conditions and
    parameters to log, then **Save**.
 3. Typed units that TestLab prints anyway are removed (`70 barg` → `70`);

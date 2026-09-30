@@ -71,17 +71,17 @@ def test_issue_errors_list_what_is_missing(project, user):
     ]
 
 
-def test_at16_issue_without_plug_medium_refused(project, user, file_storage):
-    """AT-16 (issue part): a Plug Seal needs its medium before issue."""
+def test_at16_issue_without_process_medium_refused(project, user, file_storage):
+    """AT-16 (issue part): with a Plug Seal, the process medium it runs with is required before issue."""
     tcn = ready_tcn(project, user, plug_seal_present=True)
     tcn.setup.positions.create(role="plug", seal_type_size="DHTW 4.750")
     with pytest.raises(IssueError) as excinfo:
         issue(tcn, user)
-    assert excinfo.value.errors == ["Plug Seal medium is required."]
+    assert excinfo.value.errors == ["Process medium is required."]
     assert TcnRevision.objects.get(pk=tcn.pk).status == Status.DRAFT
     assert not [path for path in file_storage.rglob("*") if path.is_file()]
 
-    tcn.setup.plug_medium = "Water"
+    tcn.setup.process_medium = "Water"
     tcn.setup.save()
     assert issue(TcnRevision.objects.get(pk=tcn.pk), user).status == Status.ISSUED
 

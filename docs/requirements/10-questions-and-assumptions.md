@@ -20,7 +20,7 @@ Updated after PO decisions round 1 (`/answers_n1.md`) and round 2 (`/answers_n2.
 | Q17 | Physical component tracking | Future feature, not M1. |
 | Q13 | DCS | Integration is future scope (details asked again when M5 starts). |
 | Q6 | Project number format | RSD format is a **convention (warning only)**; uniqueness mandatory (answers_n2). |
-| Q21 | Plug Seal conditions | **Yes**: explicit Plug Seal medium, pressure, temperature, flow on the TCN; speed common to the run (answers_n2). |
+| Q21 | Plug Seal conditions | **Yes**: explicit Plug Seal medium, pressure, temperature, flow on the TCN; speed common to the run (answers_n2). **Corrected 2026-09-30:** these are the Process Conditions — the Plug Seal establishes them; no separate plug condition group. Single ⇒ Plug Seal required; process conditions only with a Plug Seal. |
 | Q22 | Legacy Excel import in M1? | **No**; post-M1, after validation on new projects (answers_n2). |
 
 ### Open — not blocking M1

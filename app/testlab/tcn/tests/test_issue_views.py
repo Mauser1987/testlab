@@ -178,7 +178,7 @@ def test_at4_m1_success_criteria(logged_in, user):
         reference_drawing="F00321662",
         **{"inboard-seal_type_size": "UHTW 4.750", "outboard-seal_type_size": "UHTW 4.750"},
     )
-    data.update({"plug-seal_type_size": "DHTW 4.750", "plug_medium": "Water"})
+    data.update({"plug-seal_type_size": "DHTW 4.750", "process_medium": "Water"})
     assert logged_in.post(reverse("projects:defaults", args=[project.pk]), data).status_code == 302
     defaults.refresh_from_db()
     assert defaults.plug_seal_present and sorted(defaults.positions.values_list("role", flat=True)) == [

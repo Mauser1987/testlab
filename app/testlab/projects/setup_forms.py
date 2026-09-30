@@ -1,11 +1,13 @@
 """Shared run setup form (M1 spec §6): project defaults (S5) and TCN
 drafts (S7).
 
-All four seal positions and the Plug Seal conditions are always part of the
+All four seal positions and the Process Conditions are always part of the
 posted form; the ones that do not apply to the chosen configuration are kept
-as hidden inputs. Switching back and forth before saving therefore loses
-nothing, and saving asks for confirmation before non-empty data that no
-longer applies is discarded (§5.3).
+as hidden inputs (Process Conditions only apply with the Plug Seal).
+Switching back and forth before saving therefore loses nothing, and saving
+asks for confirmation before non-empty data that no longer applies is
+discarded (§5.3). Choosing single installs the Plug Seal: a single seal
+cannot be tested without it.
 """
 
 from django import forms
@@ -14,7 +16,6 @@ from django.db import transaction
 from . import conditions
 from .arrangements import (
     ALL_MONITORED_PARAMETERS,
-    PLUG_SEAL_CIRCUIT_PARAMETERS,
     PROCESS_PARAMETERS,
     SEAL_SUPPORT_PARAMETERS,
     Arrangement,
@@ -23,6 +24,7 @@ from .arrangements import (
     applicable_roles,
     canonical_order,
     parameter_label,
+    plug_seal_required,
     role_parameters,
     seal_support_label,
     seal_under_test_roles,
@@ -44,7 +46,6 @@ class RunSetupForm(forms.ModelForm):
             + conditions.COMMON_FIELDS
             + conditions.PROCESS_FIELDS
             + conditions.SEAL_SUPPORT_FIELDS
-            + conditions.PLUG_FIELDS
             + ["monitored_parameters"]
         )
         widgets = {
@@ -56,12 +57,15 @@ class RunSetupForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        arrangement = cleaned.get("arrangement")
+        # V16: a single seal is tested with the Plug Seal, whatever was posted.
+        if plug_seal_required(arrangement):
+            cleaned["plug_seal_present"] = True
         # Values that no longer apply are dropped here; RunSetupEditor has
         # already asked for confirmation when they were non-empty.
         if not cleaned.get("plug_seal_present"):
-            for field in conditions.PLUG_FIELDS:
+            for field in conditions.PROCESS_FIELDS:
                 cleaned[field] = ""
-        arrangement = cleaned.get("arrangement")
         if arrangement in Arrangement.values:
             applicable = applicable_monitored_parameters(arrangement, cleaned.get("plug_seal_present"))
             cleaned["monitored_parameters"] = canonical_order(
@@ -88,7 +92,8 @@ class RunSetupEditor:
         }
         arrangement = self.form["arrangement"].value()
         self.arrangement = arrangement if arrangement in Arrangement.values else setup.arrangement
-        self.plug_seal_present = bool(self.form["plug_seal_present"].value())
+        self.plug_seal_required = plug_seal_required(self.arrangement)
+        self.plug_seal_present = self.plug_seal_required or bool(self.form["plug_seal_present"].value())
         self.roles = applicable_roles(self.arrangement, self.plug_seal_present)
         self.show_errors = False
         self.confirmation_required = False
@@ -121,34 +126,31 @@ class RunSetupEditor:
 
     @property
     def condition_columns(self):
-        columns = [
-            ("Process", conditions.PROCESS_FIELDS),
-            (self.seal_support_label, conditions.SEAL_SUPPORT_FIELDS),
-        ]
+        """(heading, hint, fields): Process Conditions (with the Plug Seal only), then seal support."""
+        columns = []
         if self.plug_seal_present:
-            columns.append(("Plug Seal", conditions.PLUG_FIELDS))
+            columns.append(("Process", "established with the Plug Seal", conditions.PROCESS_FIELDS))
+        support_hint = "optional, e.g. Plan 23" if self.arrangement == Arrangement.SINGLE else ""
+        columns.append((self.seal_support_label, support_hint, conditions.SEAL_SUPPORT_FIELDS))
         return columns
 
     @property
     def condition_rows(self):
         labels = ["Medium", "Pressure [barg]", "Inlet temperature [°C]", "Flow [l/min]"]
         return [
-            (label, [self.form[fields[i]] for _, fields in self.condition_columns]) for i, label in enumerate(labels)
+            (label, [self.form[fields[i]] for _, _, fields in self.condition_columns])
+            for i, label in enumerate(labels)
         ]
 
     @property
     def hidden_condition_fields(self):
-        return [] if self.plug_seal_present else [self.form[f] for f in conditions.PLUG_FIELDS]
+        return [] if self.plug_seal_present else [self.form[f] for f in conditions.PROCESS_FIELDS]
 
     @property
     def parameter_groups(self):
         checked = set(self.form["monitored_parameters"].value() or [])
-        groups = [
-            ("Process", PROCESS_PARAMETERS),
-            (self.seal_support_label, SEAL_SUPPORT_PARAMETERS),
-        ]
-        if self.plug_seal_present:
-            groups.append(("Plug Seal circuit", PLUG_SEAL_CIRCUIT_PARAMETERS))
+        groups = [("Process", PROCESS_PARAMETERS)] if self.plug_seal_present else []
+        groups.append((self.seal_support_label, SEAL_SUPPORT_PARAMETERS))
         groups += [(SealRole(role).label, role_parameters(role)) for role in SealRole if role in self.roles]
         return [
             (title, [(code, parameter_label(code), code in checked) for code in codes]) for title, codes in groups
@@ -176,9 +178,9 @@ class RunSetupEditor:
             if any(values):
                 items.append(f"{SealRole(role).label}: {', '.join(v for v in values if v)}")
         if not self.plug_seal_present:
-            values = [str(self.form[f].value() or "").strip() for f in conditions.PLUG_FIELDS]
+            values = [str(self.form[f].value() or "").strip() for f in conditions.PROCESS_FIELDS]
             if any(values):
-                items.append(f"Plug Seal conditions: {', '.join(v for v in values if v)}")
+                items.append(f"Process conditions: {', '.join(v for v in values if v)}")
         return items
 
     @property

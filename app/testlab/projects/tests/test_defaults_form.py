@@ -75,9 +75,23 @@ def test_page_shows_seal_under_test_and_plug_seal_separately(logged_in, project)
     assert "Plug Seal (process-side test equipment)" in content
     assert "Inboard Seal" in content and "Outboard Seal" in content
     assert "Barrier" in content
-    # Plug Seal not installed: its fields are only kept as hidden inputs
+    # Plug Seal not installed: its fields and the process conditions are only kept as hidden inputs
     assert 'type="hidden" name="plug-seal_type_size"' in content
-    assert 'type="hidden" name="plug_medium"' in content
+    assert 'type="hidden" name="process_medium"' in content
+    assert "No process conditions: they are established with the Plug Seal, which is not installed." in content
+    assert "(optional for a dual seal)" in content
+
+
+def test_process_conditions_shown_only_with_plug_seal(logged_in, project):
+    setup = project.default_setup
+    content = logged_in.post(url(project), post_data(setup, action="update", plug_seal_present=True)).content.decode()
+    assert '<input type="text" name="process_medium"' in content
+    assert "(established with the Plug Seal)" in content
+    assert '<legend>Process</legend>' in content and 'value="process_pressure"' in content
+    assert "Plug Seal circuit" not in content and "plug_medium" not in content
+
+    content = logged_in.get(url(project)).content.decode()
+    assert '<legend>Process</legend>' not in content and 'value="process_pressure"' not in content
 
 
 def test_save_defaults(logged_in, project):
@@ -88,10 +102,11 @@ def test_save_defaults(logged_in, project):
         test_unit="TU5",
         duration="min 75 hours",
         speed="2980",
+        plug_seal_present=True,
         process_medium="Water",
         process_pressure="70 barg",
         seal_support_medium="ISO VG 32",
-        **{"inboard-seal_type_size": "UHTW 4.750", "outboard-springs": "668838NL (10)"},
+        **{"inboard-seal_type_size": "UHTW 4.750", "outboard-springs": "668838NL (10)", "plug-seal_type_size": "DHTW"},
         monitored_parameters=["outboard_leakage", "seal_support_pressure"],
     )
     response = logged_in.post(url(project), data)
@@ -116,6 +131,11 @@ def test_update_rerenders_without_saving(logged_in, project):
     content = response.content.decode()
     assert "Test Seal" in content
     assert "Flush" in content and "(optional, e.g. Plan 23)" in content
+    # Single: the Plug Seal is installed automatically and cannot be removed.
+    assert "required: a single seal is tested with the Plug Seal" in content
+    assert '<input type="hidden" name="plug_seal_present" value="on">' in content
+    assert '<input type="text" name="plug-seal_type_size"' in content
+    assert '<input type="text" name="process_medium"' in content
     setup.refresh_from_db()
     assert setup.arrangement == "dual_pressurized"
     assert roles(setup) == ["inboard", "outboard"]
@@ -140,8 +160,9 @@ def test_dual_to_single_with_seal_data_requires_confirmation(logged_in, project)
     assert response.status_code == 302
     setup.refresh_from_db()
     assert setup.arrangement == "single"
-    assert roles(setup) == ["test"]
-    assert setup.positions.get().seal_type_size == "UMPW 2.625"
+    assert setup.plug_seal_present  # installed with single, without asking
+    assert roles(setup) == ["plug", "test"]
+    assert setup.positions.get(role="test").seal_type_size == "UMPW 2.625"
     # Seal-support values are kept; single seals may have a flush circuit.
     assert (setup.seal_support_medium, setup.seal_support_pressure, setup.seal_support_inlet_temperature) == (
         "ISO VG 32",
@@ -151,15 +172,27 @@ def test_dual_to_single_with_seal_data_requires_confirmation(logged_in, project)
     assert setup.monitored_parameters == ["seal_support_pressure"]
 
 
-def test_single_to_dual_with_plug_seal(logged_in, project):
+def test_single_cannot_be_saved_without_plug_seal(logged_in, project):
+    """V16: whatever is posted, single is saved with the Plug Seal."""
     setup = project.default_setup
-    logged_in.post(url(project), post_data(setup, arrangement="single"))
+    data = post_data(setup, arrangement="single", plug_seal_present=False)
+    assert "plug_seal_present" not in data
+    assert logged_in.post(url(project), data).status_code == 302
     setup.refresh_from_db()
-    assert roles(setup) == ["test"]
+    assert (setup.arrangement, setup.plug_seal_present) == ("single", True)
+    assert roles(setup) == ["plug", "test"]
 
-    response = logged_in.post(url(project), post_data(setup, arrangement="dual_pressurized", plug_seal_present=True))
+
+def test_single_to_dual_keeps_plug_seal_and_process_conditions(logged_in, project):
+    setup = project.default_setup
+    logged_in.post(url(project), post_data(setup, arrangement="single", process_medium="Water"))
+    setup.refresh_from_db()
+    assert roles(setup) == ["plug", "test"]
+
+    response = logged_in.post(url(project), post_data(setup, arrangement="dual_pressurized"))
     assert response.status_code == 302
     setup.refresh_from_db()
+    assert setup.plug_seal_present and setup.process_medium == "Water"
     assert roles(setup) == ["inboard", "outboard", "plug"]
     assert [p.role for p in setup.seal_under_test_positions()] == ["inboard", "outboard"]
     assert setup.plug_seal_position() is not None
@@ -177,58 +210,59 @@ def test_dual_pressurized_to_unpressurized_keeps_everything(logged_in, project):
     assert "Buffer" in logged_in.get(url(project)).content.decode()
 
 
-def test_plug_seal_conditions_saved_and_shown(logged_in, project):
+def test_process_conditions_with_plug_seal_saved_and_shown(logged_in, project):
+    """Dual + Plug Seal: the Plug Seal's operating conditions are the process conditions; barrier stays separate."""
     setup = project.default_setup
     data = post_data(
         setup,
         plug_seal_present=True,
-        plug_medium="Water",
-        plug_pressure="5 barg",
-        plug_inlet_temperature="40",
-        plug_flow="10",
-        process_medium="Crude oil",
-        process_pressure="70",
+        process_medium="Water",
+        process_pressure="5 barg",
+        process_inlet_temperature="40",
+        process_flow="10",
+        seal_support_medium="ISO VG 32",
+        seal_support_pressure="70",
         **{"plug-seal_type_size": "DHTW 4.750"},
-        monitored_parameters=["plug_pressure", "plug_flow", "plug_leakage"],
+        monitored_parameters=["process_pressure", "process_flow", "plug_leakage", "seal_support_pressure"],
     )
     response = logged_in.post(url(project), data)
     assert response.status_code == 302
     setup.refresh_from_db()
-    assert (setup.plug_medium, setup.plug_pressure, setup.plug_inlet_temperature, setup.plug_flow) == (
+    assert (setup.process_medium, setup.process_pressure, setup.process_inlet_temperature, setup.process_flow) == (
         "Water",
         "5",
         "40",
         "10",
     )
-    assert (setup.process_medium, setup.process_pressure) == ("Crude oil", "70")
-    assert setup.monitored_parameters == ["plug_pressure", "plug_flow", "plug_leakage"]
+    assert (setup.seal_support_medium, setup.seal_support_pressure) == ("ISO VG 32", "70")
+    assert setup.monitored_parameters == ["process_pressure", "process_flow", "seal_support_pressure", "plug_leakage"]
     assert setup.plug_seal_position().seal_type_size == "DHTW 4.750"
     content = logged_in.get(url(project)).content.decode()
-    assert "Plug Seal circuit" in content
-    assert 'name="plug_medium" value="Water"' in content
+    assert 'name="process_medium" value="Water"' in content
+    assert '<input type="checkbox" name="monitored_parameters" value="plug_leakage" checked>' in content
 
 
-def test_removing_plug_seal_with_conditions_requires_confirmation(logged_in, project):
+def test_removing_plug_seal_with_process_conditions_requires_confirmation(logged_in, project):
     setup = project.default_setup
     logged_in.post(
         url(project),
-        post_data(setup, plug_seal_present=True, plug_medium="Water", monitored_parameters=["plug_pressure"]),
+        post_data(setup, plug_seal_present=True, process_medium="Water", monitored_parameters=["process_pressure"]),
     )
     setup.refresh_from_db()
-    assert setup.plug_seal_present
+    assert setup.plug_seal_present and setup.process_medium == "Water"
 
     data = post_data(setup, plug_seal_present=False)
     response = logged_in.post(url(project), data)
     assert response.status_code == 200
-    assert "Plug Seal conditions: Water" in response.content.decode()
+    assert "Process conditions: Water" in response.content.decode()
     setup.refresh_from_db()
-    assert setup.plug_medium == "Water"
+    assert setup.process_medium == "Water"
 
     response = logged_in.post(url(project), {**data, "confirm_discard": "1"})
     assert response.status_code == 302
     setup.refresh_from_db()
     assert not setup.plug_seal_present
-    assert setup.plug_medium == ""
+    assert setup.process_medium == ""
     assert setup.monitored_parameters == []
     assert roles(setup) == ["inboard", "outboard"]
 

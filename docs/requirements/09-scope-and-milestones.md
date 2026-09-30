@@ -17,7 +17,7 @@ works acceptably in Word for now.
 - TCN create from project defaults / copy from previous TCN; run-number
   rules; arrangement (single / dual pressurized / dual unpressurized) +
   optional plug seal with Excel-derived label switching; seal positions;
-  process, barrier/buffer/flush and Plug Seal conditions as text values; monitored parameters;
+  process (established with the Plug Seal) and barrier/buffer/flush conditions as text values; monitored parameters;
   instructions text
 - Differences vs source highlighted
 - Issue/lock; new revision with reason; no hard delete of issued TCNs

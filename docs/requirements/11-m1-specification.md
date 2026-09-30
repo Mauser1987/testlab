@@ -17,7 +17,7 @@ central TestLab web application. An engineer can:
 1. create/open a Project;
 2. store the minimum project and seal information needed for TCNs (project defaults);
 3. create TCN001 from the project defaults;
-4. configure the seal arrangement and optional plug seal;
+4. configure the seal arrangement and the Plug Seal (required for single, optional for dual);
 5. define the run conditions and instructions;
 6. generate the TCN document (PDF, §17 S1);
 7. issue/lock the TCN;
@@ -30,7 +30,8 @@ Also in M1, because they are part of today's Excel TCN workflow:
   with columns derived from the selected monitored parameters);
 - formal **TCN revisions** and **cancel** (PO decision);
 - explicit **Plug Seal operating conditions** on the TCN when a Plug Seal
-  is installed (PO decision, round 2).
+  is installed (PO decision, round 2) — these are the **Process
+  Conditions** (domain correction, §5).
 
 **Not in M1:** legacy Excel/XLSM import or any historical migration (PO,
 round 2: the data model is first validated on real new projects; see §12),
@@ -67,13 +68,13 @@ one Project *or* one TcnRevision.
 |---|---|---|---|
 | id | auto PK | | |
 | arrangement | varchar(24), choices `single` / `dual_pressurized` / `dual_unpressurized` — the **mechanical seal arrangement under test** | Arrangement (FA) | column headings (§5) |
-| plug_seal_present | bool, default false — Plug Seal (process-side test equipment) installed | (Arrangement = 1) | Plug Seal columns |
+| plug_seal_present | bool, default false — Plug Seal (test equipment establishing the process conditions) installed; **always true for single** (V16) | (Arrangement = 1) | Plug Seal seal column |
 | reference_drawing | varchar(200) | RefDwg | Reference Drawing |
 | run_description | text | TestRunDescription | Test Run Description |
 | test_unit | varchar(20) | TestUnit | Test Unit |
 | duration | varchar(50) | Duration | Duration: `<v> hours` |
 | speed | varchar(50) | Speed | Speed: `<v> rpm` |
-| process_medium | varchar(100) | Product | Test Medium (Process Fluid) |
+| process_medium | varchar(100) | Product | Test Medium (Process Fluid) — the Plug Seal operating fluid |
 | process_pressure | varchar(50) | ProdPress | Pressure `<v> barg` |
 | process_inlet_temperature | varchar(50) | ProdTemp | Inlet Temperature `<v>°C` |
 | process_flow | varchar(50) | ProdFlow | Flow `<v> l/min` |
@@ -81,22 +82,20 @@ one Project *or* one TcnRevision.
 | seal_support_pressure | varchar(50) | Bar/BufPress | Pressure |
 | seal_support_inlet_temperature | varchar(50) | Bar/BufTemp | Inlet Temperature |
 | seal_support_flow | varchar(50) | Bar/BufFlow | Flow |
-| plug_medium | varchar(100) | – (new) | Test Medium (Plug Seal Fluid) |
-| plug_pressure | varchar(50) | – (new) | Pressure |
-| plug_inlet_temperature | varchar(50) | – (new) | Inlet Temperature |
-| plug_flow | varchar(50) | – (new) | Flow |
 | monitored_parameters | JSON list of codes (§5.4), canonical order | the 12 Y/N columns | not printed; drives Test Data Sheet |
 
-The conditions are grouped by **physically separate circuit**; no circuit
-shares a field with another, and none is assumed to share fluid, pressure,
-temperature or flow with another:
+The conditions are grouped by **physically separate circuit**. There is
+exactly **one process-side group**, the Process Conditions: the Plug Seal
+is the equipment that establishes them, so its operating fluid, pressure,
+temperature and flow *are* the Process Conditions and it has no condition
+group of its own. The seal-support circuit is physically separate and keeps
+its own fields:
 
 | Group | Fields | Applies |
 |---|---|---|
 | Common Test Run conditions | test_unit, duration, speed | always. Speed is common to the whole shaft, therefore **not** repeated for the Plug Seal |
-| Process / test side | process_* | always |
+| Process Conditions (established with the Plug Seal) | process_* | only when plug_seal_present (V6) — hence always for single |
 | Mechanical-seal support circuit | seal_support_* — barrier (dual pressurized), buffer (dual unpressurized) or flush/support system such as Plan 23 (single; optional) | any arrangement |
-| Plug Seal circuit | plug_* | only when plug_seal_present |
 
 M1 holds **one** mechanical-seal support circuit (as the existing TCN) and
 does not model API piping plans; a plan designation (e.g. "Plan 23") or a
@@ -207,7 +206,7 @@ PlannedTest → TcnRevision source (M3); ConditionStep → RunSetup (M2/M3).
 | project_no | master | read via TestRun→Project; frozen in issued_snapshot and file name | correctable until the first TCN of the project is issued, then blocked (V2) → issued TCNs stay correct |
 | project description | master | **copied at creation**, editable in draft | as in Excel (per-run field); later project edits don't touch TCNs |
 | customer | master | – | not on TCN |
-| arrangement, Plug Seal presence, positions, drawing, unit, speed, duration, process / seal-support / Plug Seal conditions, run description, monitored parameters | **defaults** (Project.default_setup) | **own copy** (TcnRevision.setup) | copied when the TCN is created from defaults or from another TCN; afterwards independent |
+| arrangement, Plug Seal presence, positions, drawing, unit, speed, duration, process / seal-support conditions, run description, monitored parameters | **defaults** (Project.default_setup) | **own copy** (TcnRevision.setup) | copied when the TCN is created from defaults or from another TCN; afterwards independent |
 | prepared_by, created_date | – | TCN only | set at creation |
 | revision, status, issue data, issued PDF, snapshot | – | TCN only | frozen at issue |
 
@@ -255,20 +254,46 @@ Approval: none in M1 (PO). Any logged-in (active) user may issue; the
 check is kept in one place so this can be restricted later (§17 S3).
 Execution deviations are **not** entered on the TCN (they belong to the M2 Result).
 
-## 5. Seal arrangement + optional Plug Seal
+## 5. Seal arrangement + Plug Seal
 
 Two separate things are configured:
 - the **seal arrangement under test** — single (Test seal) or dual
   pressurized / unpressurized (Inboard + Outboard seal); and
-- optionally a **Plug Seal** — process-side simulation/test equipment on
-  the same shaft, with its own operating circuit. It is never presented as
-  a stage of the seal under test.
+- the **Plug Seal** — test equipment on the same shaft that establishes the
+  process-side conditions for the seal under test. It is never presented
+  as a stage of the seal under test.
+
+**Domain correction (after M1 hands-on testing, 2026-09-30).** The first
+M1 implementation gave the Plug Seal its own condition group (plug_*)
+next to the Process Conditions. That was wrong: the Plug Seal *is* how the
+process conditions are established, so there are not two circuits. Rules
+since the correction:
+- one process-side group only: **Process Conditions** (medium, pressure,
+  temperature, flow); no plug_* condition fields;
+- **single ⇒ Plug Seal** (V16): a single seal cannot be tested alone. This
+  is a constraint, not a default; the arrangement stays "Single" (there is
+  no "Single + Plug" arrangement);
+- dual pressurized / unpressurized: Plug Seal optional; when installed its
+  conditions are the Process Conditions;
+- Process Conditions exist **only with the Plug Seal** (V6; PO decision:
+  without a Plug Seal there is no process side, as TCN001 of 2026RSD03TL
+  shows "NA");
+- the seal-support circuit (Flush / Barrier / Buffer) stays separate;
+- Plug Seal equipment data stays separate: its seal position (type, faces,
+  springs) and its own measurements (plug_face_temp, plug_leakage).
+
+Existing data was migrated by projects migrations 0005/0006 (plug_* values
+moved into empty process_* fields; plug_pressure / plug_inlet_temp /
+plug_flow codes renamed to the process codes; single setups given the Plug
+Seal). Rows needing a decision (different process and plug values, or
+process conditions without Plug Seal) stop the migration with a report and
+nothing is changed. Issued TCNs keep their stored PDF, SHA-256 and snapshot.
 
 ### 5.1 Positions present
 
 | arrangement | plug_seal_present = false | plug_seal_present = true |
 |---|---|---|
-| single | Test | Plug, Test |
+| single | *not allowed* (V16) | Plug, Test |
 | dual_pressurized | Inboard, Outboard | Plug, Inboard, Outboard |
 | dual_unpressurized | Inboard, Outboard | Plug, Inboard, Outboard |
 
@@ -279,12 +304,13 @@ Column order on screen and in documents: Plug, Test / Plug, Inboard, Outboard.
 | Item | single | dual_pressurized | dual_unpressurized |
 |---|---|---|---|
 | Seal-support circuit label | Flush (§15 Q-B) | Barrier | Buffer |
-| TCN conditions columns | Process Fluid, [Flush Fluid — only if any seal_support value is filled], [Plug Seal Fluid] | Process Fluid, Barrier Fluid, [Plug Seal Fluid] | Process Fluid, Buffer Fluid, [Plug Seal Fluid] |
+| TCN conditions columns | Process Fluid, [Flush Fluid — only if any seal_support value is filled] | Process Fluid, Barrier Fluid | Process Fluid, Buffer Fluid |
 | Test Data Sheet medium row | "Flush Medium:" if filled, else blank (as Excel) | "Barrier Medium:" | "Buffer Medium:" |
 | Test Data Sheet seal-support columns prefix | "Flush" | "Barrier" | "Buffer" |
 
-[Plug Seal Fluid] is present exactly when plug_seal_present. Column order:
-Process, seal support, Plug Seal.
+Column order: Process, seal support. The Process Fluid column holds the
+conditions established with the Plug Seal; without a Plug Seal (dual only)
+it prints NA, as the Excel TCN did. There is no Plug Seal Fluid column.
 
 | Role | TCN seal column heading | Short label (log sheet) |
 |---|---|---|
@@ -295,8 +321,9 @@ Process, seal support, Plug Seal.
 
 Differences from Excel (deliberate):
 - Plug Seal combinable with any arrangement (PO decision); Excel only
-  had "arrangement 1 = plug + test";
-- Plug Seal has its own conditions column (PO decision); Excel had none;
+  had "arrangement 1 = plug + test". It is required for single;
+- the Plug Seal has no conditions column of its own: its conditions are
+  the Process Conditions, as in Excel (domain correction);
 - a single seal may have a seal-support (flush) circuit; Excel cleared and
   hid it for single (PO decision: do not assume single = no circuit);
 - log sheet position labels follow the role (Excel printed "IB/OB" even in
@@ -304,46 +331,48 @@ Differences from Excel (deliberate):
 - Excel Summary-sheet bug ("Inboard Seal" on the OB column) not reproduced.
 
 ### 5.3 Switching arrangement / Plug Seal on a draft or on project defaults
+- Choosing single installs the Plug Seal automatically; the "Plug Seal
+  installed" box is shown ticked and cannot be unticked. Switching single →
+  dual keeps the Plug Seal (and the Process Conditions); it can then be
+  removed.
 - Positions are added (empty) or removed to match §5.1.
 - Changing the arrangement **never clears seal_support_* values**; only
   their label changes (Barrier / Buffer / Flush). (Excel `Keuzerondje16`
   cleared them for single — deliberately not migrated.)
-- Removing the Plug Seal removes the plug position **and** the plug_*
-  conditions.
+- Removing the Plug Seal (dual only) removes the plug position **and** the
+  Process Conditions.
 - When a switch would **discard non-empty data** (a removed position or
-  non-empty plug_* values), the form is re-shown with a list of what will
-  be discarded and a required "discard" confirmation checkbox. (Excel
+  non-empty process_* values), the form is re-shown with a list of what
+  will be discarded and a required "discard" confirmation checkbox. (Excel
   cleared silently.)
-- Monitored codes no longer applicable (codes of removed roles; Plug Seal
-  circuit codes when the Plug Seal is removed) are removed.
+- Monitored codes no longer applicable (codes of removed roles; process
+  codes when the Plug Seal is removed) are removed.
 
 ### 5.4 Monitored parameters (from the 12 Excel Y/N flags)
 Canonical order = Excel log column order.
 
 | Code | Applicable | Log sheet column(s) |
 |---|---|---|
-| process_pressure | always | Process Pressure [barg] |
-| process_inlet_temp | always | Process Inlet Temp. [°C] |
-| process_outlet_temp | always | Process Outlet Temp. [°C] |
-| process_flow | always | Process Flow [l/min] |
+| process_pressure | Plug Seal present | Process Pressure [barg] |
+| process_inlet_temp | Plug Seal present | Process Inlet Temp. [°C] |
+| process_outlet_temp | Plug Seal present | Process Outlet Temp. [°C] |
+| process_flow | Plug Seal present | Process Flow [l/min] |
 | seal_support_pressure | always | `<prefix>` Pressure [barg] |
 | seal_support_inlet_temp | always | `<prefix>` Inlet Temp. [°C] |
 | seal_support_outlet_temp | always | `<prefix>` Outlet Temp. [°C] |
 | seal_support_flow | always | `<prefix>` Flow [l/min] |
-| plug_pressure | Plug Seal present | Plug Seal Pressure [barg] |
-| plug_inlet_temp | Plug Seal present | Plug Seal Inlet Temp. [°C] |
-| plug_flow | Plug Seal present | Plug Seal Flow [l/min] |
 | `<role>`_face_temp | role present | `<short>` Face Temp. [°C] |
 | `<role>`_leakage | role present | `<short>` Leakage [ml], Over [hours], `<short>` Leakage Rate [ml/hr] |
 
 Role order: plug, test, inboard, outboard. Seal-support codes are
 applicable for single (e.g. a Plan 23 flush; the 2025RSD02TL record logs
-them). Plug Seal circuit codes (PO, round 3): the Plug Seal's pressure,
-inlet temperature and flow are normally logged continuously by the
-DCS/LabVIEW system, so they are monitored parameters (not only set-up
-conditions); the codes follow the RunSetup plug_* fields. M1 only defines
-the codes (selection, log-sheet columns); no DCS acquisition, time series
-or calculations. Plug Seal leakage uses the existing `plug_leakage` code.
+them). Process codes (PO, round 3, corrected): the pressure, inlet
+temperature and flow logged continuously by the DCS/LabVIEW system while
+operating the Plug Seal are the process variables, so they use the process
+codes (the former plug_pressure / plug_inlet_temp / plug_flow codes were
+renamed to them). M1 only defines the codes (selection, log-sheet columns);
+no DCS acquisition, time series or calculations. Measurements of the Plug
+Seal itself keep their role codes `plug_face_temp` and `plug_leakage`.
 
 ## 6. Screens, forms and navigation
 
@@ -374,13 +403,15 @@ admin: user management and approval of registered accounts (superusers;
      positions grid (Test, or Inboard + Outboard; rows Seal Type and Size /
      Stationary Seal Face / Rotating Seal Face / Spring(s));
    - *Plug Seal (process-side test equipment)* — "Plug Seal installed"
-     checkbox; when ticked, the same four fields for the Plug Seal.
+     checkbox (ticked and locked for single); when ticked, the same four
+     fields for the Plug Seal.
 3. Test Conditions — *Common*: test unit, duration [hours], speed [rpm]
    (applies to the whole shaft, incl. Plug Seal). Then one column per
    circuit, each with medium, pressure [barg], inlet temperature [°C],
-   flow [l/min]: *Process*; *Barrier* / *Buffer* / *Flush (optional, e.g.
-   Plan 23)* per arrangement; *Plug Seal* (only when installed).
-4. Parameters to log — checkboxes grouped Process / Barrier-Buffer-Flush / per seal position.
+   flow [l/min]: *Process (established with the Plug Seal)* — only when the
+   Plug Seal is installed; *Barrier* / *Buffer* / *Flush (optional, e.g.
+   Plan 23)* per arrangement.
+4. Parameters to log — checkboxes grouped Process (with Plug Seal) / Barrier-Buffer-Flush / per seal position.
 
 Changing arrangement or Plug Seal re-renders the positions grid, circuit
 labels/columns and parameter list (small htmx request; plain "Update" button as
@@ -477,7 +508,7 @@ run_description_lines: [{text, level}],
 reference_drawing,
 seal_columns: [{heading, seal_type_size, stationary_face, rotating_face, springs}],   # 1–3
 test_unit, duration ("min 75 hours"), speed ("2980 rpm"),
-condition_columns: [{heading, medium, pressure, inlet_temperature, flow}],            # 1–3
+condition_columns: [{heading, medium, pressure, inlet_temperature, flow}],            # 1–2
 prepared_by, created_date ("16-Jun-2026")
 ```
 Seal and condition tables use docxtpl column loops (`{%tc for … %}`), so
@@ -487,8 +518,6 @@ Seal and condition tables use docxtpl column loops (`{%tc for … %}`), so
 - Process column: empty → `NA`; otherwise value + unit.
 - Seal-support column: empty → blank; otherwise value + unit. Always
   present for dual; for single only when any seal_support value is filled.
-- Plug Seal column (only when plug_seal_present): empty → `NA`; otherwise
-  value + unit.
 - Units: pressure `" barg"`, temperature `"°C"` (no space, as TCN001.pdf),
   flow `" l/min"`, duration `" hours"`, speed `" rpm"`; only when non-empty.
 - Run description: each line becomes one paragraph; characters kept
@@ -522,16 +551,17 @@ sheet protected without password; file name `<project_no>-TCN001-TestDataSheet.x
 | V3 | project description required, ≤ 200 chars | save project |
 | V4 | run_no integer 1–999, unique in project (message "Run number already used!") | create TCN |
 | V5 | arrangement ∈ 3 values; positions exactly per §5.1 | every save |
-| V6 | plug_* values empty when plug_seal_present = false (seal_support_* are allowed for every arrangement) | every save |
+| V6 | process_* values empty when plug_seal_present = false — the process conditions are established with the Plug Seal (seal_support_* are allowed for every arrangement). Model validation + DB check constraint | every save |
 | V7 | monitored_parameters ⊆ applicable codes; stored in canonical order | every save |
 | V8 | text values trimmed; max lengths per §1; a trailing unit repeating the printed unit is removed and the user informed (`70 barg`→`70`, `40°C`→`40`, `2980 rpm`→`2980`, `min 75 hours`→`min 75`; case-insensitive; also `bar g`, `C`, `h`, `hrs`) | every save |
 | V9 | only drafts editable/deletable; model-level guard | always |
 | V10 | row_version must match on save, otherwise "changed by <user> at <time> — reload" | save draft |
-| V11 | issue requires: project_description, prepared_by, run_description, test_unit, seal_type_size for every applicable position; plug_medium when plug_seal_present; revision_reason when revision ≥ 1 | issue |
+| V11 | issue requires: project_description, prepared_by, run_description, test_unit, seal_type_size for every applicable position; process_medium when plug_seal_present; revision_reason when revision ≥ 1 | issue |
 | V12 | one draft and one issued revision per run (DB constraints) | always |
 | V13 | new revision only from current issued revision, no existing draft, run not cancelled | new revision |
 | V14 | cancel requires reason; only current issued revision | cancel |
 | V15 | issued file path must not exist before writing | issue |
+| V16 | arrangement single ⇒ plug_seal_present (a single seal cannot be tested alone). The form sets it; model validation + DB check constraint | every save |
 
 Everything else (e.g. "TBD", "60 - 40", "Approx. 35-50") is accepted as text.
 
@@ -543,20 +573,20 @@ Automated (pytest) unless marked **manual**. Reference files are read, never mod
 |---|---|---|
 | AT-1 | *(withdrawn — legacy import moved out of M1, §12)* | – |
 | AT-2 | **TCN001 regression** — 2026RSD03TL TCN001 entered through the services from a test fixture transcribing the workbook DataBase row, then rendered | Text of the rendered Word template (python-docx extraction, whitespace-normalised — the layout source of the PDF) equals fixture `tcn001_expected.txt` transcribed from `reference/tcn/TCN001.pdf`, except the documented differences: date `16-Jun-2026` vs `6/16/2026`; paper size (§15 Q-C). Key strings: "Project No.: 2026RSD03TL", "Run/TCN No.: 001", "ADNOC BAB UHTW/UHTW 4.750/4.750", "F00321662 / D0527190-2 revB", "Inboard Seal", "Outboard Seal", "C100603035 (SL WAVY)", "668838NL (10)", "min 75 hours", "2980 rpm", "Process Fluid", "Barrier Fluid", "NA", "70 barg", "60°C", "TBD l/min", "Prepared by: MG". The real PDF conversion is checked for the key strings separately (tests marked `libreoffice`) |
-| AT-3 | Single + Plug Seal regression — 2025RSD02TL TCN001 from a fixture (product temperature typed as `40°C`, as in the workbook) | headings "Plug Seal" / "Test Seal"; plug: DHTW 4.750, C0625623AP, C0625624SL - WAVY, 668818NL (18); test: …, 668818NL (16); "Process Fluid" column: Water / 80 barg / **40°C** (not "40°C°C") / TBD l/min; no Flush column (seal-support empty); "Plug Seal Fluid" column printed with the fixture's plug values (NA where empty); "50 hours"; "1100 rpm" |
+| AT-3 | Single + Plug Seal regression — 2025RSD02TL TCN001 from a fixture (product temperature typed as `40°C`, as in the workbook) | headings "Plug Seal" / "Test Seal"; plug: DHTW 4.750, C0625623AP, C0625624SL - WAVY, 668818NL (18); test: …, 668818NL (16); "Process Fluid" column (the Plug Seal operating conditions, Excel "Product"): Water / 80 barg / **40°C** (not "40°C°C") / TBD l/min; no Flush column (seal-support empty); no Plug Seal Fluid column; "50 hours"; "1100 rpm" |
 | AT-4 | **M1 success criteria 1–10** on a new project `2099RSD01TL` | project + defaults created; TCN001 from defaults; plug seal toggled; conditions & instructions entered; PDF previewed; issued; TCN002 copied; one field changed; TCN002 issued; TCN001 record, file SHA-256 and snapshot unchanged |
 | AT-5 | Re-create 2026RSD03TL TCN002–004 by copying (fresh project) | only these edits needed: 002 ← 001: run description; 003 ← 002: run description, prepared by MT, IB/OB stationary & rotating faces (C0618722SL, C0619339SL, C0618722SL, C0618723SL); 004 ← 003: run description, barrier temp `60 - 40`. Each result equals the workbook row; diff markers show exactly those fields |
 | AT-6 | Immutability | editing an issued TCN via form, ORM save and delete all fail; file unchanged |
 | AT-7 | Revision | rev 1 of TCN002 needs a reason; after issue rev 0 = superseded, rev 1 = issued, header "002 rev 1", both PDFs downloadable |
 | AT-8 | Project defaults edit | after TCN001/002 exist, changing defaults alters no TCN (draft or issued); a new TCN from defaults uses the new values |
-| AT-9 | Arrangement switching | dual → single with IB/OB data requires discard confirmation; afterwards positions = Test (+Plug), **seal-support values unchanged** and labelled Flush, IB/OB codes removed; single → dual + Plug Seal gives Plug, Inboard, Outboard; removing the Plug Seal with plug conditions filled requires confirmation and empties plug_* |
-| AT-10 | Validation | `4` → 004; duplicate rejected with "Run number already used!"; duplicate project_no (any case) rejected; `2099-TEST` saved with a format warning; `A/B` rejected; unit stripping cases of V8 (incl. plug_* fields) |
+| AT-9 | Arrangement switching | dual → single with IB/OB data requires discard confirmation; afterwards positions = Plug + Test (Plug Seal installed automatically, V16), **seal-support values unchanged** and labelled Flush, IB/OB codes removed; single → dual keeps the Plug Seal: Plug, Inboard, Outboard; removing the Plug Seal with process conditions filled requires confirmation and empties process_* |
+| AT-10 | Validation | `4` → 004; duplicate rejected with "Run number already used!"; duplicate project_no (any case) rejected; `2099-TEST` saved with a format warning; `A/B` rejected; unit stripping cases of V8 |
 | AT-11 | Test Data Sheet | for 2026RSD03TL TCN001 flags: columns Date, Time, Running Hours, By, Torque [Nm], Barrier Pressure [barg], Barrier Inlet Temp. [°C], Barrier Outlet Temp. [°C], Barrier Flow [l/min], IB Face Temp. [°C], IB Leakage [ml], Over [hours], IB Leakage Rate [ml/hr], OB Face Temp. [°C], OB Leakage [ml], Over [hours], OB Leakage Rate [ml/hr], Notes. With the first rows of the 2023 TCN001 manual log typed in (08:09, 08:24, 09:36 with OB 15 ml) LibreOffice-recalculated values give running hours 1.45 and Over 1.20, rate 12.50 at 09:36 |
 | AT-12 | **manual** — PO timing | creating TCN005 for 2026RSD03TL by copy is no slower than in Excel |
 | AT-13 | PostgreSQL | full suite passes with `TESTLAB_DATABASE_URL` pointing to PostgreSQL |
 | AT-14 | Concurrency | two sessions edit the same draft; second save refused (V10) |
 | AT-15 | Access | anonymous requests redirect to login |
-| AT-16 | Plug Seal conditions | dual pressurized + Plug Seal with distinct process, barrier and plug medium/pressure/temperature/flow: the document shows three condition columns with each circuit's own values, one speed; issue without plug_medium refused (V11) |
+| AT-16 | Plug Seal conditions | dual pressurized + Plug Seal with distinct process and barrier medium/pressure/temperature/flow: the document shows two condition columns (Process Fluid, Barrier Fluid) with each circuit's own values and no Plug Seal Fluid column, one speed; issue without process_medium refused (V11) |
 | AT-18 | Controlled PDF (§17 S1) | preview returns a PDF; issue stores a PDF whose SHA-256 matches the stored bytes; download returns the stored PDF; no DOCX stored or served; failed conversion leaves the TCN draft with nothing stored; superseded and cancelled revisions keep serving their own PDF |
 | AT-19 | Registration and approval (§17 S2) | Login \| Register; allowed domain(s) only, case-insensitive, server-side; external address rejected with a clear message and no account; account inactive until approved in Django admin; then login with the email address; bootstrap superuser still works |
 | AT-17 | Project number lock | project_no editable while only draft TCNs exist; after TCN001 is issued the form field is read-only and a model-level change is rejected; still locked after that TCN is superseded or cancelled |
@@ -568,7 +598,7 @@ validated on real new projects; migration tooling is specified and built
 afterwards. The mapping below is kept only as input for that later work
 and is not an M1 requirement (it would add `source_kind = legacy_import`
 and a `legacy_source` field). Additional point for later: legacy rows carry
-no Plug Seal conditions, and legacy 2026RSD03TL rows mention a plug seal in
+no separate Plug Seal conditions (Product = process conditions, see the mapping), and legacy 2026RSD03TL rows mention a plug seal in
 text without plug data (08-D4).
 
 Draft mapping (`manage.py import_legacy_tcn <xlsm> [--dry-run]`). Source: hidden sheet `DataBase`, table rows 2..n, columns A–AM, CK.
@@ -578,8 +608,8 @@ Draft mapping (`manage.py import_legacy_tcn <xlsm> [--dry-run]`). Source: hidden
 | ProjNo | Project.project_no (created if missing) |
 | ProjName | Project.description (from the highest run no.) and TcnRevision.project_description |
 | RunNo (`"004"`) | TestRun.run_no = 4 |
-| Arrangement 1 | single + plug; IB* columns → Plug position, OB* columns → Test position; IB/OB face temp & leak flags → plug_/test_ codes |
-| Arrangement 2 / 3 | dual_unpressurized / dual_pressurized, no plug; IB*→inboard, OB*→outboard |
+| Arrangement 1 | single (Plug Seal required); IB* columns → Plug position, OB* columns → Test position; Product* → process_* (the Plug Seal operating conditions); IB/OB face temp & leak flags → plug_/test_ codes |
+| Arrangement 2 / 3 | dual_unpressurized / dual_pressurized, no plug; IB*→inboard, OB*→outboard; Product* must be empty (no process conditions without Plug Seal) |
 | TestRunDescription, TestUnit, Speed, Duration, RefDwg | RunSetup fields |
 | IB/OB SealType, StatFace, RotFace, Spring | SealPosition fields |
 | Product, ProdPress, ProdTemp, ProdFlow | process_* |
@@ -644,6 +674,8 @@ testlab/
 
 Plug Seal conditions and the project-number lock are part of commits 2–9
 (model in 3, form in 4, lock in 2 + 9, document in 8); tests AT-16/AT-17.
+The Process Conditions / Plug Seal domain correction (§5) followed as one
+separate commit after M1 hands-on testing.
 
 ## 15. Remaining questions
 
@@ -652,7 +684,7 @@ unless the PO decides otherwise.
 
 | # | Question | M1 default | DB impact if changed |
 |---|---|---|---|
-| Q-A | ~~Plug Seal conditions on the TCN?~~ **Resolved (PO round 2):** yes — plug medium, pressure, temperature, flow (§1.2); speed common | – | – |
+| Q-A | ~~Plug Seal conditions on the TCN?~~ **Resolved (PO round 2), corrected 2026-09-30:** yes — they are the Process Conditions (§1.2, §5); no separate plug group; speed common | – | – |
 | Q-B | Label of the single-seal support circuit: "Flush" (generic; the plan, e.g. Plan 23, goes in the run description)? | "Flush" | none (label only) |
 | Q-C | Paper size A4 or US Letter (TCN001.pdf is Letter via Print to PDF)? | A4 | none |
 | Q-D | Date format on TCN (`16-Jun-2026` vs `6/16/2026`)? | `16-Jun-2026` | none |
@@ -661,8 +693,8 @@ unless the PO decides otherwise.
 | Q-G | ~~Project number pattern enforced?~~ **Resolved (PO round 2):** convention/warning only; uniqueness mandatory | – | – |
 | Q-H | Multi-phase conditions (TCN004 "60 - 40") as text in M1; structured steps from M2/M3? | text | additive (new table) |
 | Q-I | Server platform for production (Linux/Windows) and PostgreSQL availability | needed before deployment, not before development | none |
-| Q-J | Set-ups with more than one seal-support circuit (e.g. Plan 11 on the inboard seal + Plan 53 barrier) or a Plug Seal's own support system | one seal-support circuit + Plug Seal circuit; extra circuits in run description | additive |
-| Q-K | ~~Plug Seal circuit monitored parameters?~~ **Resolved (PO round 3):** yes — plug_pressure, plug_inlet_temp, plug_flow (§5.4) | – | – |
+| Q-J | Set-ups with more than one seal-support circuit (e.g. Plan 11 on the inboard seal + Plan 53 barrier) or a Plug Seal's own support system | one seal-support circuit + Process Conditions; extra circuits in run description | additive |
+| Q-K | ~~Plug Seal circuit monitored parameters?~~ **Resolved (PO round 3), corrected 2026-09-30:** the DCS/LabVIEW values are the process codes process_pressure, process_inlet_temp, process_flow (§5.4) | – | – |
 
 ## 16. Readiness statement
 

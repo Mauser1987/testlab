@@ -1,7 +1,10 @@
 """Run condition fields, grouped by physically separate circuit (M1 spec §1.2).
 
-No circuit shares a field with another, and none is assumed to share fluid,
-pressure, temperature or flow with another. Values are free text as typed
+There is one process-side group: the Process Conditions. They are the
+operating conditions established with the Plug Seal, so they exist only when
+a Plug Seal is installed; the Plug Seal has no second, independent set of
+conditions. The mechanical-seal support circuit (flush, barrier, buffer) is
+physically separate and keeps its own fields. Values are free text as typed
 ("min 75", "TBD", "60 - 40"); the unit is printed by TestLab.
 """
 
@@ -10,6 +13,7 @@ import re
 # Common to the whole Test Run. Speed applies to the whole shaft, so the
 # Plug Seal has no speed of its own.
 COMMON_FIELDS = ["test_unit", "duration", "speed"]
+# Process side, established with the Plug Seal; only used when a Plug Seal is present.
 PROCESS_FIELDS = ["process_medium", "process_pressure", "process_inlet_temperature", "process_flow"]
 # Mechanical-seal support circuit: barrier, buffer or flush (any arrangement).
 SEAL_SUPPORT_FIELDS = [
@@ -18,9 +22,6 @@ SEAL_SUPPORT_FIELDS = [
     "seal_support_inlet_temperature",
     "seal_support_flow",
 ]
-# Plug Seal circuit; only used when a Plug Seal is present.
-PLUG_FIELDS = ["plug_medium", "plug_pressure", "plug_inlet_temperature", "plug_flow"]
-
 # Printed unit per field and the typed spellings of it that are removed (V8).
 _UNIT_SPELLINGS = {
     "hours": r"hours?|hrs?|h",

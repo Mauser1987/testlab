@@ -127,8 +127,8 @@ def issue_errors(tcn):
         (setup.run_description, "Test Run description"),
         (setup.test_unit, "Test unit"),
     ]
-    if setup.plug_seal_present:
-        required.append((setup.plug_medium, "Plug Seal medium"))
+    if setup.plug_seal_present:  # the Plug Seal establishes the process conditions
+        required.append((setup.process_medium, "Process medium"))
     if tcn.revision >= 1:
         required.append((tcn.revision_reason, "Reason for revision"))
     errors += [f"{label} is required." for value, label in required if not value]

@@ -59,7 +59,7 @@ def test_units_only_with_a_value():
     assert with_unit("speed", "2980") == "2980 rpm"
     assert with_unit("process_pressure", "70") == "70 barg"
     assert with_unit("seal_support_inlet_temperature", "60 - 40") == "60 - 40°C"
-    assert with_unit("plug_flow", "TBD") == "TBD l/min"
+    assert with_unit("process_flow", "TBD") == "TBD l/min"
     assert with_unit("speed", "") == ""
     assert with_unit("process_flow", "", empty="NA") == "NA"
 
@@ -99,22 +99,30 @@ def test_dual_unpressurized_shows_empty_buffer_column(project, user):
 
 
 def test_single_seal_flush_column_only_when_filled(project, user):
-    context = build_tcn_context(tcn_with(project, user, Arrangement.SINGLE))
-    assert headings(context["seal_columns"]) == ["Test Seal"]
+    context = build_tcn_context(tcn_with(project, user, Arrangement.SINGLE, plug=True))
+    assert headings(context["seal_columns"]) == ["Plug Seal", "Test Seal"]
     assert headings(context["condition_columns"]) == ["Process Fluid"]
 
-    tcn = tcn_with(project, user, Arrangement.SINGLE, seal_support_medium="Process fluid (Plan 23)")
+    tcn = tcn_with(project, user, Arrangement.SINGLE, plug=True, seal_support_medium="Process fluid (Plan 23)")
     context = build_tcn_context(tcn)
     assert headings(context["condition_columns"]) == ["Process Fluid", "Flush Fluid"]
     assert context["condition_columns"][1]["pressure"] == ""
 
 
-def test_plug_seal_columns_first_and_na_when_empty(project, user):
-    context = build_tcn_context(tcn_with(project, user, Arrangement.SINGLE, plug=True, plug_pressure="35"))
+def test_plug_seal_column_first_and_its_conditions_are_the_process_column(project, user):
+    context = build_tcn_context(tcn_with(project, user, Arrangement.SINGLE, plug=True, process_pressure="35"))
     assert headings(context["seal_columns"]) == ["Plug Seal", "Test Seal"]
     assert context["seal_columns"][0]["seal_type_size"] == "plug type"
-    plug = context["condition_columns"][-1]
-    assert plug == column("Plug Seal Fluid", "NA", "35 barg", "NA", "NA")
+    # One process-side column, no separate Plug Seal Fluid column; empty values print NA.
+    assert context["condition_columns"] == [column("Process Fluid", "NA", "35 barg", "NA", "NA")]
+
+
+@pytest.mark.parametrize("arrangement", [Arrangement.DUAL_PRESSURIZED, Arrangement.DUAL_UNPRESSURIZED])
+def test_dual_with_plug_seal_has_process_and_seal_support_columns(project, user, arrangement):
+    tcn = tcn_with(project, user, arrangement, plug=True, process_medium="Water", seal_support_medium="ISO VG 32")
+    process, support = build_tcn_context(tcn)["condition_columns"]
+    assert process == column("Process Fluid", "Water", "NA", "NA", "NA")
+    assert support["heading"] in ("Barrier Fluid", "Buffer Fluid") and support["medium"] == "ISO VG 32"
 
 
 def test_header_values_and_draft_flag(project, user):
@@ -131,7 +139,7 @@ def test_header_values_and_draft_flag(project, user):
 
 def test_context_comes_from_tcn_snapshot_not_project_defaults(project, user):
     """Project defaults → TCN snapshot → document: later default edits never reach the document."""
-    tcn = tcn_with(project, user, speed="2980", process_medium="Water")
+    tcn = tcn_with(project, user, plug=True, speed="2980", process_medium="Water")
     before = build_tcn_context(tcn)
 
     defaults = project.default_setup
@@ -156,7 +164,7 @@ def grid_widths(docx_bytes, table_index):
 def test_loop_columns_keep_the_template_widths(project, user):
     template_seal_grid = grid_widths(template_path("tcn.docx").read_bytes(), 1)
     for arrangement, plug, count in [
-        (Arrangement.SINGLE, False, 1),
+        (Arrangement.SINGLE, True, 2),
         (Arrangement.DUAL_PRESSURIZED, False, 2),
         (Arrangement.DUAL_PRESSURIZED, True, 3),
     ]:

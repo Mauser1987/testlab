@@ -239,6 +239,7 @@ def test_issued_revision_unaffected_by_project_default_changes(draft, project, u
     issue(draft, user)
     defaults = project.default_setup
     defaults.speed = "3600"
+    defaults.plug_seal_present = True
     defaults.process_medium = "Oil"
     defaults.save()
     project.description = "RENAMED"

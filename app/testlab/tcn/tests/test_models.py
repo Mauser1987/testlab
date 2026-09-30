@@ -163,7 +163,6 @@ def test_tcn_setup_is_independent_copy_of_project_defaults(project, user):
     defaults.plug_seal_present = True
     defaults.speed = "2980"
     defaults.process_medium = "Water"
-    defaults.plug_medium = "Oil"
     defaults.monitored_parameters = ["process_pressure", "test_leakage"]
     defaults.save()
     defaults.positions.all().delete()
@@ -173,8 +172,8 @@ def test_tcn_setup_is_independent_copy_of_project_defaults(project, user):
     tcn = rev0(make_run(project, user))
     setup = tcn.setup
     assert setup.pk != defaults.pk
-    assert (setup.arrangement, setup.plug_seal_present, setup.speed, setup.plug_medium) == (
-        Arrangement.SINGLE, True, "2980", "Oil",
+    assert (setup.arrangement, setup.plug_seal_present, setup.speed, setup.process_medium) == (
+        Arrangement.SINGLE, True, "2980", "Water",
     )  # fmt: skip
     assert setup.monitored_parameters == ["process_pressure", "test_leakage"]
     copied = {p.role: p for p in setup.positions.all()}

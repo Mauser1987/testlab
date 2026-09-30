@@ -112,19 +112,22 @@ def test_at3_single_with_plug_seal_regression(user):
     assert "Stationary Seal Face C0625623AP C0625623AP" in lines
     assert "Rotating Seal Face: C0625624SL - WAVY C0625624SL - WAVY" in lines
     assert "Spring(s): 668818NL (18) 668818NL (16)" in lines
-    # Process column; no Flush column (seal support empty); Plug Seal column with NA (no plug values).
-    assert "Process Fluid Plug Seal Fluid" in lines
-    assert "Test Medium: Water NA" in lines
-    assert "Pressure: 80 barg NA" in lines
-    assert "Inlet Temperature: 40°C NA" in lines and "40°C°C" not in text
-    assert "Flow: TBD l/min NA" in lines
-    assert "Flush" not in text
+    # The Excel "Product" values are the conditions established with the Plug Seal: one Process
+    # column, no separate Plug Seal column; no Flush column (seal support empty).
+    assert "Process Fluid" in lines
+    assert "Test Medium: Water" in lines
+    assert "Pressure: 80 barg" in lines
+    assert "Inlet Temperature: 40°C" in lines and "40°C°C" not in text
+    assert "Flow: TBD l/min" in lines
+    assert "Flush" not in text and "Plug Seal Fluid" not in text
     assert "Duration: 50 hours" in lines and "Speed: 1100 rpm" in lines
     assert "• Pre-test work Job & Plug seal, required on stationary and rotating seal faces." in lines
 
 
-def test_at16_three_circuits_one_speed(user):
-    """AT-16 (document part): process, barrier and Plug Seal each print their own values; speed once."""
+def test_at16_plug_seal_process_and_barrier_one_speed(user):
+    """AT-16 (document part): dual + Plug Seal prints the process conditions (established with
+    the Plug Seal) and the barrier conditions, each with its own values; no Plug Seal Fluid
+    column; speed once."""
     project = make_project(user)
     setup = project.default_setup
     setup.plug_seal_present = True
@@ -132,7 +135,6 @@ def test_at16_three_circuits_one_speed(user):
     values = {
         "process": ("Crude oil", "40", "80", "12"),
         "seal_support": ("ISO VG 32", "70", "60", "8"),
-        "plug": ("Water", "35", "45", "5"),
     }
     for circuit, (medium, pressure, temperature, flow) in values.items():
         setattr(setup, f"{circuit}_medium", medium)
@@ -144,11 +146,12 @@ def test_at16_three_circuits_one_speed(user):
     lines = render(create_tcn(project, 1, user))
 
     assert "Plug Seal Inboard Seal Outboard Seal" in lines
-    assert "Process Fluid Barrier Fluid Plug Seal Fluid" in lines
-    assert "Test Medium: Crude oil ISO VG 32 Water" in lines
-    assert "Pressure: 40 barg 70 barg 35 barg" in lines
-    assert "Inlet Temperature: 80°C 60°C 45°C" in lines
-    assert "Flow: 12 l/min 8 l/min 5 l/min" in lines
+    assert "Process Fluid Barrier Fluid" in lines
+    assert "Test Medium: Crude oil ISO VG 32" in lines
+    assert "Pressure: 40 barg 70 barg" in lines
+    assert "Inlet Temperature: 80°C 60°C" in lines
+    assert "Flow: 12 l/min 8 l/min" in lines
+    assert not [line for line in lines if "Plug Seal Fluid" in line]
     assert [line for line in lines if line.startswith("Speed:")] == ["Speed: 2980 rpm"]
 
 

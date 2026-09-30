@@ -99,8 +99,9 @@ text), purpose text, rotation, tester drawing, ConditionSteps.
 Used both as **project defaults** (Project 1–1 RunSetup) and as each TCN
 revision's own copy (Tcn 1–1 RunSetup). Holds arrangement, `plug_seal_present`,
 reference drawing, test unit, speed, duration, run description
-(instructions), process, seal-support and Plug Seal circuit conditions
-(separate fields per circuit; speed common), monitored
+(instructions), Process Conditions (established with the Plug Seal; only
+when it is installed) and seal-support conditions (separate fields per
+circuit; speed common), monitored
 parameters; 1..* SealPosition. Copy = deep copy of this block.
 
 ### ConditionStep
@@ -134,12 +135,16 @@ IB/OB leakage, speed, torque, power consumption, cooling water in/out.
 ### Arrangement, Plug Seal, SealPosition / ComponentUse
 - Arrangement (PO decision): `single` | `dual_pressurized` | `dual_unpressurized`.
   No other values in M1.
-- Plug Seal: process-side simulation/test equipment, **not** a stage of the
-  seal under test. Separate boolean `plug_seal_present` + a Plug
-  SealPosition + its own circuit conditions (medium, pressure, temperature,
-  flow). Never encoded in the arrangement value.
-- Positions present: single → Test; dual → Inboard + Outboard; plus Plug if
-  `plug_seal_present`.
+- Plug Seal: the test equipment that establishes the process conditions,
+  **not** a stage of the seal under test. Separate boolean
+  `plug_seal_present` + a Plug SealPosition (and its own measurements: face
+  temperature, leakage). Its operating fluid / pressure / temperature / flow
+  **are** the Process Conditions — there is no second condition group
+  (domain correction 2026-09-30). Never encoded in the arrangement value.
+- Single ⇒ Plug Seal: a single seal cannot be tested alone (constraint, not
+  a default). Dual: Plug Seal optional.
+- Positions present: single → Plug + Test; dual → Inboard + Outboard, plus
+  Plug if `plug_seal_present`.
 - Seal-support circuit label follows arrangement: dual pressurized →
   "Barrier", dual unpressurized → "Buffer", single → "Flush" (optional,
   e.g. Plan 23 — single does **not** imply no support circuit, PO round 2).
