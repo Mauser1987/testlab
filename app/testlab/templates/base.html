@@ -21,7 +21,7 @@
     {% endif %}
   </header>
   {% block breadcrumbs %}{% endblock %}
-  <main>
+  <main class="{% block main_class %}{% endblock %}">
     {% if messages %}
       <ul class="messages">
         {% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}

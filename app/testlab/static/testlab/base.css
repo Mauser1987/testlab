@@ -6,6 +6,7 @@ body { margin: 0; font-family: system-ui, sans-serif; font-size: 15px; color: #1
 .topbar form { margin: 0; }
 button.link { background: none; border: 0; padding: 0; color: #fff; cursor: pointer; font: inherit; text-decoration: underline; }
 main { padding: 16px; max-width: 1200px; }
+main.wide { max-width: none; }
 .messages { list-style: none; padding: 0; }
 .messages li { padding: 8px 12px; margin-bottom: 8px; background: #eef3f8; border-left: 4px solid #1f3a5a; }
 .messages li.warning { background: #fff6e0; border-color: #c98a00; }
@@ -20,6 +21,14 @@ form.search { margin: 12px 0; }
 table.list { border-collapse: collapse; width: 100%; }
 table.list th, table.list td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #d8dde2; }
 table.list th { background: #eef1f4; }
+/* TCN register: short values never break (3500 rpm, 28-Sep-2026, Barrier: 35 barg);
+   only the arrangement and the long pressure heading wrap, and only when space runs out.
+   On narrow screens the table scrolls sideways instead of squeezing. */
+.table-scroll { overflow-x: auto; }
+table.register th, table.register td { white-space: nowrap; }
+table.register .arrangement { white-space: normal; min-width: 10em; }
+table.register th.wrap { white-space: normal; min-width: 7em; }
+table.register .row-actions { width: 1%; }
 form.fields .field { margin-bottom: 12px; }
 form.fields label { display: block; font-weight: 600; margin-bottom: 2px; }
 form.fields small { display: block; color: #5a6570; }

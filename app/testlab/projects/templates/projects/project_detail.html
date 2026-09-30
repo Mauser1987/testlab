@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> › {{ project.project_no }}
@@ -33,11 +34,12 @@
 
   <h2>TCN register</h2>
   {% if register %}
-    <table class="list">
+    <div class="table-scroll">
+    <table class="list register">
       <thead>
         <tr>
           <th>Run/TCN</th><th>Rev</th><th>Status</th><th>Created</th><th>Prepared by</th><th>Test unit</th>
-          <th>Arrangement</th><th>Speed</th><th>Barrier / Buffer / Flush pressure</th><th></th>
+          <th class="arrangement">Arrangement</th><th>Speed</th><th class="wrap">Barrier / Buffer / Flush pressure</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -51,19 +53,20 @@
               <td>{{ tcn.created_date|date:"d-M-Y" }}</td>
               <td>{{ tcn.prepared_by }}</td>
               <td>{{ setup.test_unit }}</td>
-              <td>{{ setup.configuration_display }}</td>
+              <td class="arrangement">{{ setup.configuration_display }}</td>
               <td>{% if setup.speed %}{{ setup.speed }} rpm{% endif %}</td>
               <td>{% if setup.seal_support_pressure %}{{ row.seal_support_label }}: {{ setup.seal_support_pressure }} barg{% endif %}</td>
-              <td>
-                <a href="{% url 'tcn:edit' tcn.pk %}">Open</a> ·
-                <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
-                {% if tcn.issued_document %} · <a href="{% url 'tcn:document' tcn.pk %}">Download PDF</a>{% endif %}
+              <td class="row-actions">
+                <a href="{% url 'tcn:edit' tcn.pk %}" title="Open TCN{{ tcn.test_run.display_no }}">Open</a> ·
+                <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}" title="Copy to new TCN">Copy</a>
+                {% if tcn.issued_document %} · <a href="{% url 'tcn:document' tcn.pk %}" title="Download PDF">PDF</a>{% endif %}
               </td>
             </tr>
           {% endwith %}
         {% endfor %}
       </tbody>
     </table>
+    </div>
   {% else %}
     <p>No TCNs yet. <a href="{% url 'tcn:create' project.pk %}">Create TCN001</a> from the project defaults.</p>
   {% endif %}
