@@ -1,0 +1,20 @@
+{# Chromium footer template: repeated on every page, in the bottom page margin (tcn.css @page). #}
+{# pageNumber / totalPages are filled in by Chromium. #}
+<style>
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  .tcn-footer { width: 100%; box-sizing: border-box; padding: 0 20mm 10mm; font-family: "Carlito"; font-size: 11pt;
+                font-variant-ligatures: none; line-height: 1.22; color: #000; -webkit-print-color-adjust: exact; }
+  .tcn-footer table { width: 100%; table-layout: fixed; border-collapse: collapse; border-top: 0.75pt solid #808080; }
+  .tcn-footer td { padding: 4pt 0 0; vertical-align: top; }
+  .tcn-footer .page-number { text-align: center; }
+  .tcn-footer .created { text-align: right; }
+</style>
+<footer class="tcn-footer">
+  <table>
+    <tr>
+      <td class="prepared">Prepared by: {{ prepared_by }}</td>
+      <td class="page-number">Page <span class="pageNumber"></span> of <span class="totalPages"></span></td>
+      <td class="created">Created: {{ created_date }}</td>
+    </tr>
+  </table>
+</footer>

@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from testlab.documents.pdf import PDF_CONTENT_TYPE, PdfConversionError
-from testlab.documents.render import render_pdf, template_path
+from testlab.documents.render import tcn_template
 from testlab.documents.tcn_context import build_tcn_context, tcn_file_name
 from testlab.projects.models import Project
 from testlab.projects.setup_forms import RunSetupEditor
@@ -148,7 +148,7 @@ class TcnPreviewView(DraftTcnMixin, View):
         if tcn.is_locked:
             return self.refuse_locked(request, tcn)
         try:
-            content = render_pdf(template_path("tcn.docx"), build_tcn_context(tcn))
+            content = tcn_template().render_pdf(build_tcn_context(tcn))
         except PdfConversionError as error:
             messages.error(request, f"The PDF preview could not be generated. {error}")
             return redirect("tcn:edit", pk=tcn.pk)

@@ -1,0 +1,36 @@
+/* TCN print layout for Chromium: the A4 layout of reference/tcn/TCN001.pdf.
+   Header and footer are Chromium header/footer templates (header.html,
+   footer.html) placed in the page margins below. Only the bundled Carlito
+   (metric-compatible with Calibri) is used, never machine fonts. */
+
+/* The Carlito faces are declared in tcn.html, inlined from the bundle: Chromium lays out the
+   header and footer templates without waiting for fonts, so they can only use a font the page
+   has already loaded from the very same source. */
+
+/* Exact A4: Chromium's format="A4" is rounded to 8.27 × 11.7 in (595.92 × 842.88 pt). */
+@page { size: 210mm 297mm; margin: 28mm 20mm 22mm 20mm; }
+/* Previews: room for the draft marking under the header rule. */
+@page draft { margin-top: 35mm; }
+body.draft { page: draft; }
+
+/* Ligatures off: "ti", "fi" … stay separate characters, so the PDF text is extracted reliably. */
+html { font-family: "Carlito"; font-size: 11pt; font-variant-ligatures: none; line-height: 1.22; color: #000; }
+body { margin: 0; }
+p { margin: 0; }
+table { border-collapse: collapse; }
+td, th { padding: 0; vertical-align: top; }
+
+h2 { font-size: 11pt; font-weight: bold; margin: 8pt 0 2pt; break-after: avoid; }
+.text, .run-line.level-0 { margin-left: 10mm; }
+.run-line.level-1 { margin-left: 13mm; }
+.run-line.level-2 { margin-left: 16mm; }
+
+table.values { margin-left: 10mm; table-layout: fixed; break-inside: avoid; }
+table.values + table.values { margin-top: 8pt; }
+table.values col.label { width: 46mm; }
+table.values col.value { width: 46mm; }
+/* Three value columns (Plug Seal installed) share the 160 mm text width with the labels. */
+table.values.columns-3 col.label, table.values.columns-3 col.value { width: 40mm; }
+table.values td, table.values th { text-align: center; padding: 0 1mm; }
+table.values td.label, table.values td.wide { text-align: left; padding-left: 0; }
+table.values th { font-weight: bold; }

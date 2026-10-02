@@ -1,11 +1,11 @@
-"""DOCX → PDF conversion (stabilization decision S1)."""
+"""DOCX → PDF conversion of the docx renderer (transitional, TESTLAB_TCN_RENDERER=docx)."""
 
 import os
 import stat
 
 import pytest
 
-from testlab.documents import checks, pdf
+from testlab.documents import checks, pdf, pdf_word
 from testlab.documents.render import render_docx, template_path
 from testlab.documents.tcn_context import build_tcn_context
 from testlab.tcn.services import create_tcn
@@ -16,6 +16,13 @@ from .pdf_text import is_real_pdf, pdf_lines
 REAL_DOCX_TO_PDF = pdf.docx_to_pdf  # before conftest replaces it with the stand-in
 
 posix_only = pytest.mark.skipif(os.name != "posix", reason="uses a shell script as a fake soffice")
+
+
+@pytest.fixture(autouse=True)
+def libreoffice_backend(settings):
+    """The LibreOffice tests below do not depend on TESTLAB_PDF_CONVERTER of the environment."""
+    settings.TESTLAB_TCN_RENDERER = "docx"
+    settings.TESTLAB_PDF_CONVERTER = "libreoffice"
 
 
 def fake_soffice(tmp_path, script):
@@ -62,17 +69,92 @@ def test_conversion_timeout_kills_libreoffice(settings, tmp_path):
     assert not marker.exists()
 
 
-def test_system_check_warns_without_libreoffice(monkeypatch):
-    monkeypatch.setattr(checks, "soffice_available", lambda: False)
-    (warning,) = checks.libreoffice_check(None)
-    assert warning.id == "testlab.W001" and "TESTLAB_SOFFICE" in warning.hint
-    monkeypatch.setattr(checks, "soffice_available", lambda: True)
-    assert checks.libreoffice_check(None) == []
+# --- Backend selection (TESTLAB_PDF_CONVERTER) -------------------------------------------------
 
 
-@pytest.mark.libreoffice
+def converters_present(monkeypatch, libreoffice, word):
+    monkeypatch.setattr(pdf, "soffice_available", lambda: libreoffice)
+    monkeypatch.setattr(pdf_word, "word_available", lambda: word)
+
+
+def record_backends(monkeypatch):
+    calls = []
+    monkeypatch.setattr(pdf, "_libreoffice_docx_to_pdf", lambda docx: calls.append("libreoffice") or b"%PDF-lo")
+    monkeypatch.setattr(pdf_word, "word_docx_to_pdf", lambda docx, timeout: calls.append(("word", timeout)) or b"%PDF-w")
+    return calls
+
+
+@pytest.mark.parametrize(
+    "setting, libreoffice, word, expected",
+    [
+        ("libreoffice", False, True, "libreoffice"),  # explicit choice, even when only Word is present
+        ("word", True, False, "word"),
+        ("auto", True, True, "libreoffice"),  # LibreOffice preferred
+        ("auto", False, True, "word"),
+        ("auto", False, False, None),
+    ],
+)
+def test_converter_selection(settings, monkeypatch, setting, libreoffice, word, expected):
+    settings.TESTLAB_PDF_CONVERTER = setting
+    converters_present(monkeypatch, libreoffice, word)
+    assert pdf.selected_converter() == expected
+
+
+def test_conversion_goes_through_the_selected_backend(settings, monkeypatch):
+    calls = record_backends(monkeypatch)
+    settings.TESTLAB_PDF_TIMEOUT = 45
+    settings.TESTLAB_PDF_CONVERTER = "word"
+    assert REAL_DOCX_TO_PDF(b"docx") == b"%PDF-w"
+    settings.TESTLAB_PDF_CONVERTER = "libreoffice"
+    assert REAL_DOCX_TO_PDF(b"docx") == b"%PDF-lo"
+    assert calls == [("word", 45), "libreoffice"]
+
+
+def test_auto_without_any_converter_fails_clearly(settings, monkeypatch):
+    calls = record_backends(monkeypatch)
+    settings.TESTLAB_PDF_CONVERTER = "auto"
+    converters_present(monkeypatch, False, False)
+    with pytest.raises(pdf.PdfConversionError, match="No PDF converter was found"):
+        REAL_DOCX_TO_PDF(b"docx")
+    assert calls == []
+
+
+def test_unknown_converter_is_refused(settings):
+    settings.TESTLAB_PDF_CONVERTER = "acrobat"
+    with pytest.raises(pdf.PdfConversionError, match="Unknown TESTLAB_PDF_CONVERTER 'acrobat'"):
+        REAL_DOCX_TO_PDF(b"docx")
+
+
+def test_word_is_never_available_outside_windows(monkeypatch):
+    monkeypatch.setattr(pdf_word.os, "name", "posix")
+    assert not pdf_word.word_available()
+
+
+# --- System check ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "setting, libreoffice, word, hint",
+    [
+        ("libreoffice", False, True, "TESTLAB_SOFFICE"),
+        ("word", True, False, "pywin32"),
+        ("auto", False, False, "Microsoft Word"),
+    ],
+)
+def test_system_check_warns_without_the_configured_converter(settings, monkeypatch, setting, libreoffice, word, hint):
+    settings.TESTLAB_PDF_CONVERTER = setting
+    converters_present(monkeypatch, libreoffice, word)
+    (warning,) = checks.pdf_converter_check(None)
+    assert warning.id == "testlab.W001" and hint in warning.hint
+    converters_present(monkeypatch, True, True)
+    assert checks.pdf_converter_check(None) == []
+
+
+@pytest.mark.parametrize("backend", [pytest.param("libreoffice", marks=pytest.mark.libreoffice),
+                                     pytest.param("word", marks=pytest.mark.word)])  # fmt: skip
 @pytest.mark.django_db
-def test_real_conversion_of_a_tcn(user):
+def test_real_conversion_of_a_tcn(user, settings, backend):
+    settings.TESTLAB_PDF_CONVERTER = backend
     project = make_project(user, project_no="2099RSD01TL", description="TEST UHTW 4.750")
     tcn = create_tcn(project, 1, user)
     tcn.setup.speed = "2980"

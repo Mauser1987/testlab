@@ -8,6 +8,8 @@ class TcnConfig(AppConfig):
     verbose_name = "TCN"
 
     def ready(self):
-        from testlab.documents.checks import libreoffice_check
+        from testlab.documents.checks import chromium_check, pdf_converter_check, weasyprint_check
 
-        checks.register(libreoffice_check)
+        checks.register(weasyprint_check)
+        checks.register(pdf_converter_check)
+        checks.register(chromium_check)

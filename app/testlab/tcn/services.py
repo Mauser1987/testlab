@@ -8,7 +8,6 @@ the user's actions, each in one transaction.
 """
 
 import hashlib
-import io
 
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
@@ -17,7 +16,7 @@ from django.db.models import F, ProtectedError
 from django.utils import timezone
 
 from testlab.documents.pdf import PdfConversionError
-from testlab.documents.render import render_pdf, template_path
+from testlab.documents.render import tcn_template
 from testlab.documents.tcn_context import build_tcn_context, tcn_file_name
 from testlab.projects.arrangements import SealRole
 
@@ -152,7 +151,7 @@ def issue_tcn(tcn, expected_row_version, user):
     """Issue a draft: the stored PDF and snapshot become the record of the instruction.
 
     In one transaction: V11 check on the saved draft, render the PDF without
-    the draft marking (Word template → temporary DOCX → PDF), store it
+    the draft marking (from the TCN document template), store it
     (refused if the file exists, V15), store the SHA-256 of the stored PDF
     and of the template and the render context, set issued_at/issued_by (the
     user performing the issue) and supersede the previously issued revision
@@ -173,9 +172,9 @@ def issue_tcn(tcn, expected_row_version, user):
 
             context = build_tcn_context(tcn)
             context["is_draft"] = False
-            template = template_path("tcn.docx").read_bytes()
             try:
-                content = render_pdf(io.BytesIO(template), context)
+                template = tcn_template()  # read once: the PDF is rendered from what template_sha256 describes
+                content = template.render_pdf(context)
             except PdfConversionError as error:
                 raise IssueError([f"The PDF could not be generated; nothing was issued. {error}"]) from error
 
@@ -200,7 +199,7 @@ def issue_tcn(tcn, expected_row_version, user):
             tcn.issued_by = user
             tcn.issued_document.name = written
             tcn.issued_document_sha256 = hashlib.sha256(content).hexdigest()
-            tcn.template_sha256 = hashlib.sha256(template).hexdigest()
+            tcn.template_sha256 = template.sha256
             tcn.issued_snapshot = context
             tcn.updated_by = user
             tcn.save()

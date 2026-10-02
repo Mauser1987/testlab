@@ -1,4 +1,9 @@
-"""TCN Word document regressions (M1 spec §9, §11): AT-2, AT-3, AT-16 (document part)."""
+"""TCN document regressions (M1 spec §9, §11): AT-2, AT-3, AT-16 (document part).
+
+Run against the text of the rendered document template of every renderer:
+the HTML template (WeasyPrint, the default), the Chromium template bundle
+(under validation) and the Word template (transitional).
+"""
 
 import io
 from pathlib import Path
@@ -7,7 +12,7 @@ import pytest
 from django.conf import settings
 from docx import Document
 
-from testlab.documents.render import render_docx, template_path
+from testlab.documents.render import ChromiumTemplate, HtmlTemplate, render_docx, template_path
 from testlab.documents.tcn_context import build_tcn_context, format_date
 from testlab.projects.arrangements import Arrangement
 from testlab.tcn.services import create_tcn
@@ -17,6 +22,7 @@ from testlab.tcn.tests.test_at5_copy_chain import load_defaults
 
 from . import data_2025rsd02tl
 from .docx_text import docx_lines, normalized
+from .html_text import html_lines
 
 pytestmark = pytest.mark.django_db
 
@@ -24,10 +30,22 @@ FIXTURES = Path(settings.APP_DIR) / "tests" / "fixtures"
 DRAFT_MARK = "DRAFT — not issued"
 
 
-def render(tcn, **overrides):
-    context = build_tcn_context(tcn)
-    context.update(overrides)
-    return docx_lines(render_docx(template_path("tcn.docx"), context))
+@pytest.fixture(params=["html", "chromium", "docx"])
+def render(request):
+    """Lines of the rendered TCN document template: render(tcn, **context_overrides)."""
+
+    def render(tcn, **overrides):
+        context = build_tcn_context(tcn)
+        context.update(overrides)
+        if request.param == "html":
+            return html_lines(HtmlTemplate.load("tcn").render_html(context))
+        if request.param == "chromium":
+            # Chromium fills in the page number and count; the template holds only "Page  of ".
+            lines = html_lines(ChromiumTemplate.load("tcn_chromium").render_html(context))
+            return [line.replace(" Page of ", " ") for line in lines]
+        return docx_lines(render_docx(template_path("tcn.docx"), context))
+
+    return render
 
 
 def test_template_is_configurable(settings, tmp_path):
@@ -35,7 +53,7 @@ def test_template_is_configurable(settings, tmp_path):
     assert template_path("tcn.docx") == tmp_path / "tcn.docx"
 
 
-def test_at2_tcn001_regression(user):
+def test_at2_tcn001_regression(user, render):
     """AT-2: 2026RSD03TL TCN001 through the services equals TCN001.pdf (except the date format)."""
     row = data_2026rsd03tl.ROWS[1]
     project = make_project(user, project_no="2026RSD03TL", description=row["ProjName"])
@@ -61,6 +79,18 @@ def test_at2_tcn001_regression(user):
     draft = render(tcn)
     assert draft.index(DRAFT_MARK) == 1  # right under the header line
     assert [line for line in draft if line != DRAFT_MARK] == issued_look
+
+
+def test_at2_run_description_indent_levels_html(user):
+    """Run description lines keep their characters; leading spaces become indent classes."""
+    row = data_2026rsd03tl.ROWS[1]
+    project = make_project(user, project_no="2026RSD03TL", description=row["ProjName"])
+    load_defaults(project, 1)
+    tcn = create_tcn(project, 1, user)
+    html = HtmlTemplate.load("tcn").render_html(build_tcn_context(tcn))
+    assert '<p class="run-line level-0">• Pre-test work required on stationary and rotating seal faces.</p>' in html
+    assert '<p class="run-line level-1">- Waviness measurement on 1 location</p>' in html
+    assert "{%" not in html and "{{" not in html
 
 
 def test_at2_run_description_indent_levels(user):
@@ -102,7 +132,7 @@ def single_plug_project(user):
     return project
 
 
-def test_at3_single_with_plug_seal_regression(user):
+def test_at3_single_with_plug_seal_regression(user, render):
     tcn = create_tcn(single_plug_project(user), 1, user)
     lines = render(tcn, is_draft=False)
     text = normalized(lines)
@@ -124,7 +154,7 @@ def test_at3_single_with_plug_seal_regression(user):
     assert "• Pre-test work Job & Plug seal, required on stationary and rotating seal faces." in lines
 
 
-def test_at16_plug_seal_process_and_barrier_one_speed(user):
+def test_at16_plug_seal_process_and_barrier_one_speed(user, render):
     """AT-16 (document part): dual + Plug Seal prints the process conditions (established with
     the Plug Seal) and the barrier conditions, each with its own values; no Plug Seal Fluid
     column; speed once."""
@@ -155,7 +185,7 @@ def test_at16_plug_seal_process_and_barrier_one_speed(user):
     assert [line for line in lines if line.startswith("Speed:")] == ["Speed: 2980 rpm"]
 
 
-def test_text_is_escaped_not_interpreted(user):
+def test_text_is_escaped_not_interpreted(user, render):
     project = make_project(user, description="A & B <C> {{ project_no }}")
     tcn = create_tcn(project, 1, user)
     tcn.setup.run_description = "• Step {% if x %} & <b>bold</b>"

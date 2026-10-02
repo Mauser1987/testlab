@@ -1,36 +1,206 @@
 """Render the TCN document (M1 spec §9.1, stabilization decision S1).
 
-Pipeline: context → Word template (docxtpl) → temporary DOCX → PDF
-(LibreOffice, pdf.py). The PDF is the document users see and the one
-stored at issue; the DOCX is an internal intermediate and is never served.
+The PDF is the document users see and the one stored at issue. It is
+rendered from a document template, never from the interactive pages:
+
+- HTML (default): an HTML template bundle with print CSS, rendered
+  directly to PDF by WeasyPrint (HtmlTemplate).
+- Chromium (TESTLAB_TCN_RENDERER=chromium, under validation, §19): an HTML
+  template bundle with Chromium header/footer templates, printed by headless
+  Chromium through Playwright (ChromiumTemplate, chromium.py). Intended to
+  become the only renderer, replacing the other two.
+- DOCX (TESTLAB_TCN_RENDERER=docx, transitional): Word template (docxtpl)
+  → temporary DOCX → PDF (LibreOffice or Word, pdf.py). Kept until
+  WeasyPrint is proven on the Windows workstations, then removed.
+
+tcn_template() returns the configured template; `sha256` identifies it
+(stored as template_sha256) and `render_pdf(context)` renders exactly
+those bytes.
 """
 
+import hashlib
 import io
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath
 
 from django.conf import settings
+from django.template import Context, Engine, TemplateDoesNotExist, TemplateSyntaxError
 from docxtpl import DocxTemplate
 from lxml import etree
 
 from . import pdf
+
+# Base URL of the files of an HTML template bundle; they are served from memory, never fetched.
+_BUNDLE_URL = "https://template.testlab.invalid/"
+
+# A file reference in Chromium's header/footer templates other than an inlined data: URI.
+_FILE_REFERENCE = re.compile(r"""(?:\b(?:src|href|srcset)\s*=\s*|url\(\s*)(?!["']?\s*data:)""", re.IGNORECASE)
+
+# Fixed, not from the mimetypes module: on Windows that reads the registry, which varies per machine.
+_CONTENT_TYPES = {
+    ".css": "text/css",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".ttf": "font/ttf",
+    ".otf": "font/otf",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+}
 
 
 def template_path(name):
     return Path(settings.TESTLAB_TEMPLATE_DIR) / name
 
 
-def render_pdf(template, context):
-    """Render `template` with `context` and convert it; returns the PDF as bytes.
+def tcn_template():
+    """The TCN document template of the configured renderer, read once."""
+    if settings.TESTLAB_TCN_RENDERER == "docx":
+        return WordTemplate.load("tcn.docx")
+    if settings.TESTLAB_TCN_RENDERER == "chromium":
+        return ChromiumTemplate.load("tcn_chromium")
+    return HtmlTemplate.load("tcn")
 
-    Raises pdf.PdfConversionError when the PDF cannot be generated.
+
+class HtmlTemplate:
+    """An HTML document template bundle: directory <name>/ with <name>.html, its stylesheet, images and fonts.
+
+    All files are read into memory once: the PDF is rendered from exactly the
+    bytes `sha256` describes, and nothing outside the bundle is loaded (no
+    network, no system fonts asked for by name). The HTML is rendered by a
+    separate Django template engine — no request, no context processors, no
+    access to the application's page templates.
     """
-    return pdf.docx_to_pdf(render_docx(template, context))
+
+    def __init__(self, name, files):
+        self.name = name
+        self.files = files  # bundle-relative POSIX path → bytes
+
+    @classmethod
+    def load(cls, name):
+        root = template_path(name)
+        files = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+        if f"{name}.html" not in files:
+            raise pdf.PdfConversionError(f"The document template {root / (name + '.html')} was not found.")
+        return cls(name, files)
+
+    @property
+    def sha256(self):
+        """SHA-256 of the bundle: of the lines "<path>\\0<SHA-256 of the file>\\n", sorted by path."""
+        manifest = "".join(f"{path}\0{hashlib.sha256(data).hexdigest()}\n" for path, data in sorted(self.files.items()))
+        return hashlib.sha256(manifest.encode()).hexdigest()
+
+    def render_html(self, context):
+        source = self.files[f"{self.name}.html"].decode("utf-8")
+        return Engine(autoescape=True).from_string(source).render(Context(context))
+
+    def render_pdf(self, context):
+        """The PDF as bytes; raises pdf.PdfConversionError when it cannot be rendered."""
+        try:
+            # Imported on use: it loads Pango, and the DOCX renderer must work without it (transitional).
+            import weasyprint
+            from weasyprint.text.fonts import FontConfiguration
+            from weasyprint.urls import FatalURLFetchingError, URLFetcher, URLFetcherResponse
+        except (ImportError, OSError) as error:
+            raise pdf.PdfConversionError(f"WeasyPrint could not be loaded: {error}") from error
+
+        files = self.files
+
+        class BundleFetcher(URLFetcher):
+            def fetch(self, url, headers=None):
+                path = url.removeprefix(_BUNDLE_URL)
+                if not url.startswith(_BUNDLE_URL) or path not in files:
+                    raise ValueError(f"{url} is not a file of the document template")
+                content_type = _CONTENT_TYPES.get(PurePosixPath(path).suffix.lower(), "application/octet-stream")
+                return URLFetcherResponse(url, files[path], {"Content-Type": content_type})
+
+        try:
+            html = weasyprint.HTML(
+                string=self.render_html(context),
+                base_url=_BUNDLE_URL,
+                url_fetcher=BundleFetcher(fail_on_errors=True),  # a missing logo or font stops the rendering
+            )
+            return html.write_pdf(font_config=FontConfiguration())
+        except (Exception, FatalURLFetchingError) as error:
+            reason = f"{error} ({error.__cause__})" if error.__cause__ else str(error)  # the fetcher's reason
+            raise pdf.PdfConversionError(f"The PDF could not be rendered: {reason}") from error
+
+
+class ChromiumTemplate(HtmlTemplate):
+    """An HTML document template bundle printed by headless Chromium (§19).
+
+    Directory <name>/ with tcn.html (the body), header.html and footer.html
+    (Chromium's header/footer templates, repeated on every page; Chromium
+    fills in the page number and page count), the stylesheet, logo and
+    fonts. Same model as HtmlTemplate: all files are read once, `sha256` is
+    the bundle manifest hash, and the PDF is printed from exactly those
+    bytes; Chromium can load nothing outside the bundle. Header and footer
+    cannot load files, so they inline bundle files with {% bundle_data_uri %}.
+    """
+
+    PARTS = ("tcn.html", "header.html", "footer.html")
+
+    @classmethod
+    def load(cls, name):
+        root = template_path(name)
+        files = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+        for part in cls.PARTS:
+            if part not in files:
+                raise pdf.PdfConversionError(f"The document template {root / part} was not found.")
+        return cls(name, files)
+
+    def render_parts(self, context):
+        """The rendered tcn.html, header.html and footer.html."""
+        engine = Engine(autoescape=True, builtins=["testlab.documents.bundle_tags"])
+        engine.bundle_files = self.files  # for {% bundle_data_uri %}
+        return [engine.from_string(self.files[part].decode("utf-8")).render(Context(context)) for part in self.PARTS]
+
+    def render_html(self, context):
+        """Header, body and footer as one HTML text (for text regressions; never printed like this)."""
+        document, header, footer = self.render_parts(context)
+        return document.replace("<main>", header + "<main>", 1).replace("</main>", "</main>" + footer, 1)
+
+    def render_pdf(self, context):
+        """The PDF as bytes; raises pdf.PdfConversionError when it cannot be rendered."""
+        from . import chromium
+
+        try:
+            document, header, footer = self.render_parts(context)
+        except (TemplateSyntaxError, TemplateDoesNotExist) as error:
+            raise pdf.PdfConversionError(f"The document template could not be rendered: {error}") from error
+        for part, html in (("header.html", header), ("footer.html", footer)):
+            if _FILE_REFERENCE.search(html):
+                raise pdf.PdfConversionError(
+                    f"{part} may only use bundle files inlined with {{% bundle_data_uri %}}: "
+                    "Chromium's header and footer templates cannot load files."
+                )
+        files = dict(self.files, **{"tcn.html": document.encode("utf-8")})
+        return chromium.print_pdf(files, "tcn.html", header, footer, base_url=_BUNDLE_URL)
+
+
+class WordTemplate:
+    """The Word template of the DOCX renderer (transitional, see the module docstring)."""
+
+    def __init__(self, data):
+        self.data = data
+
+    @classmethod
+    def load(cls, name):
+        return cls(template_path(name).read_bytes())
+
+    @property
+    def sha256(self):
+        return hashlib.sha256(self.data).hexdigest()
+
+    def render_pdf(self, context):
+        return pdf.docx_to_pdf(render_docx(io.BytesIO(self.data), context))
 
 
 def render_docx(template, context):
     """Render `template` (a path or a file object) with `context`; returns the DOCX as bytes.
 
-    Internal step of render_pdf; also used by the layout regression tests.
+    Internal step of WordTemplate.render_pdf; also used by the layout regression tests.
     """
     document = _Template(template)
     document.render(context, autoescape=True)

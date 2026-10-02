@@ -59,14 +59,15 @@ What works today:
   TCN, marked "DRAFT — not issued". It shows the saved draft and is not stored.
 - **Issue** — "Issue…" on a draft checks that the TCN is complete, shows the
   differences from its source, and on confirmation stores the **PDF** (without
-  the draft marking), its SHA-256, the Word template's SHA-256 and the
+  the draft marking), its SHA-256, the document template's SHA-256 and the
   printed data. The user who confirms is recorded as issued by. The issued
   TCN is read-only for good; downloads always serve the stored PDF. If the
   PDF cannot be generated nothing is issued. Once a TCN of a project is
   issued, the project number can no longer be changed.
 - **Controlled document** — TCNs are only ever shown and downloaded as PDF.
-  Layout comes from the Word template `app/doc_templates/tcn.docx`; the
-  Word file rendered from it is converted by LibreOffice and never offered.
+  Layout comes from the HTML document template `app/doc_templates/tcn/`
+  (HTML + print CSS, bundled Carlito font), rendered directly to PDF by
+  WeasyPrint. It is separate from the TCN pages of the application.
 - **New revision** — "New revision" on the current issued TCN creates the
   next revision as a draft (a copy of it; prepared by the current user).
   Only one draft at a time, and none for a cancelled run. It needs a reason
@@ -90,17 +91,12 @@ Reports, DCS/LabVIEW data.
 
 ## Development setup
 
-Requires Python 3.12+ and **LibreOffice** (for the TCN PDF; no Microsoft
-Office needed):
+Requires Python 3.12+ and the **Pango** library, which WeasyPrint uses to
+render the TCN PDF:
 
-- Linux: `sudo apt install libreoffice-writer` (or the distribution's
-  equivalent). `soffice` is found on the PATH.
-- Windows: install LibreOffice from libreoffice.org; it is found in
-  `C:\Program Files\LibreOffice\program`. Otherwise set `TESTLAB_SOFFICE`.
-
-`manage.py check` (and `runserver`) warn with `testlab.W001` when LibreOffice
-is not found. Tests marked `libreoffice` use the real conversion and are
-skipped without it; all other tests use a fast stand-in.
+- Linux: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0` (present on
+  most desktop installations).
+- Windows: see *Windows: WeasyPrint* below.
 
 ```bash
 python3 -m venv .venv
@@ -109,6 +105,83 @@ python3 -m venv .venv
 .venv/bin/python app/manage.py createsuperuser
 .venv/bin/python app/manage.py runserver
 ```
+
+`manage.py check` (and `runserver`) warn with `testlab.W002` when
+WeasyPrint cannot be loaded. The TCN PDF uses only the fonts in the
+template bundle, so it looks the same on every machine; no Office or
+LibreOffice is needed.
+
+### Windows: WeasyPrint
+
+WeasyPrint needs Pango from MSYS2 on Windows:
+
+1. Install MSYS2 from https://www.msys2.org (default folder `C:\msys64`).
+2. In the **MSYS2 UCRT64** shell: `pacman -S mingw-w64-ucrt-x86_64-pango`
+3. WeasyPrint finds `C:\msys64\ucrt64\bin` by itself; for another folder
+   set `WEASYPRINT_DLL_DIRECTORIES` to its `bin` directory.
+
+```bat
+python -m venv .venv
+.venv\Scripts\pip install -e ".[dev]"
+.venv\Scripts\weasyprint --info
+.venv\Scripts\python app\manage.py check
+```
+
+**Proof on the corporate workstation** (required before the transitional
+DOCX renderer below is removed):
+
+1. `weasyprint --info` runs and `manage.py check` reports no `testlab.W002`.
+2. `.venv\Scripts\pytest` passes — every TCN test renders real PDFs,
+   including A4 size, header/footer and "Page x of y" on each page, only
+   the bundled fonts embedded, and byte-identical output on repeated
+   renders.
+3. Preview PDF of a TCN shows the same line and page breaks as the same TCN
+   rendered on the Linux server. (The files need not be byte-identical
+   across machines: Pango/HarfBuzz versions can differ.)
+
+### Chromium renderer (under validation, M1 spec §19)
+
+`TESTLAB_TCN_RENDERER=chromium` prints the TCN with headless Chromium
+through Playwright (the engine Seal Inspection uses). It needs no system
+libraries on Windows; the browser is downloaded once into the user profile:
+
+```bat
+.venv\Scripts\pip install -e ".[dev]"
+.venv\Scripts\python -m playwright install chromium
+```
+
+(about 150 MB; behind HTTPS inspection the download may need the company
+root certificate. On Linux, if Chromium cannot start for missing libraries:
+`.venv/bin/python -m playwright install-deps chromium` on Debian/Ubuntu.)
+`manage.py check` warns with `testlab.W003` when Chromium is missing.
+
+**Validation on the corporate Windows workstation:**
+
+1. `set TESTLAB_TCN_RENDERER=chromium` and `.venv\Scripts\python app\manage.py check`
+   reports no `testlab.W003`.
+2. `set TESTLAB_PROOF_DIR=%CD%\proof` and `.venv\Scripts\pytest -m chromium`
+   passes (exact page size, margins, Carlito only, logo, header/footer and
+   "Page x of y" on every page, draft marking, page breaks, no request
+   outside the template, content/layout determinism, AT-2/AT-3/AT-16).
+   It writes the sample PDFs and `timings.json` to `proof\`.
+3. The PDFs in `proof\` show the same line and page breaks as the same
+   samples rendered on Linux.
+
+### Transitional: DOCX renderer
+
+Until the proof above is done, `TESTLAB_TCN_RENDERER=docx` renders the
+TCN the old way: Word template `app/doc_templates/tcn.docx` → DOCX → PDF
+converted by **LibreOffice** (`TESTLAB_PDF_CONVERTER=libreoffice`, the
+default; `apt install libreoffice-writer`, or LibreOffice for Windows,
+otherwise set `TESTLAB_SOFFICE`) or by the locally installed desktop
+**Microsoft Word** (`TESTLAB_PDF_CONVERTER=word`, Windows only, needs
+`pip install -e ".[dev,word]"`; `auto` = LibreOffice when found, else
+Word). Word runs invisibly in its own instance per conversion and is
+closed again after every conversion, also when it fails; run TestLab in
+the desktop session of a user with an activated Word. With this renderer
+`manage.py check` warns with `testlab.W001` when the converter is not
+found; tests marked `libreoffice` or `word` use the real conversion and
+are skipped without it.
 
 Open http://localhost:8000/ and log in. `createsuperuser` is for the first
 (bootstrap) administrator only.
@@ -170,7 +243,7 @@ app/
 ├── manage.py
 ├── conftest.py                 shared pytest fixtures
 ├── config/                     settings (env-driven), urls, wsgi
-├── doc_templates/              Word templates (tcn.docx) + tag reference (README.md)
+├── doc_templates/              document templates: tcn/ (HTML bundle), tcn.docx (transitional) + reference (README.md)
 ├── tests/                      cross-cutting tests (login required); fixtures/ (AT-2 expected text)
 └── testlab/
     ├── templates/              base layout, login
@@ -196,9 +269,10 @@ app/
     │   └── tests/
     └── documents/
         ├── tcn_context.py      TCN render context: labels, units, NA rule, column sets
-        ├── render.py           render_pdf: docxtpl rendering (keeps template column widths) → PDF
-        ├── pdf.py              DOCX → PDF with LibreOffice headless (timeout, temporary profile)
-        ├── checks.py           system check: LibreOffice present
+        ├── render.py           tcn_template(): HTML template bundle → PDF (WeasyPrint); DOCX renderer (transitional)
+        ├── pdf.py              DOCX → PDF for the DOCX renderer: LibreOffice headless (timeout, temporary profile)
+        ├── pdf_word.py         optional Microsoft Word backend of pdf.py (Windows, COM automation via pywin32)
+        ├── checks.py           system checks: WeasyPrint loadable; PDF converter present (DOCX renderer)
         └── tests/
 docs/requirements/              requirements and M1 specification
 reference/                      historical source documents (read-only)
@@ -222,9 +296,11 @@ reference/                      historical source documents (read-only)
 | `TESTLAB_PROJECT_NO_PATTERN` | `^\d{4}RSD\d{2}TL$` | Usual project-number format; a mismatch only gives a warning |
 | `TESTLAB_TIME_ZONE` | `Europe/Amsterdam` | |
 | `TESTLAB_FILE_ROOT` | `<repo>/data/files` | Server-side file store (issued TCN PDFs) |
-| `TESTLAB_TEMPLATE_DIR` | `<repo>/app/doc_templates` | Word templates of generated documents |
-| `TESTLAB_SOFFICE` | found on PATH / usual install dirs | Path of LibreOffice `soffice` (`soffice.com` on Windows) |
-| `TESTLAB_PDF_TIMEOUT` | `120` | Seconds allowed per PDF conversion |
+| `TESTLAB_TEMPLATE_DIR` | `<repo>/app/doc_templates` | Document templates of generated documents |
+| `TESTLAB_TCN_RENDERER` | `html` | TCN PDF renderer: `html` (WeasyPrint), `chromium` (under validation) or `docx` (transitional, see above) |
+| `TESTLAB_PDF_CONVERTER` | `libreoffice` | DOCX renderer only: `libreoffice`, `word` (Windows workstation with Microsoft Word, needs the `word` extra) or `auto` (LibreOffice when found, else Word) |
+| `TESTLAB_SOFFICE` | found on PATH / usual install dirs | DOCX renderer only: path of LibreOffice `soffice` (`soffice.com` on Windows) |
+| `TESTLAB_PDF_TIMEOUT` | `120` | DOCX renderer only: seconds allowed per PDF conversion |
 | `TESTLAB_ALLOWED_EMAIL_DOMAINS` | *(empty: registration closed)* | Comma-separated email domains that may register, e.g. `example.com` |
 | `TESTLAB_STATIC_ROOT` | `<repo>/staticfiles` | Target of `collectstatic` |
 

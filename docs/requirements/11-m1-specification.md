@@ -476,6 +476,12 @@ DataBase import → post-M1 (§12).
 
 ## 9. Document generation architecture (Word template → PDF)
 
+> **Amended 2026-10-01 (§18):** the TCN is rendered from an HTML template
+> bundle with print CSS directly to PDF (WeasyPrint). The Word pipeline
+> below stays available as a transitional renderer
+> (`TESTLAB_TCN_RENDERER=docx`) until WeasyPrint is proven on the Windows
+> workstations, then it is removed.
+
 Pipeline (§17 S1): TCN snapshot (render context) → Word template rendered
 with docxtpl → temporary DOCX → PDF conversion (LibreOffice headless) →
 PDF previewed, or stored and served at issue. The DOCX is an internal
@@ -495,7 +501,10 @@ intermediate: it is never stored or offered for download.
   (`soffice --convert-to pdf`) in a separate process with a temporary
   profile and a timeout (`TESTLAB_SOFFICE`, `TESTLAB_PDF_TIMEOUT`); any
   failure raises `PdfConversionError`. `manage.py check` warns when
-  LibreOffice is not found (testlab.W001). No Microsoft Office involved.
+  the configured converter is not found (testlab.W001). Backend chosen with
+  `TESTLAB_PDF_CONVERTER` (`libreoffice` default, `word`, `auto`); the
+  optional Word backend (`documents/pdf_word.py`, pywin32, Windows only)
+  automates the local desktop Word for workstations without LibreOffice.
 - Template location configurable (`TESTLAB_TEMPLATE_DIR`); SHA-256 of the
   Word template file stored with every issued TCN (`template_sha256`),
   besides the SHA-256 of the issued PDF.
@@ -572,7 +581,7 @@ Automated (pytest) unless marked **manual**. Reference files are read, never mod
 | # | Test | Pass criteria |
 |---|---|---|
 | AT-1 | *(withdrawn — legacy import moved out of M1, §12)* | – |
-| AT-2 | **TCN001 regression** — 2026RSD03TL TCN001 entered through the services from a test fixture transcribing the workbook DataBase row, then rendered | Text of the rendered Word template (python-docx extraction, whitespace-normalised — the layout source of the PDF) equals fixture `tcn001_expected.txt` transcribed from `reference/tcn/TCN001.pdf`, except the documented differences: date `16-Jun-2026` vs `6/16/2026`; paper size (§15 Q-C). Key strings: "Project No.: 2026RSD03TL", "Run/TCN No.: 001", "ADNOC BAB UHTW/UHTW 4.750/4.750", "F00321662 / D0527190-2 revB", "Inboard Seal", "Outboard Seal", "C100603035 (SL WAVY)", "668838NL (10)", "min 75 hours", "2980 rpm", "Process Fluid", "Barrier Fluid", "NA", "70 barg", "60°C", "TBD l/min", "Prepared by: MG". The real PDF conversion is checked for the key strings separately (tests marked `libreoffice`) |
+| AT-2 | **TCN001 regression** — 2026RSD03TL TCN001 entered through the services from a test fixture transcribing the workbook DataBase row, then rendered | Text of the rendered document template (HTML template since §18, and the transitional Word template; whitespace-normalised — the layout source of the PDF) equals fixture `tcn001_expected.txt` transcribed from `reference/tcn/TCN001.pdf`, except the documented differences: date `16-Jun-2026` vs `6/16/2026`; paper size (§15 Q-C). Key strings: "Project No.: 2026RSD03TL", "Run/TCN No.: 001", "ADNOC BAB UHTW/UHTW 4.750/4.750", "F00321662 / D0527190-2 revB", "Inboard Seal", "Outboard Seal", "C100603035 (SL WAVY)", "668838NL (10)", "min 75 hours", "2980 rpm", "Process Fluid", "Barrier Fluid", "NA", "70 barg", "60°C", "TBD l/min", "Prepared by: MG". The real PDF conversion is checked for the key strings separately (tests marked `libreoffice`) |
 | AT-3 | Single + Plug Seal regression — 2025RSD02TL TCN001 from a fixture (product temperature typed as `40°C`, as in the workbook) | headings "Plug Seal" / "Test Seal"; plug: DHTW 4.750, C0625623AP, C0625624SL - WAVY, 668818NL (18); test: …, 668818NL (16); "Process Fluid" column (the Plug Seal operating conditions, Excel "Product"): Water / 80 barg / **40°C** (not "40°C°C") / TBD l/min; no Flush column (seal-support empty); no Plug Seal Fluid column; "50 hours"; "1100 rpm" |
 | AT-4 | **M1 success criteria 1–10** on a new project `2099RSD01TL` | project + defaults created; TCN001 from defaults; plug seal toggled; conditions & instructions entered; PDF previewed; issued; TCN002 copied; one field changed; TCN002 issued; TCN001 record, file SHA-256 and snapshot unchanged |
 | AT-5 | Re-create 2026RSD03TL TCN002–004 by copying (fresh project) | only these edits needed: 002 ← 001: run description; 003 ← 002: run description, prepared by MT, IB/OB stationary & rotating faces (C0618722SL, C0619339SL, C0618722SL, C0618723SL); 004 ← 003: run description, barrier temp `60 - 40`. Each result equals the workbook row; diff markers show exactly those fields |
@@ -724,7 +733,8 @@ controlled instruction, not to be edited outside TestLab. Therefore:
   only temporarily during the conversion.
 - Conversion: LibreOffice headless on the server (Linux production; Windows
   development supported with a normal LibreOffice install). No Microsoft
-  Word automation, no Microsoft Office requirement.
+  Office requirement; Microsoft Word automation is an optional backend for
+  Windows workstations where LibreOffice cannot be installed.
 - Fail-safe: a TCN becomes issued only when the PDF was generated and
   stored; on any failure the TCN stays draft and nothing is kept.
 - Revision, supersede, cancel and historical downloads work as before,
@@ -769,3 +779,82 @@ does not change.
 
 **S5 — Scope.** Further usability findings from testing are collected
 separately and are not part of this change.
+
+## 18. TCN document rendering: HTML template → PDF (PO, 2026-10-01)
+
+The TCN is authored entirely in TestLab and issued only as a PDF (§17 S1);
+nobody edits a TCN in Word. The Word step (template → DOCX → LibreOffice or
+Word → PDF) is therefore replaced. The render context (§9.2), snapshot,
+issue transaction, hashes, stored PDF, revisions, supersede and cancel are
+unchanged.
+
+- **R1 — Layout ownership.** The TCN layout moves from the Word template to
+  an HTML document template with print CSS (`app/doc_templates/tcn/`),
+  maintained with the code. It is a document template only: it is not the
+  interactive TCN page and has no access to the application's page
+  templates; the interactive UI is never printed or scraped. (Supersedes
+  "Word owns the look" of 06 §1 for the TCN.)
+- **R2 — Renderer.** WeasyPrint renders the HTML to PDF in-process
+  (`documents/render.py`, `HtmlTemplate`). All bundle files are read once;
+  the PDF is rendered from those bytes and nothing outside the bundle is
+  loaded. `template_sha256` = SHA-256 of the bundle manifest (lines
+  `<path>\0<SHA-256 of the file>\n`, sorted by path). Issued TCNs from
+  before §18 keep the hash of `tcn.docx`; their PDFs are never re-rendered.
+- **R3 — Font.** Bundled Carlito (metric-compatible with Calibri, SIL OFL);
+  no system fonts, so the PDF is identical on every machine with the same
+  WeasyPrint version.
+- **R4 — Page numbering.** Footer "Page x of y" on every page, besides
+  "Prepared by" and "Created"; the header repeats on every page.
+- **R5 — Transition.** WeasyPrint is proven on a corporate Windows
+  workstation first (README, *Windows: WeasyPrint*). Until then the Word
+  pipeline remains selectable (`TESTLAB_TCN_RENDERER=docx`), including the
+  optional Microsoft Word backend. After the proof, the DOCX renderer,
+  `pdf.py`, `pdf_word.py`, `tcn.docx`, docxtpl and the related settings and
+  tests are removed.
+
+## 19. TCN rendering engine: Playwright/Chromium (PO, 2026-10-02)
+
+The WeasyPrint validation on the corporate Windows workstation failed: its
+native Pango dependency could not be loaded there. The rendering engine is
+changed to headless Chromium driven by Playwright, the engine the Seal
+Inspection application already uses on such workstations. The architecture
+of §18 is kept: TCN snapshot → dedicated HTML/CSS template bundle → PDF.
+The render context, snapshot, issue transaction, hashes, stored PDF,
+revisions, supersede/cancel and historical PDFs are unchanged.
+
+- **C1 — Bundle.** `app/doc_templates/tcn_chromium/`: `tcn.html` (body),
+  `header.html` / `footer.html` (Chromium header/footer templates, repeated
+  on every page; logo, numbers, draft marking; "Prepared by", "Page x of y",
+  "Created"), `tcn.css`, logo, Carlito. `template_sha256` as §18 R2 (bundle
+  manifest). Header and footer cannot load files: bundle files are inlined
+  as data URIs (`{% bundle_data_uri %}`) from the loaded bytes; any other
+  file reference in them is refused. Carlito is declared from the same data
+  in the page, because Chromium lays out header/footer without waiting for
+  fonts.
+- **C2 — Printing.** A worker process per PDF (`documents/chromium_print.py`,
+  started by `documents/chromium.py`) launches Chromium, serves only the
+  bundle files from memory and refuses every other request; any refused or
+  failed request, console error, unloaded font or broken image stops the
+  printing. Fonts are loaded explicitly before printing. The process is
+  ended after `TESTLAB_PDF_TIMEOUT`. Failures raise `PdfConversionError`
+  with the action to take (install Chromium, Linux libraries, timeout);
+  `manage.py check` warns with `testlab.W003`.
+- **C3 — Page.** CSS `@page size: 210mm 297mm`, not Chromium's rounded
+  `format="A4"`. Chromium sets the paper size in steps of 1/75 in, so the
+  PDF is 209.89 × 297.01 mm (A4 ± 0.11 mm, within ISO 216 tolerance).
+  Ligatures are off in body, header and footer, for reliable text
+  extraction.
+- **C4 — Determinism.** PDFs are not byte-identical between renders
+  (Chromium writes CreationDate/ModDate); they are not post-processed.
+  Required and tested: same page count, page breaks, positioned text,
+  fonts, images, header/footer and draft/issued marking. The integrity of
+  an issued TCN is the SHA-256 of the PDF generated once at issue and
+  stored permanently; it is never regenerated.
+- **C5 — Migration.** During validation `TESTLAB_TCN_RENDERER=chromium` is a
+  third option (`playwright==1.49.1`, Chromium build 1148). After the
+  automated proof and the corporate Windows validation, Chromium becomes
+  the only TCN renderer and the WeasyPrint renderer and dependency, the
+  DOCX renderer and template, the LibreOffice and Word conversion, the
+  renderer setting and their tests and configuration are removed; the
+  bundle moves to `tcn/`. Issued PDFs, their hashes, snapshots and legacy
+  template hashes are never changed.

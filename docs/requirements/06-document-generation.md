@@ -9,6 +9,10 @@
 > template (template → temporary DOCX → PDF, LibreOffice headless). The
 > DOCX is never offered, and §4 (engineer editing) does not apply to TCNs.
 > Other document types are decided with their milestones.
+>
+> **Amended 2026-10-01 (11 §18):** the TCN layout is an HTML document
+> template with print CSS rendered directly to PDF (WeasyPrint); for the
+> TCN, §1 "Word owns the look" no longer applies.
 
 ## 1. Principle
 

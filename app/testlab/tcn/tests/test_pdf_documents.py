@@ -1,8 +1,9 @@
 """The controlled TCN document is a PDF (stabilization decision S1).
 
 Preview, issue, download and the revision/supersede/cancel history all use
-the PDF; the intermediate DOCX is never stored or served. Tests marked
-`libreoffice` run the real conversion.
+the PDF; it is rendered from the TCN document template and never served
+in another format. With the HTML renderer (the default) every test here
+renders real PDFs.
 """
 
 import hashlib
@@ -11,6 +12,7 @@ import pytest
 from django.urls import reverse
 
 from testlab.documents import pdf
+from testlab.documents.render import HtmlTemplate, WordTemplate
 from testlab.documents.tests.pdf_text import is_real_pdf, pdf_lines
 from testlab.tcn.models import TcnRevision
 from testlab.tcn.services import IssueError, cancel_tcn, create_revision, issue_tcn
@@ -47,10 +49,11 @@ def document(client, tcn):
 
 
 def fail_conversion(monkeypatch):
-    def failing(docx):
-        raise pdf.PdfConversionError("LibreOffice could not convert the document (exit code 1).")
+    def failing(template, context):
+        raise pdf.PdfConversionError("The PDF could not be rendered: font missing.")
 
-    monkeypatch.setattr(pdf, "docx_to_pdf", failing)
+    monkeypatch.setattr(HtmlTemplate, "render_pdf", failing)
+    monkeypatch.setattr(WordTemplate, "render_pdf", failing)
 
 
 # --- Preview ---------------------------------------------------------------------------------
@@ -174,10 +177,9 @@ def test_supersede_and_cancel_keep_serving_each_issued_pdf(logged_in, project, u
     assert stored_bytes(rev_0) == rev_0_pdf
 
 
-# --- Real LibreOffice -------------------------------------------------------------------------
+# --- Real PDFs through the whole lifecycle ----------------------------------------------------
 
 
-@pytest.mark.libreoffice
 def test_real_pdf_issue_supersede_cancel_and_download(logged_in, project, user, file_storage):
     rev_0 = ready_tcn(project, user)
     preview = logged_in.get(reverse("tcn:preview", args=[rev_0.pk]))

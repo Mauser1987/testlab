@@ -6,7 +6,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 
-from testlab.documents.render import template_path
+from testlab.documents.render import HtmlTemplate
 from testlab.documents.tcn_context import build_tcn_context
 from testlab.documents.tests.pdf_text import pdf_lines
 from testlab.projects.forms import ProjectForm
@@ -111,7 +111,7 @@ def test_issue_stores_document_hashes_snapshot_and_identity(project, user, other
     assert (file_storage / issued.issued_document.name).is_file()
     content = stored_bytes(issued)
     assert issued.issued_document_sha256 == hashlib.sha256(content).hexdigest()
-    assert issued.template_sha256 == hashlib.sha256(template_path("tcn.docx").read_bytes()).hexdigest()
+    assert issued.template_sha256 == HtmlTemplate.load("tcn").sha256
     assert issued.issued_snapshot == expected_context
 
     lines = pdf_lines(content)

@@ -1,0 +1,24 @@
+{# Chromium header template: repeated on every page, in the top page margin (tcn.css @page). #}
+{# Self-contained: it cannot load files, so font and logo are inlined from the bundle. #}
+<style>
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  @font-face { font-family: "Carlito"; font-weight: bold; src: url({% bundle_data_uri "fonts/Carlito-Bold.ttf" %}); }
+  .tcn-header { width: 100%; box-sizing: border-box; padding: 10mm 20mm 0; font-family: "Carlito"; font-size: 11pt;
+                font-variant-ligatures: none; line-height: 1.22; color: #000; -webkit-print-color-adjust: exact; }
+  .tcn-header table { width: 100%; table-layout: fixed; border-collapse: collapse; border-bottom: 0.75pt solid #808080; }
+  .tcn-header td { padding: 0 0 4pt; vertical-align: middle; }
+  .tcn-header img { width: 30mm; height: 11.4mm; display: block; }
+  .tcn-header .title { text-align: center; font-size: 16pt; }
+  .tcn-header .numbers { text-align: right; }
+  .tcn-header .draft { margin: 0; padding-top: 4pt; text-align: center; font-weight: bold; color: #c00000; }
+</style>
+<header class="tcn-header">
+  <table>
+    <tr>
+      <td class="logo"><img src="{% bundle_data_uri "logo.jpg" %}" alt="Flowserve"></td>
+      <td class="title">Test Change Notice</td>
+      <td class="numbers">Project No.: {{ project_no }}<br>Run/TCN No.: {{ tcn_no }}</td>
+    </tr>
+  </table>
+  {% if is_draft %}<p class="draft">DRAFT — not issued</p>{% endif %}
+</header>

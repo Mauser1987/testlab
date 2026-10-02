@@ -51,7 +51,7 @@ on SQLite by default and must also pass on PostgreSQL before a release.
 | File storage | Django storage API, root directory configured by environment variable | Server-side, configurable; can move to another storage backend without code changes. |
 | DOCX | **docxtpl** (Jinja placeholders inside real Word templates) | Templates are edited in Word; formatting stays in Word, not in code. See 06. |
 | XLSX (log sheet export) | **openpyxl** | Replaces Excel "Create Test Data Sheet" (M1). |
-| PDF | LibreOffice headless on the server (Linux; a normal LibreOffice install on Windows development machines) | **The controlled TCN document is a PDF** (11 §17 S1): Word template → temporary DOCX → PDF. No Microsoft Office. |
+| PDF | **WeasyPrint** (in-process; Pango system library) | **The controlled TCN document is a PDF** (11 §17 S1), rendered from an HTML template with print CSS (11 §18). No Office or LibreOffice. Transitional until proven on Windows: Word template → DOCX → LibreOffice / Microsoft Word → PDF. |
 | Plots (later) | matplotlib | Generates plots from logged data. |
 | P&ID builder (later) | Isolated browser SVG editor page; diagram as JSON; SVG/PNG export | Keeps the rest of the app free of heavy JS. |
 | App server | gunicorn (Linux) or waitress (Windows) behind the company's reverse proxy (nginx/IIS) | Standard, simple. |

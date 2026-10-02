@@ -1,18 +1,61 @@
 # Document templates
 
-Word owns the look, TestLab owns the data (requirements 06 §1, M1 spec §9).
-The templates are normal Word files with [docxtpl](https://docxtpl.readthedocs.io)
-tags; edit them in Word. TestLab never sets fonts, margins or colours.
+TestLab owns both the data and, for the TCN, the layout: the controlled TCN
+document is rendered from an HTML template with print CSS straight to PDF
+(WeasyPrint). The template is a document template only — it is not the TCN
+page of the application and has no access to the application's page
+templates.
 
 The directory is configurable with `TESTLAB_TEMPLATE_DIR` (default: this
 directory).
 
-The Word file rendered from a template is an internal step: TestLab
-converts it to PDF with LibreOffice (`documents/pdf.py`) and only the PDF
-is previewed, issued and downloaded (M1 spec §17 S1). Check a template
-change in Preview PDF — LibreOffice renders the Word layout.
+## `tcn/` — Test Change Notice (HTML template bundle)
 
-## `tcn.docx` — Test Change Notice
+Layout of `reference/tcn/TCN001.pdf` (the Excel TCN print), on A4, 11 pt.
+
+| File | Content |
+|---|---|
+| `tcn.html` | The document: page header, page footer, body. Django template language, values escaped |
+| `tcn.css` | Print layout: `@page` size and margins, running header/footer, "Page x of y", column widths |
+| `logo.jpg` | Header logo |
+| `fonts/Carlito-*.ttf` | Carlito (metric-compatible with Calibri), SIL Open Font License — `fonts/OFL.txt` |
+
+The context is built by `testlab/documents/tcn_context.py` (the same as
+for the Word template below): `project_no`, `tcn_no`, `is_draft`,
+`project_description`, `run_description_lines` (`line.text`,
+`line.level` 0–2 → class `level-N`), `reference_drawing`, `seal_columns`,
+`test_unit`, `duration`, `speed`, `condition_columns`, `prepared_by`,
+`created_date`. It already contains labels, units and "NA".
+
+Rules:
+
+- Only files of the bundle are loaded (relative URLs such as `logo.jpg`,
+  `fonts/…`); anything else — other files, `file:`/`http(s):` URLs — stops
+  the rendering. A missing file stops it too.
+- Only the bundled fonts are used, so the PDF does not depend on the
+  fonts installed on the machine. New characters must exist in Carlito.
+- The page header and footer are running elements: they must stay before
+  `<main>` so that they appear from the first page on.
+- Previews use the named page `draft` (deeper top margin for the draft
+  marking); the issued layout is unchanged by it.
+- The bundle is hashed byte for byte (`.gitattributes` keeps line endings
+  unchanged): `template_sha256` of an issued TCN is the SHA-256 of the
+  lines `<path>\0<SHA-256 of the file>\n`, one per file of the bundle,
+  sorted by path (`HtmlTemplate.sha256`). Any change to any file gives a
+  new hash; the issued PDFs themselves are never re-rendered.
+- After changing the template, run the test suite: AT-2 compares the text
+  of the rendered TCN001 with `app/tests/fixtures/tcn001_expected.txt`,
+  other tests check the PDF (A4, header/footer and page numbers on every
+  page, fonts, determinism).
+
+## `tcn.docx` — Test Change Notice (Word template, transitional)
+
+Used only with `TESTLAB_TCN_RENDERER=docx`, until WeasyPrint is proven on
+the Windows workstations; then removed. The Word file rendered from it is
+an internal step: TestLab converts it to PDF with LibreOffice
+(`documents/pdf.py`; Microsoft Word on Windows workstations configured with
+`TESTLAB_PDF_CONVERTER=word`) and only the PDF is previewed, issued and
+downloaded (M1 spec §17 S1). Its tags are edited in Word:
 
 Layout of `reference/tcn/TCN001.pdf` (the Excel TCN print), on A4, Calibri 11.
 The context is built by `testlab/documents/tcn_context.py`; it already

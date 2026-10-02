@@ -1,3 +1,5 @@
 # Keep script line endings correct on every checkout.
 *.sh text eol=lf
 *.bat text eol=crlf
+# Document templates are hashed byte for byte (template_sha256): same bytes on every checkout.
+app/doc_templates/** -text

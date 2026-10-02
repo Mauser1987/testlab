@@ -1,7 +1,7 @@
 """PDF test helpers.
 
-Most tests replace the LibreOffice conversion with `fake_docx_to_pdf`
-(conftest.py): a fast stand-in whose output starts like a PDF and carries
+With the docx renderer, tests replace the DOCX → PDF conversion with
+`fake_docx_to_pdf` (conftest.py): a fast stand-in whose output starts like a PDF and carries
 the rendered DOCX, so the printed text can still be checked. Tests marked
 `libreoffice` use the real conversion and real PDFs.
 """

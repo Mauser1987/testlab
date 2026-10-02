@@ -136,9 +136,24 @@ STORAGES = {
 # Word templates of generated documents (M1 spec §9.1).
 TESTLAB_TEMPLATE_DIR = Path(os.environ.get("TESTLAB_TEMPLATE_DIR", APP_DIR / "doc_templates"))
 
-# PDF conversion with LibreOffice headless (documents/pdf.py). TESTLAB_SOFFICE:
-# path of soffice (soffice.com on Windows); empty = look on PATH and in the
-# usual install locations. TESTLAB_PDF_TIMEOUT: seconds per conversion.
+# TCN document renderer (documents/render.py): `html` (HTML template bundle →
+# WeasyPrint → PDF), `chromium` (HTML template bundle → Playwright/Chromium →
+# PDF, under validation, M1 spec §19) or `docx` (Word template → DOCX → PDF
+# conversion below). A migration mechanism only: once Chromium is validated
+# it becomes the only renderer and this setting is removed.
+TESTLAB_TCN_RENDERER = os.environ.get("TESTLAB_TCN_RENDERER", "html").strip().lower()
+if TESTLAB_TCN_RENDERER not in ("html", "chromium", "docx"):
+    raise ImproperlyConfigured("TESTLAB_TCN_RENDERER must be html, chromium or docx.")
+
+# PDF conversion of the docx renderer (documents/pdf.py). TESTLAB_PDF_CONVERTER: `libreoffice`
+# (LibreOffice headless, the server), `word` (Microsoft Word on a Windows
+# workstation, needs pywin32) or `auto` (LibreOffice when found, else Word).
+# TESTLAB_SOFFICE: path of soffice (soffice.com on Windows); empty = look on
+# PATH and in the usual install locations. TESTLAB_PDF_TIMEOUT: seconds per
+# conversion (also the limit of the chromium renderer).
+TESTLAB_PDF_CONVERTER = os.environ.get("TESTLAB_PDF_CONVERTER", "libreoffice").strip().lower()
+if TESTLAB_PDF_CONVERTER not in ("libreoffice", "word", "auto"):
+    raise ImproperlyConfigured("TESTLAB_PDF_CONVERTER must be libreoffice, word or auto.")
 TESTLAB_SOFFICE = os.environ.get("TESTLAB_SOFFICE", "")
 TESTLAB_PDF_TIMEOUT = int(os.environ.get("TESTLAB_PDF_TIMEOUT", "120"))
 
