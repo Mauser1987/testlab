@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 staticfiles/
 *.egg-info/
+
+# Historical source documents (requirements/examples): kept locally, not in the repository
+reference/
