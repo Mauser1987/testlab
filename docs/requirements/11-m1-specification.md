@@ -386,7 +386,7 @@ admin: user management and approval of registered accounts (superusers;
 |---|---|---|
 | S1 | Login | "Log in \| Register"; email address + password (a bootstrap username also works); pending accounts are told they await approval |
 | S1a | Register | first name, last name, corporate email address, password, confirmation; only approved domains; account created inactive (§17 S2) |
-| S2 | Project list | Search (project no., description, customer). Table: Project no. · Description · Customer · No. of TCNs · last TCN created. **New project** |
+| S2 | Project list | Search (project no., description, customer). Full-width engineering overview from the current project defaults: Project no. · Customer · Seal type (seal type and size of the seals under test, not the Plug Seal) · Arrangement · Process pressure · Barrier / Buffer / Flush pressure · No. of TCNs · Test unit (hidden first on narrow screens) · **Defaults** action; `—` where no value. Description only on the project page. **New project** |
 | S3 | Project form (create/edit) | project_no (read-only once a TCN has been issued; a non-RSD-format number shows a warning but can be saved), description, customer. On create → continue to S5 (defaults) |
 | S4 | Project page | Identity block (Edit). Project defaults summary (Edit). **TCN register**: Run/TCN · Rev · Status · Created · Prepared by · Test unit · Arrangement (+ Plug Seal) · Speed · Barrier/Buffer/Flush pressure · actions (Open · Copy to new TCN · Download PDF). **New TCN** |
 | S5 | Project defaults form | Shared *Run setup form* (below) without TCN header fields |

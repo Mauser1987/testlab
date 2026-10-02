@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
@@ -104,3 +106,65 @@ def test_list_shows_projects_and_searches(logged_in, user):
 
     content = logged_in.get(reverse("projects:list"), {"q": "nomatch"}).content.decode()
     assert "No projects match" in content
+
+
+def configure_defaults(project, arrangement, seal_types, **fields):
+    """Set the project defaults directly: arrangement, seal type per role, conditions."""
+    setup = project.default_setup
+    setup.arrangement = arrangement
+    for name, value in fields.items():
+        setattr(setup, name, value)
+    setup.save()
+    setup.positions.all().delete()
+    for role in setup.applicable_roles():
+        setup.positions.create(role=role, seal_type_size=seal_types.get(role, ""))
+
+
+def list_rows(content):
+    body = content[content.index("<tbody>") : content.index("</tbody>")]
+    return [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", row)).strip() for row in body.split("</tr>")[:-1]]
+
+
+def test_list_shows_engineering_overview_from_defaults(logged_in, user, django_assert_max_num_queries):
+    dual = make_project(user, project_no="2026RSD03TL", description="ADNOC BAB UHTW/UHTW 4.750/4.750", customer="ADNOC")
+    configure_defaults(
+        dual,
+        "dual_pressurized",
+        {"plug": "DHTW 4.750", "inboard": "UHTW 4.750", "outboard": "UHTW 4.750"},
+        plug_seal_present=True,
+        process_pressure="10",
+        seal_support_pressure="35",
+        test_unit="TU-04",
+    )
+    single = make_project(user, project_no="2025RSD02TL", customer="Celeros")
+    configure_defaults(
+        single,
+        "single",
+        {"plug": "DHTW 4.750", "test": "C0625623AP"},
+        plug_seal_present=True,
+        seal_support_pressure="TBD",
+    )
+    make_project(user, project_no="2024RSD01TL")
+    mixed = make_project(user, project_no="2023RSD01TL", customer="Shell")
+    configure_defaults(mixed, "dual_unpressurized", {"inboard": "UHTW 4.750", "outboard": "DHTW 3.500"})
+
+    with django_assert_max_num_queries(6):  # no query per project
+        content = logged_in.get(reverse("projects:list")).content.decode()
+
+    head = content[content.index("<thead>") : content.index("</thead>")]
+    columns = ["Project no.", "Customer", "Seal type", "Arrangement", "Process pressure",
+               "Barrier / Buffer / Flush pressure", "No. of TCNs", "Test unit"]
+    assert [head.index(c) for c in columns] == sorted(head.index(c) for c in columns)
+    assert "Description" not in head and "Last TCN" not in head
+    assert "ADNOC BAB" not in content  # the description stays on the project page
+
+    assert list_rows(content) == [
+        # Seal type of the seals under test only, equal values once; the Plug Seal is left out.
+        "2026RSD03TL ADNOC UHTW 4.750 Dual Pressurized + Plug Seal 10 barg 35 barg 0 TU-04 Defaults",
+        "2025RSD02TL Celeros C0625623AP Single — TBD barg 0 — Defaults",
+        "2024RSD01TL — — Dual Pressurized — — 0 — Defaults",
+        "2023RSD01TL Shell UHTW 4.750 / DHTW 3.500 Dual Unpressurized — — 0 — Defaults",
+    ]
+    assert 'title="Barrier pressure"' in content and 'title="Flush pressure"' in content
+    assert reverse("projects:defaults", args=[dual.pk]) in content
+    assert reverse("projects:detail", args=[dual.pk]) in content

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Projects · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
   <div class="page-head">
     <h1>Projects</h1>
@@ -11,21 +12,35 @@
     {% if query %}<a href="{% url 'projects:list' %}">Clear</a>{% endif %}
   </form>
   {% if projects %}
-    <table class="list">
-      <thead><tr><th>Project no.</th><th>Description</th><th>Customer</th><th>No. of TCNs</th><th>Last TCN created</th><th></th></tr></thead>
+    <div class="table-scroll">
+    <table class="list projects">
+      <thead>
+        <tr>
+          <th>Project no.</th><th class="text">Customer</th><th class="text">Seal type</th>
+          <th class="text">Arrangement</th><th>Process pressure</th>
+          <th class="wrap" title="Barrier (Dual Pressurized), Buffer (Dual Unpressurized) or Flush (Single)">Barrier / Buffer / Flush pressure</th>
+          <th class="number">No. of TCNs</th><th class="test-unit">Test unit</th><th></th>
+        </tr>
+      </thead>
       <tbody>
-        {% for project in projects %}
-          <tr>
-            <td><a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a></td>
-            <td>{{ project.description }}</td>
-            <td>{{ project.customer }}</td>
-            <td>{{ project.tcn_count }}</td>
-            <td>{{ project.last_tcn_at|date:"d-M-Y" }}</td>
-            <td><a href="{% url 'projects:defaults' project.pk %}">Defaults</a></td>
-          </tr>
+        {% for row in rows %}
+          {% with project=row.project setup=row.setup %}
+            <tr>
+              <td><a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a></td>
+              <td class="text">{% if project.customer %}{{ project.customer }}{% else %}<span class="empty">—</span>{% endif %}</td>
+              <td class="text">{% if row.seal_type %}{{ row.seal_type }}{% else %}<span class="empty">—</span>{% endif %}</td>
+              <td class="text">{{ setup.configuration_display }}</td>
+              <td>{% if setup.process_pressure %}{{ setup.process_pressure }} barg{% else %}<span class="empty">—</span>{% endif %}</td>
+              <td{% if setup.seal_support_pressure %} title="{{ row.seal_support_label }} pressure"{% endif %}>{% if setup.seal_support_pressure %}{{ setup.seal_support_pressure }} barg{% else %}<span class="empty">—</span>{% endif %}</td>
+              <td class="number">{{ project.tcn_count }}</td>
+              <td class="test-unit">{% if setup.test_unit %}{{ setup.test_unit }}{% else %}<span class="empty">—</span>{% endif %}</td>
+              <td class="row-actions"><a href="{% url 'projects:defaults' project.pk %}" title="Edit the project defaults of {{ project.project_no }}">Defaults</a></td>
+            </tr>
+          {% endwith %}
         {% endfor %}
       </tbody>
     </table>
+    </div>
   {% elif query %}
     <p>No projects match “{{ query }}”.</p>
   {% else %}

@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, Max, Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -15,6 +15,8 @@ from .setup_forms import RunSetupEditor
 
 
 class ProjectListView(ListView):
+    """S2: engineering overview, read from each project's current defaults."""
+
     model = Project
     context_object_name = "projects"
 
@@ -23,7 +25,9 @@ class ProjectListView(ListView):
         projects = (
             super()
             .get_queryset()
-            .annotate(tcn_count=Count("test_runs"), last_tcn_at=Max("test_runs__created_at"))
+            .select_related("default_setup")
+            .prefetch_related("default_setup__positions")
+            .annotate(tcn_count=Count("test_runs"))
             .order_by("-project_no")
         )
         self.query = self.request.GET.get("q", "").strip()
@@ -36,7 +40,30 @@ class ProjectListView(ListView):
         return projects
 
     def get_context_data(self, **kwargs):
-        return super().get_context_data(query=self.query, **kwargs)
+        context = super().get_context_data(query=self.query, **kwargs)
+        context["rows"] = [
+            {
+                "project": project,
+                "setup": project.default_setup,
+                "seal_type": seal_type_summary(project.default_setup),
+                "seal_support_label": seal_support_label(project.default_setup.arrangement),
+            }
+            for project in context["projects"]
+        ]
+        return context
+
+
+def seal_type_summary(setup):
+    """Seal type and size of the seals under test, e.g. "UHTW 4.750" or "UHTW 4.750 / DHTW 4.750".
+
+    The Plug Seal is test equipment, not the seal under test, so it is left
+    out. Equal values are shown once; empty positions are skipped.
+    """
+    values = []
+    for position in setup.seal_under_test_positions():
+        if position.seal_type_size and position.seal_type_size not in values:
+            values.append(position.seal_type_size)
+    return " / ".join(values)
 
 
 class ProjectDetailView(DetailView):

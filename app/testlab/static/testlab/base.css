@@ -29,6 +29,16 @@ table.register th, table.register td { white-space: nowrap; }
 table.register .arrangement { white-space: normal; min-width: 10em; }
 table.register th.wrap { white-space: normal; min-width: 7em; }
 table.register .row-actions { width: 1%; }
+/* Projects overview: uses the full width. Numbers, pressures, project numbers and
+   test units never break; customer, seal type and arrangement wrap only when space
+   runs out. On narrower screens Test unit is dropped first, then the table scrolls. */
+table.projects th, table.projects td { white-space: nowrap; }
+table.projects .text { white-space: normal; min-width: 8em; }
+table.projects th.wrap { white-space: normal; min-width: 7em; }
+table.projects .number { text-align: right; }
+table.projects .row-actions { width: 1%; }
+table.projects .empty { color: #8a949e; }
+@media (max-width: 1000px) { table.projects .test-unit { display: none; } }
 form.fields .field { margin-bottom: 12px; }
 form.fields label { display: block; font-weight: 600; margin-bottom: 2px; }
 form.fields small { display: block; color: #5a6570; }

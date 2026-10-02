@@ -299,7 +299,7 @@ def test_project_list_counts_tcns(logged_in, project, user):
     create_tcn(project, 2, user)
     response = logged_in.get(reverse("projects:list"))
     (listed,) = response.context["projects"]
-    assert listed.tcn_count == 2 and listed.last_tcn_at is not None
+    assert listed.tcn_count == 2
 
 
 # --- AT-8 -------------------------------------------------------------------------
