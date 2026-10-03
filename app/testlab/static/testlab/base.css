@@ -432,6 +432,7 @@ p.origin .status { margin-right: 6px; }
 /* ---- Test Result (M2B) ------------------------------------------------------ */
 
 .result-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: -6px 0 16px; }
+.result-bar .report-preview { margin-left: auto; }
 .section-nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .section-nav a { padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
   color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; }

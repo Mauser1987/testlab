@@ -1,0 +1,144 @@
+/* Test Run Report print layout for Chromium (M2C): A4 portrait.
+   Header and footer are Chromium header/footer templates (header.html,
+   footer.html) placed in the page margins below. Only the bundled Carlito
+   (metric-compatible with Calibri) is used, never machine fonts; the faces
+   are declared in report.html, inlined from the bundle, as for the TCN. */
+
+/* Exact A4: Chromium's format="A4" is rounded. Text width 174 mm. */
+@page { size: 210mm 297mm; margin: 24mm 18mm 18mm 18mm; }
+/* Previews: room for the draft marking under the header rule. */
+@page draft { margin-top: 32mm; }
+body.draft { page: draft; }
+
+/* Ligatures off: "ti", "fi" … stay separate characters, so the PDF text is extracted reliably. */
+html { font-family: "Carlito"; font-size: 10pt; font-variant-ligatures: none; line-height: 1.25; color: #000;
+       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; }
+p { margin: 0 0 4pt; }
+table { border-collapse: collapse; }
+td, th { padding: 0; vertical-align: top; text-align: left; }
+img { display: block; }
+
+/* Draft watermark: position fixed repeats on every printed page; behind the content, very light. */
+.watermark { position: fixed; top: 105mm; left: 0; width: 174mm; text-align: center; z-index: -1;
+             font-size: 120pt; font-weight: bold; letter-spacing: 0.1em; color: #f0f0f0; transform: rotate(-35deg); }
+
+/* ---- Headings: never alone at the bottom of a page ---- */
+h1 { font-size: 15pt; margin: 0 0 6pt; }
+h1 .dates { font-weight: normal; font-size: 12pt; }
+h2 { font-size: 12pt; margin: 14pt 0 5pt; padding-bottom: 2pt; border-bottom: 0.75pt solid #808080;
+     break-after: avoid; break-inside: avoid; }
+h3 { font-size: 10.5pt; margin: 9pt 0 4pt; break-after: avoid; }
+section.annex { break-before: page; }
+section.annex h2 { margin-top: 0; }
+
+.text { margin-left: 0; }
+.run-line.level-1 { margin-left: 4mm; }
+.run-line.level-2 { margin-left: 8mm; }
+.note { font-size: 8.5pt; color: #444; }
+p.note { margin: 3pt 0 0; }
+.none { color: #777; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+.unit { color: #333; white-space: nowrap; }
+
+/* ---- Identification ---- */
+table.facts { width: 100%; table-layout: fixed; border-top: 1pt solid #000; border-bottom: 1pt solid #000; }
+table.facts col.label { width: 30mm; }
+table.facts col.value { width: 57mm; }
+table.facts th, table.facts td { padding: 2.5pt 4pt 2.5pt 0; border-bottom: 0.5pt solid #d0d0d0; }
+table.facts tr:last-child th, table.facts tr:last-child td { border-bottom: 0; }
+table.facts th { font-weight: bold; color: #222; }
+table.facts td .note { display: block; }
+
+/* ---- Engineering tables ---- */
+table.grid { width: 100%; margin: 2pt 0 4pt; font-size: 9pt; }
+table.grid thead { display: table-header-group; } /* repeated after a page break */
+table.grid thead th { font-weight: bold; border-top: 1pt solid #000; border-bottom: 0.75pt solid #000;
+                      padding: 2.5pt 4pt; vertical-align: bottom; background: #f2f2f2; }
+table.grid td, table.grid tbody th { padding: 2pt 4pt; border-bottom: 0.5pt solid #d0d0d0; }
+table.grid tbody th { font-weight: bold; }
+table.grid tr { break-inside: avoid; }
+table.grid tbody:last-child tr:last-child > * { border-bottom: 1pt solid #000; }
+table.grid tr.group th { padding-top: 5pt; border-bottom: 0.5pt solid #808080; font-size: 9pt; color: #222; }
+table.grid tr.sub td { font-size: 8.5pt; color: #444; border-bottom: 0.5pt solid #d0d0d0; }
+table.grid .note { font-size: 8pt; }
+table.seals, table.components { margin-bottom: 8pt; }
+table.seals { width: auto; min-width: 110mm; }
+table.components th .note { font-weight: normal; }
+
+table.conditions { table-layout: fixed; }
+table.conditions col.parameter { width: 38mm; }
+table.conditions col.unit { width: 13mm; }
+table.conditions col.instructed { width: 27mm; }
+table.conditions col.actual { width: 36mm; }
+table.conditions col.requirement { width: 33mm; }
+table.conditions col.assessment { width: 27mm; }
+table.conditions tbody { break-inside: avoid; }
+
+table.measurements { table-layout: fixed; }
+table.measurements col.component { width: 28mm; }
+table.measurements col.quantity { width: 40mm; }
+table.measurements col.value { width: 28mm; }
+table.measurements col.unit { width: 22mm; }
+table.measurements tbody.component { break-inside: avoid; }
+table.measurements tbody.component tr:first-child > * { border-top: 0.75pt solid #808080; }
+
+table.events { table-layout: fixed; }
+table.events col.ref { width: 10mm; }
+table.events col.at { width: 28mm; }
+table.events col.elapsed { width: 19mm; }
+table.events col.category { width: 32mm; }
+
+table.acceptance { table-layout: fixed; }
+table.acceptance col.criterion { width: 40mm; }
+table.acceptance col.requirement { width: 30mm; }
+table.acceptance col.actual { width: 34mm; }
+table.acceptance col.assessment { width: 24mm; }
+
+td.text { white-space: normal; }
+
+/* Assessment: restrained, readable in black and white. */
+.assess { font-weight: bold; }
+.assess-fail { color: #a00000; }
+.assess-not_evaluated, .assess-not_applicable { font-weight: normal; font-style: italic; }
+
+/* ---- Figures: image and caption never separated; aspect ratio always kept, never cropped ---- */
+figure { margin: 6pt 0 10pt; break-inside: avoid; }
+figure img { max-width: 100%; width: auto; height: auto; margin: 0 auto; }
+figure.cross-section img { max-height: 110mm; }
+figure.plot img { width: 100%; max-height: 120mm; object-fit: contain; }
+figure.plot + figure.plot { margin-top: 12pt; }
+figcaption { margin-top: 3pt; font-size: 9pt; text-align: center; }
+figcaption .caption { margin: 0; }
+figcaption .note { text-align: center; }
+figure.plot figcaption { text-align: left; }
+figure.plot figcaption .note { text-align: left; }
+
+/* Pre ↔ Post: one pair per table, kept together; each picture fits its half page. */
+table.pair { width: 100%; table-layout: fixed; margin: 4pt 0 10pt; break-inside: avoid; }
+table.pair th { font-size: 9pt; font-weight: bold; padding: 2pt 3pt; border-bottom: 0.75pt solid #000; background: #f2f2f2; }
+table.pair td { padding: 4pt 3pt 0; vertical-align: top; }
+table.pair img { max-width: 100%; max-height: 80mm; width: auto; height: auto; margin: 0 auto; }
+table.pair .caption { font-size: 8.5pt; text-align: center; margin: 3pt 0 0; }
+table.pair .none { text-align: center; padding: 6pt 0; font-size: 9pt; }
+table.pair th.blank { background: none; border-bottom: 0; }
+
+.gallery { display: flex; flex-wrap: wrap; gap: 6mm; }
+.gallery figure.picture { width: 84mm; margin: 0; }
+.gallery figure.picture img { max-height: 70mm; }
+
+/* ---- Annex: manual log. Small but legible type; header rows repeat; rows never split. ---- */
+table.log { font-size: 7.5pt; table-layout: auto; margin-bottom: 10pt; }
+table.log td.when { font-size: 7pt; }
+table.log thead th { padding: 1.5pt 2pt; font-size: 7pt; line-height: 1.15; text-align: right; }
+table.log thead tr.groups th.group { text-align: center; border-bottom: 0; padding-bottom: 0; }
+table.log thead tr.groups th.group span { display: block; margin: 0 1.5pt; border-bottom: 0.5pt solid #808080; }
+table.log thead th.when, table.log thead th.ref { text-align: left; }
+table.log td { padding: 1.2pt 2pt; border-bottom: 0.4pt solid #e0e0e0; }
+table.log td.when { white-space: nowrap; }
+table.log td.ref { color: #444; }
+table.log th.rate, table.log tbody td:nth-child(n) .rate { font-style: italic; }
+table.log tbody tr:nth-child(5n) td { border-bottom: 0.5pt solid #b0b0b0; }
+
+p.end { margin-top: 12pt; }

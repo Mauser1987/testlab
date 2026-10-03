@@ -130,38 +130,51 @@ class HtmlTemplate:
 class ChromiumTemplate(HtmlTemplate):
     """An HTML document template bundle printed by headless Chromium (§19).
 
-    Directory <name>/ with tcn.html (the body), header.html and footer.html
+    Directory <name>/ with the body document (tcn.html for the TCN,
+    report.html for the Test Run Report), header.html and footer.html
     (Chromium's header/footer templates, repeated on every page; Chromium
     fills in the page number and page count), the stylesheet, logo and
     fonts. Same model as HtmlTemplate: all files are read once, `sha256` is
     the bundle manifest hash, and the PDF is printed from exactly those
     bytes; Chromium can load nothing outside the bundle. Header and footer
     cannot load files, so they inline bundle files with {% bundle_data_uri %}.
+
+    `assets` passed to render_pdf are files of one document only (the
+    pictures and plots of a report), served under assets/ next to the
+    bundle; they are not part of the bundle or its hash.
     """
 
-    PARTS = ("tcn.html", "header.html", "footer.html")
+    ASSET_DIR = "assets/"
+
+    def __init__(self, name, files, document="tcn.html"):
+        super().__init__(name, files)
+        self.document = document
+
+    @property
+    def parts(self):
+        return (self.document, "header.html", "footer.html")
 
     @classmethod
-    def load(cls, name):
+    def load(cls, name, document="tcn.html"):
         root = template_path(name)
         files = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-        for part in cls.PARTS:
+        for part in (document, "header.html", "footer.html"):
             if part not in files:
                 raise pdf.PdfConversionError(f"The document template {root / part} was not found.")
-        return cls(name, files)
+        return cls(name, files, document)
 
     def render_parts(self, context):
-        """The rendered tcn.html, header.html and footer.html."""
+        """The rendered document, header.html and footer.html."""
         engine = Engine(autoescape=True, builtins=["testlab.documents.bundle_tags"])
         engine.bundle_files = self.files  # for {% bundle_data_uri %}
-        return [engine.from_string(self.files[part].decode("utf-8")).render(Context(context)) for part in self.PARTS]
+        return [engine.from_string(self.files[part].decode("utf-8")).render(Context(context)) for part in self.parts]
 
     def render_html(self, context):
         """Header, body and footer as one HTML text (for text regressions; never printed like this)."""
         document, header, footer = self.render_parts(context)
         return document.replace("<main>", header + "<main>", 1).replace("</main>", "</main>" + footer, 1)
 
-    def render_pdf(self, context):
+    def render_pdf(self, context, assets=None):
         """The PDF as bytes; raises pdf.PdfConversionError when it cannot be rendered."""
         from . import chromium
 
@@ -175,8 +188,17 @@ class ChromiumTemplate(HtmlTemplate):
                     f"{part} may only use bundle files inlined with {{% bundle_data_uri %}}: "
                     "Chromium's header and footer templates cannot load files."
                 )
-        files = dict(self.files, **{"tcn.html": document.encode("utf-8")})
-        return chromium.print_pdf(files, "tcn.html", header, footer, base_url=_BUNDLE_URL)
+        files = dict(self.files, **{self.document: document.encode("utf-8")})
+        for path, data in (assets or {}).items():
+            if not path.startswith(self.ASSET_DIR) or path in files:
+                raise pdf.PdfConversionError(f"{path} is not a valid document asset path.")
+            files[path] = data
+        return chromium.print_pdf(files, self.document, header, footer, base_url=_BUNDLE_URL)
+
+
+def run_report_template():
+    """The Test Run Report document template (M2C): Chromium only."""
+    return ChromiumTemplate.load("run_report", document="report.html")
 
 
 class WordTemplate:

@@ -11,11 +11,14 @@ import mimetypes
 
 from django.contrib import messages
 from django.db.models import Prefetch
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
+from testlab.documents.pdf import PdfConversionError
+from testlab.documents.render import run_report_template
+from testlab.documents.run_report_context import build_run_report_context, report_assets, run_report_file_name
 from testlab.execution import manual_log
 from testlab.execution.views import get_dataset, get_run, recording_refusal, run_context
 
@@ -509,3 +512,27 @@ class PlotDeleteView(View):
         services.touch(plot.result, request.user)
         messages.success(request, "Plot removed from the Result.")
         return redirect(section_url(test_run, "plots"))
+
+
+# ---- Test Run Report (M2C) ------------------------------------------------------------------
+
+
+class ReportPreviewView(View):
+    """Draft Test Run Report PDF, regenerated from the run's current data; marked DRAFT, never stored.
+
+    Finalization (freeze the report context, render once, store the PDF with
+    its SHA-256) is not part of M2C.
+    """
+
+    def get(self, request, run_pk):
+        test_run = get_run(run_pk)
+        context = build_run_report_context(test_run)
+        try:
+            content = run_report_template().render_pdf(context, report_assets(context))
+        except PdfConversionError as error:
+            messages.error(request, f"The report preview could not be generated. {error}")
+            return redirect("results:result", test_run.pk)
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{run_report_file_name(test_run, draft=True)}"'
+        response["Cache-Control"] = "no-store"
+        return response

@@ -25,6 +25,7 @@ M1 is implemented commit by commit following §14 of the M1 specification.
 | 11–13 | Test Data Sheet, PostgreSQL, acceptance | not started |
 | M2A | Test execution evidence: manual log and LabVIEW/DCS datasets per Test Run (under review) | in progress |
 | M2B | Test Result: inspection measurements and pictures per seal component, acceptance, conclusion (under review) | in progress |
+| M2C | Test Run Report: Draft preview PDF generated from the TCN, manual log, DCS plots and Result (Chromium) | in progress |
 
 What works today:
 

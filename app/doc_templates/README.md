@@ -91,3 +91,28 @@ Notes for editing:
   without a colon.
 - After changing the template, run the test suite: AT-2 compares the
   generated TCN001 text with `app/tests/fixtures/tcn001_expected.txt`.
+
+## `run_report/` — Test Run Report (Chromium HTML template bundle, M2C)
+
+A4 portrait, printed by headless Chromium (Playwright) like `tcn_chromium/`.
+
+| File | Content |
+|---|---|
+| `report.html` | The document body: identification, numbered sections, Annex A (manual log) |
+| `header.html`, `footer.html` | Chromium header/footer templates: logo, project/run/TCN, DRAFT marking, Page x of y |
+| `report.css` | Print layout: `@page`, tables (repeated headers, rows never split), figures (never cropped) |
+| `logo.jpg`, `fonts/Carlito-*.ttf` | Same files as `tcn_chromium/` (each bundle is self-contained) |
+
+The context is built by `testlab/documents/run_report_context.py`
+(`build_run_report_context`): plain data only, every value already
+formatted, sections without content left out (`sections` holds the numbers
+of the sections present). Calculations come from `results.evidence` and
+`results.acceptance`, never from the template.
+
+Pictures and plots are not bundle files: they are passed to the renderer
+as `assets/…` (`report_assets`), next to the bundle and outside its hash.
+Pictures are the stored display copies (whole picture, at most 1600 px,
+upright); plots are the stored report PNGs of the Result.
+
+Do not give elements the classes `title`, `date`, `url`, `pageNumber` or
+`totalPages` in the header/footer for own content: Chromium fills them in.

@@ -26,5 +26,6 @@ urlpatterns = [
     path("result/plots/<int:pk>/caption/", views.PlotCaptionView.as_view(), name="plot_caption"),
     path("result/plots/<int:pk>/move/", views.PlotMoveView.as_view(), name="plot_move"),
     path("result/plots/<int:pk>/delete/", views.PlotDeleteView.as_view(), name="plot_delete"),
+    path("runs/<int:run_pk>/result/report/preview/", views.ReportPreviewView.as_view(), name="report_preview"),
     path("runs/<int:run_pk>/result/conclusion/", views.NarrativeView.as_view(), name="narrative"),
 ]

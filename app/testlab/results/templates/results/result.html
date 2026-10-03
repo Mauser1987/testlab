@@ -11,6 +11,7 @@
       <a href="#summary">Summary</a><a href="#plots">Plots{% if plots %} ({{ plots|length }}){% endif %}</a><a href="#measurements">Measurements</a><a href="#pictures">Pictures</a><a href="#acceptance">Acceptance</a><a href="#conclusion">Conclusion</a>
     </nav>
     <span class="hint">Last changed {{ result.updated_at|date:"d-M-Y H:i" }} by {{ result.updated_by|initials }}</span>
+    <a class="button btn-primary report-preview" href="{% url 'results:report_preview' run.pk %}" target="_blank" rel="noopener" title="Draft Test Run Report (PDF), generated from the current data">Preview Report</a>
   </div>
   {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
 
