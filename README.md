@@ -91,29 +91,134 @@ Reports, DCS/LabVIEW data.
 
 ## Development setup
 
-Requires Python 3.12+ and the **Pango** library, which WeasyPrint uses to
-render the TCN PDF:
+For a developer or test machine. Production deployment is separate (see
+*Configuration* below); these scripts are development conveniences only.
 
-- Linux: `sudo apt install libpango-1.0-0 libpangoft2-1.0-0` (present on
-  most desktop installations).
-- Windows: see *Windows: WeasyPrint* below.
+**Requirements:** Python 3.12 or newer (on Windows from python.org; "Install
+for me only" needs no administrator rights) and internet access for the
+Python packages and the Chromium download. Nothing else: no Office,
+LibreOffice, Node or Docker.
+
+### First run
+
+Linux:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/python app/manage.py migrate
-.venv/bin/python app/manage.py createsuperuser
-.venv/bin/python app/manage.py runserver
+./scripts/setup.sh
+.venv/bin/python app/manage.py createsuperuser     # first administrator, once
+./scripts/run_app.sh
 ```
 
-`manage.py check` (and `runserver`) warn with `testlab.W002` when
-WeasyPrint cannot be loaded. The TCN PDF uses only the fonts in the
-template bundle, so it looks the same on every machine; no Office or
-LibreOffice is needed.
+Windows (Command Prompt, or double-click the `.bat` files):
 
-### Windows: WeasyPrint
+```bat
+scripts\setup.bat
+.venv\Scripts\python app\manage.py createsuperuser
+scripts\run_app.bat
+```
 
-WeasyPrint needs Pango from MSYS2 on Windows:
+Open http://127.0.0.1:8000/ and log in with the administrator account.
+
+`setup` is safe to run again at any time (after a `git pull`, for example).
+It:
+
+1. checks the Python version (3.12+; on Windows it prefers `py -3.12`; set
+   `TESTLAB_PYTHON` to the interpreter to use another one);
+2. creates `.venv` in the repository if it does not exist (an existing one
+   is kept; if it was made with another Python version, setup stops and
+   says so);
+3. installs or updates TestLab's dependencies from `pyproject.toml`
+   (`pip install -e ".[dev]"`, including the test tools);
+4. installs Playwright's Chromium, the browser that prints the TCN PDF
+   (about 150 MB, once per user profile, no administrator rights). If the
+   download is blocked, setup finishes with a warning: everything except
+   TCN Preview/Issue works, and running setup again retries;
+5. creates the local data directories (`data/`, `data/files/`, or the
+   locations configured by `TESTLAB_DATA_DIR` / `TESTLAB_DATABASE_URL` /
+   `TESTLAB_FILE_ROOT`);
+6. applies the database migrations (the database is never deleted or reset);
+7. runs Django's system checks.
+
+It does not create users, install system packages, change certificates or
+proxy settings, or install the transitional renderers' dependencies
+(Pango, LibreOffice, Word — see *TCN PDF renderers* below).
+
+The shared logic is in `scripts/devenv.py` (Python standard library only);
+`setup.sh`/`setup.bat` and `run_app.sh`/`run_app.bat` only locate Python
+and call it, so both platforms follow the same procedure.
+
+### Starting TestLab
+
+```bash
+./scripts/run_app.sh                  # http://127.0.0.1:8000/, this machine only
+./scripts/run_app.sh --port 8001      # another port (or TESTLAB_PORT)
+./scripts/run_app.sh --lan            # also reachable from other machines
+```
+
+(`scripts\run_app.bat` takes the same options.) The scripts work from any
+directory. They use `.venv` (and stop with a pointer to setup if it is
+missing or incomplete), apply pending migrations, and start the Django
+development server; stop it with Ctrl+C.
+
+- By default the server listens on 127.0.0.1 only. `--lan` listens on all
+  interfaces and prints the addresses colleagues can use; it adds this
+  machine's names to `TESTLAB_ALLOWED_HOSTS` unless that variable is set.
+  Anyone on the network then reaches the login page — use it for testing
+  only.
+- All `TESTLAB_*` environment variables are passed through unchanged. The
+  scripts only add a default for `TESTLAB_TCN_RENDERER` when it is unset:
+  `chromium`, the intended renderer (the settings default is still the
+  transitional `html`).
+
+### Troubleshooting
+
+- **Chromium download fails** (setup warning, or `testlab.W003` from
+  `manage.py check`): behind HTTPS inspection the download needs the
+  company root certificate. Ask IT for it as a PEM file and run
+  `set NODE_EXTRA_CA_CERTS=C:\path\company-root.pem` (Linux: `export …`)
+  before setup.
+- **Linux: Chromium is installed but cannot start** (missing system
+  libraries): `sudo .venv/bin/python -m playwright install-deps chromium`
+  on Debian/Ubuntu. This needs administrator rights, so setup only reports it.
+- **".venv was made with Python X"**: delete the `.venv` folder and run
+  setup again with the Python you want.
+- **Port already in use**: TestLab (or something else) is already running;
+  open it, or start with `--port`.
+
+### Users: registration and approval
+
+1. Set the corporate domain(s), e.g. `TESTLAB_ALLOWED_EMAIL_DOMAINS=example.com`
+   (comma-separated for several). Without it registration is closed.
+2. A user chooses **Register** on the login page. The account is created
+   inactive: "awaiting administrator approval".
+3. An administrator opens Django admin → **Users**, filter **Approval:
+   Awaiting approval**, selects the account(s) and runs **Approve selected
+   accounts (activate)** — or ticks **Active** on the user page.
+   Deactivating an account (untick Active) blocks its login again.
+4. The user logs in with the email address.
+
+Every active user may issue and cancel TCNs in M1; the check lives in
+`app/testlab/tcn/permissions.py` so it can be restricted later. Corporate
+SSO (Entra ID/LDAP) is future work and would be added as another Django
+authentication backend without changing the TCN data.
+
+By default the development database is a SQLite file at `data/testlab.sqlite3`
+(git-ignored).
+
+## TCN PDF renderers (transitional)
+
+The TCN PDF is moving to headless **Chromium** through Playwright (M1 spec
+§19), which the setup and run scripts use. Until Chromium has also been
+validated on the corporate Windows workstation, the earlier renderers remain
+selectable with `TESTLAB_TCN_RENDERER`; they will be removed afterwards.
+The automated tests render with WeasyPrint (`html`) unless marked
+`chromium`, so `pytest` needs Pango (below) for now.
+
+### `html`: WeasyPrint (settings default)
+
+WeasyPrint needs the **Pango** library. Linux: `sudo apt install
+libpango-1.0-0 libpangoft2-1.0-0` (present on most desktop installations).
+Windows: Pango from MSYS2:
 
 1. Install MSYS2 from https://www.msys2.org (default folder `C:\msys64`).
 2. In the **MSYS2 UCRT64** shell: `pacman -S mingw-w64-ucrt-x86_64-pango`
@@ -121,8 +226,6 @@ WeasyPrint needs Pango from MSYS2 on Windows:
    set `WEASYPRINT_DLL_DIRECTORIES` to its `bin` directory.
 
 ```bat
-python -m venv .venv
-.venv\Scripts\pip install -e ".[dev]"
 .venv\Scripts\weasyprint --info
 .venv\Scripts\python app\manage.py check
 ```
@@ -139,7 +242,7 @@ DOCX renderer below is removed):
    rendered on the Linux server. (The files need not be byte-identical
    across machines: Pango/HarfBuzz versions can differ.)
 
-### Chromium renderer (under validation, M1 spec §19)
+### `chromium`: validation
 
 `TESTLAB_TCN_RENDERER=chromium` prints the TCN with headless Chromium
 through Playwright (the engine Seal Inspection uses). It needs no system
@@ -167,7 +270,7 @@ root certificate. On Linux, if Chromium cannot start for missing libraries:
 3. The PDFs in `proof\` show the same line and page breaks as the same
    samples rendered on Linux.
 
-### Transitional: DOCX renderer
+### `docx`: Word template and PDF conversion
 
 Until the proof above is done, `TESTLAB_TCN_RENDERER=docx` renders the
 TCN the old way: Word template `app/doc_templates/tcn.docx` → DOCX → PDF
@@ -182,45 +285,6 @@ the desktop session of a user with an activated Word. With this renderer
 `manage.py check` warns with `testlab.W001` when the converter is not
 found; tests marked `libreoffice` or `word` use the real conversion and
 are skipped without it.
-
-Open http://localhost:8000/ and log in. `createsuperuser` is for the first
-(bootstrap) administrator only.
-
-### Users: registration and approval
-
-1. Set the corporate domain(s), e.g. `TESTLAB_ALLOWED_EMAIL_DOMAINS=example.com`
-   (comma-separated for several). Without it registration is closed.
-2. A user chooses **Register** on the login page. The account is created
-   inactive: "awaiting administrator approval".
-3. An administrator opens Django admin → **Users**, filter **Approval:
-   Awaiting approval**, selects the account(s) and runs **Approve selected
-   accounts (activate)** — or ticks **Active** on the user page.
-   Deactivating an account (untick Active) blocks its login again.
-4. The user logs in with the email address.
-
-Every active user may issue and cancel TCNs in M1; the check lives in
-`app/testlab/tcn/permissions.py` so it can be restricted later. Corporate
-SSO (Entra ID/LDAP) is future work and would be added as another Django
-authentication backend without changing the TCN data.
-
-By default the development database is a SQLite file at `data/testlab.sqlite3`
-(git-ignored).
-
-### Starting TestLab locally (after the setup above)
-
-Convenience scripts for local testing; they can be run from any directory.
-They use the existing `.venv` (nothing is installed), apply pending
-migrations to the development database, and start the Django development
-server at **http://127.0.0.1:8000/** (stop with Ctrl+C). They are not a
-production deployment.
-
-- Linux: `scripts/start-linux.sh`
-- Windows: double-click `scripts\start-windows.bat`, or run it from a
-  command prompt. On Windows the environment is created with
-  `py -3.12 -m venv .venv` and `.venv\Scripts\pip install -e ".[dev]"`.
-
-If `.venv` is missing or incomplete, the script stops and prints the setup
-commands.
 
 ## Using it
 
@@ -275,13 +339,14 @@ app/
         ├── checks.py           system checks: WeasyPrint loadable; PDF converter present (DOCX renderer)
         └── tests/
 docs/requirements/              requirements and M1 specification
+scripts/                        devenv.py (shared setup/start logic) + setup.sh/.bat, run_app.sh/.bat
 reference/                      historical source documents (read-only)
 ```
 
 ## Tests
 
 ```bash
-.venv/bin/pytest
+.venv/bin/pytest            # Windows: .venv\Scripts\pytest
 ```
 
 ## Configuration (environment variables)
@@ -297,13 +362,16 @@ reference/                      historical source documents (read-only)
 | `TESTLAB_TIME_ZONE` | `Europe/Amsterdam` | |
 | `TESTLAB_FILE_ROOT` | `<repo>/data/files` | Server-side file store (issued TCN PDFs) |
 | `TESTLAB_TEMPLATE_DIR` | `<repo>/app/doc_templates` | Document templates of generated documents |
-| `TESTLAB_TCN_RENDERER` | `html` | TCN PDF renderer: `html` (WeasyPrint), `chromium` (under validation) or `docx` (transitional, see above) |
+| `TESTLAB_TCN_RENDERER` | `html` (`chromium` with the run/setup scripts) | TCN PDF renderer: `chromium` (intended), `html` (WeasyPrint) or `docx` (both transitional, see above) |
 | `TESTLAB_PDF_CONVERTER` | `libreoffice` | DOCX renderer only: `libreoffice`, `word` (Windows workstation with Microsoft Word, needs the `word` extra) or `auto` (LibreOffice when found, else Word) |
 | `TESTLAB_SOFFICE` | found on PATH / usual install dirs | DOCX renderer only: path of LibreOffice `soffice` (`soffice.com` on Windows) |
 | `TESTLAB_PDF_TIMEOUT` | `120` | DOCX renderer only: seconds allowed per PDF conversion |
 | `TESTLAB_ALLOWED_EMAIL_DOMAINS` | *(empty: registration closed)* | Comma-separated email domains that may register, e.g. `example.com` |
 | `TESTLAB_STATIC_ROOT` | `<repo>/staticfiles` | Target of `collectstatic` |
+| `TESTLAB_HOST`, `TESTLAB_PORT` | `127.0.0.1`, `8000` | Run scripts only: address and port of the development server (`--lan` = all interfaces) |
+| `TESTLAB_PYTHON` | `py -3.12` / `python3.12` … | Setup scripts only: Python interpreter that creates `.venv` |
 
 Production runs one central Django application with **PostgreSQL**
-(`pip install -e ".[postgres]"`). SQLite is for development and tests only
+(`pip install -e ".[postgres]"`), set up separately from the development
+scripts above (debug off, own secret key, a real web server). SQLite is for development and tests only
 and must not be placed on a network share or synchronised folder.
