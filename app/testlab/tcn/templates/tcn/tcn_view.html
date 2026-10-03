@@ -7,8 +7,13 @@
   </nav>
 {% endblock %}
 {% block content %}
-  <div class="tcn-head">
-    <h1>{{ tcn }} <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display|upper }}</span></h1>
+  <div class="page-head tcn-head">
+    <div class="title"><h1>{{ tcn }}</h1> <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display|upper }}</span></div>
+    <ol class="lifecycle" aria-label="TCN lifecycle">
+      <li class="done">Draft</li><li class="done">Issue</li>
+      <li class="{% if tcn.status == 'issued' %}current{% else %}done{% endif %}">Issued</li>
+      {% if tcn.status == "superseded" %}<li class="current">Superseded</li>{% elif tcn.status == "cancelled" %}<li class="current">Cancelled</li>{% endif %}
+    </ol>
   </div>
 
   <div class="banner banner-{{ tcn.status }}">
@@ -23,23 +28,23 @@
     {% endif %}
   </div>
 
-  <div class="actions">
-    {% if tcn.issued_document %}<a class="button" href="{% url 'tcn:document' tcn.pk %}">Download issued PDF</a>{% endif %}
-    <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
+  <div class="actions card">
+    {% if tcn.issued_document %}<a class="button btn-primary" href="{% url 'tcn:document' tcn.pk %}">Download issued PDF</a>{% endif %}
     {% if can_revise %}
       <form method="post" action="{% url 'tcn:new_revision' tcn.pk %}">
         {% csrf_token %}<button type="submit">New revision</button>
       </form>
     {% elif pending_draft %}
-      <a href="{% url 'tcn:edit' pending_draft.pk %}">Open draft {{ pending_draft }}</a>
+      <a class="button" href="{% url 'tcn:edit' pending_draft.pk %}">Open draft {{ pending_draft }}</a>
     {% endif %}
-    {% if can_cancel %}<a href="{% url 'tcn:cancel' tcn.pk %}">Cancel TCN</a>{% endif %}
+    <a class="button" href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
+    <span class="spacer"></span>
+    {% if can_cancel %}<a class="button btn-danger" href="{% url 'tcn:cancel' tcn.pk %}">Cancel TCN</a>{% endif %}
   </div>
 
   {% if snapshot %}
-    <section class="setup-section">
-      <h2>Issued content</h2>
-      <p class="hint">As printed in the issued document.</p>
+    <section class="setup-section card">
+      <div class="card-head"><h2>Issued content</h2><span class="hint">As printed in the issued document.</span></div>
       <table class="list summary">
         <tbody>
           <tr><th>Project No. / Run/TCN No.</th><td>{{ snapshot.project_no }} / {{ snapshot.tcn_no }}</td></tr>
@@ -52,7 +57,7 @@
         </tbody>
       </table>
       <h3>Seal Information</h3>
-      <table class="list">
+      <div class="table-scroll"><table class="list">
         <thead><tr><th></th>{% for col in snapshot.seal_columns %}<th>{{ col.heading }}</th>{% endfor %}</tr></thead>
         <tbody>
           <tr><th>Seal Type and Size</th>{% for col in snapshot.seal_columns %}<td>{{ col.seal_type_size }}</td>{% endfor %}</tr>
@@ -60,9 +65,9 @@
           <tr><th>Rotating Seal Face</th>{% for col in snapshot.seal_columns %}<td>{{ col.rotating_face }}</td>{% endfor %}</tr>
           <tr><th>Spring(s)</th>{% for col in snapshot.seal_columns %}<td>{{ col.springs }}</td>{% endfor %}</tr>
         </tbody>
-      </table>
+      </table></div>
       <h3>Test Conditions</h3>
-      <table class="list">
+      <div class="table-scroll"><table class="list">
         <thead><tr><th></th>{% for col in snapshot.condition_columns %}<th>{{ col.heading }}</th>{% endfor %}</tr></thead>
         <tbody>
           <tr><th>Test Medium</th>{% for col in snapshot.condition_columns %}<td>{{ col.medium }}</td>{% endfor %}</tr>
@@ -70,29 +75,31 @@
           <tr><th>Inlet Temperature</th>{% for col in snapshot.condition_columns %}<td>{{ col.inlet_temperature }}</td>{% endfor %}</tr>
           <tr><th>Flow</th>{% for col in snapshot.condition_columns %}<td>{{ col.flow }}</td>{% endfor %}</tr>
         </tbody>
-      </table>
+      </table></div>
     </section>
   {% else %}
-    <p class="hint">No issued document is stored for this TCN.</p>
+    <p class="alert">No issued document is stored for this TCN.</p>
   {% endif %}
 
-  <section class="setup-section">
+  <section class="setup-section card">
     <h2>Revisions of Run {{ tcn.test_run.display_no }}</h2>
-    <table class="list">
+    <div class="table-scroll">
+    <table class="list register">
       <thead><tr><th>Rev</th><th>Status</th><th>Created</th><th>Issued</th><th>Issued by</th><th>Reason</th><th></th></tr></thead>
       <tbody>
         {% for revision in revisions %}
           <tr{% if revision.pk == tcn.pk %} class="current"{% endif %}>
-            <td><a href="{% url 'tcn:edit' revision.pk %}">{{ revision.revision }}</a></td>
+            <td class="id"><a href="{% url 'tcn:edit' revision.pk %}">{{ revision.revision }}</a></td>
             <td><span class="status status-{{ revision.status }}">{{ revision.get_status_display }}</span></td>
             <td>{{ revision.created_date|date:"d-M-Y" }}</td>
             <td>{{ revision.issued_at|date:"d-M-Y H:i" }}</td>
             <td>{% if revision.issued_by %}{{ revision.issued_by.get_full_name|default:revision.issued_by.username }}{% endif %}</td>
-            <td>{{ revision.revision_reason }}{% if revision.cancel_reason %} Cancelled: {{ revision.cancel_reason }}{% endif %}</td>
-            <td>{% if revision.issued_document %}<a href="{% url 'tcn:document' revision.pk %}">Download</a>{% endif %}</td>
+            <td class="text wide">{{ revision.revision_reason }}{% if revision.cancel_reason %} Cancelled: {{ revision.cancel_reason }}{% endif %}</td>
+            <td class="row-actions">{% if revision.issued_document %}<a class="button btn-sm" href="{% url 'tcn:document' revision.pk %}">Download</a>{% endif %}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </section>
 {% endblock %}

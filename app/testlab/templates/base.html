@@ -10,7 +10,9 @@
   <header class="topbar">
     <a class="brand" href="{% url 'home' %}">TestLab</a>
     {% if user.is_authenticated %}
-      <nav><a href="{% url 'projects:list' %}">Projects</a></nav>
+      {% with section=request.resolver_match.app_name %}
+        <nav><a href="{% url 'projects:list' %}"{% if section == "projects" or section == "tcn" %} class="active"{% endif %}>Projects</a></nav>
+      {% endwith %}
       <div class="user">
         <span>{{ user.get_full_name|default:user.username }}</span>
         <form method="post" action="{% url 'logout' %}">
@@ -20,8 +22,9 @@
       </div>
     {% endif %}
   </header>
-  {% block breadcrumbs %}{% endblock %}
+  {# Layout: "wide" for registers, default for forms and detail pages, "narrow" for confirmations, "auth" for log in / register #}
   <main class="{% block main_class %}{% endblock %}">
+    {% block breadcrumbs %}{% endblock %}
     {% if messages %}
       <ul class="messages">
         {% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}

@@ -4,15 +4,16 @@
 {% block content %}
   <div class="page-head">
     <h1>Projects</h1>
-    <a class="button" href="{% url 'projects:create' %}">New project</a>
+    <a class="button btn-primary" href="{% url 'projects:create' %}">New project</a>
   </div>
+  {# Searches project no., description and customer #}
   <form method="get" class="search">
-    <input type="search" name="q" value="{{ query }}" placeholder="Project no., description or customer" size="40">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search projects…" aria-label="Search projects">
     <button type="submit">Search</button>
-    {% if query %}<a href="{% url 'projects:list' %}">Clear</a>{% endif %}
+    {% if query %}<a class="button btn-ghost" href="{% url 'projects:list' %}">Clear</a>{% endif %}
   </form>
   {% if projects %}
-    <div class="table-scroll">
+    <div class="table-card table-scroll">
     <table class="list projects">
       <thead>
         <tr>
@@ -26,7 +27,7 @@
         {% for row in rows %}
           {% with project=row.project setup=row.setup %}
             <tr>
-              <td><a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a></td>
+              <td class="id"><a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a></td>
               <td class="text">{% if project.customer %}{{ project.customer }}{% else %}<span class="empty">—</span>{% endif %}</td>
               <td class="text">{% if row.seal_type %}{{ row.seal_type }}{% else %}<span class="empty">—</span>{% endif %}</td>
               <td class="text">{{ setup.configuration_display }}</td>
@@ -34,7 +35,7 @@
               <td{% if setup.seal_support_pressure %} title="{{ row.seal_support_label }} pressure"{% endif %}>{% if setup.seal_support_pressure %}{{ setup.seal_support_pressure }} barg{% else %}<span class="empty">—</span>{% endif %}</td>
               <td class="number">{{ project.tcn_count }}</td>
               <td class="test-unit">{% if setup.test_unit %}{{ setup.test_unit }}{% else %}<span class="empty">—</span>{% endif %}</td>
-              <td class="row-actions"><a href="{% url 'projects:defaults' project.pk %}" title="Edit the project defaults of {{ project.project_no }}">Defaults</a></td>
+              <td class="row-actions"><a class="button btn-sm" href="{% url 'projects:defaults' project.pk %}" title="Edit the project defaults of {{ project.project_no }}">Defaults</a></td>
             </tr>
           {% endwith %}
         {% endfor %}
@@ -42,8 +43,8 @@
     </table>
     </div>
   {% elif query %}
-    <p>No projects match “{{ query }}”.</p>
+    <p class="alert">No projects match “{{ query }}”.</p>
   {% else %}
-    <p>No projects yet.</p>
+    <p class="alert">No projects yet. Start with <a href="{% url 'projects:create' %}">New project</a>.</p>
   {% endif %}
 {% endblock %}

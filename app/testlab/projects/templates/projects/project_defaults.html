@@ -7,15 +7,18 @@
   </nav>
 {% endblock %}
 {% block content %}
-  <h1>Project defaults — {{ project.project_no }}</h1>
-  <p class="hint">New TCNs created from project defaults start with these values. Changing them never alters an existing TCN.</p>
+  <div class="page-head">
+    <h1>Project defaults — {{ project.project_no }}</h1>
+    <p class="meta">New TCNs created from project defaults start with these values. Changing them never alters an existing TCN.</p>
+  </div>
   <form method="post" class="setup">
     {% csrf_token %}
     {% include "projects/run_setup_form.html" %}
-    <div class="actions">
-      <button type="submit" name="action" value="save">Save</button>
-      <button type="submit" name="action" value="update" id="update-button" formnovalidate>Update</button>
-      <a href="{% url 'projects:detail' project.pk %}">Close</a>
+    <div class="actions sticky">
+      <button type="submit" name="action" value="save" class="btn-primary">Save</button>
+      <button type="submit" name="action" value="update" id="update-button" formnovalidate title="Redraw the form for the chosen arrangement / Plug Seal without saving">Update</button>
+      <span class="spacer"></span>
+      <a class="button btn-ghost" href="{% url 'projects:detail' project.pk %}">Close</a>
     </div>
   </form>
 {% endblock %}

@@ -1,16 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Log in · TestLab{% endblock %}
+{% block main_class %}auth{% endblock %}
 {% block content %}
-  <p class="auth-switch"><strong>Log in</strong> | <a href="{% url 'register' %}">Register</a></p>
-  <h1>Log in</h1>
-  {% if form.non_field_errors %}
-    {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
-  {% endif %}
-  <form method="post" action="{% url 'login' %}" class="login">
-    {% csrf_token %}
-    <p>{{ form.username.label_tag }} {{ form.username }}</p>
-    <p>{{ form.password.label_tag }} {{ form.password }}</p>
-    <input type="hidden" name="next" value="{{ next }}">
-    <button type="submit">Log in</button>
-  </form>
+  <div class="auth-card">
+    <nav class="auth-switch"><strong>Log in</strong><a href="{% url 'register' %}">Register</a></nav>
+    <h1>Log in</h1>
+    <p class="subtitle">Test lifecycle management · wet-seal test laboratory</p>
+    {% if form.non_field_errors %}
+      <ul class="errorlist nonfield">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    {% endif %}
+    <form method="post" action="{% url 'login' %}" class="stacked">
+      {% csrf_token %}
+      <div class="field">{{ form.username.label_tag }}{{ form.username }}</div>
+      <div class="field">{{ form.password.label_tag }}{{ form.password }}</div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="btn-primary">Log in</button>
+    </form>
+  </div>
 {% endblock %}

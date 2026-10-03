@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if object %}{{ object.project_no }}{% else %}New project{% endif %} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
@@ -7,9 +8,11 @@
   </nav>
 {% endblock %}
 {% block content %}
-  <h1>{% if object %}Edit project {{ object.project_no }}{% else %}New project{% endif %}</h1>
-  {% if object %}<p><a href="{% url 'projects:defaults' object.pk %}">Project defaults</a></p>{% endif %}
-  <form method="post" class="fields">
+  <div class="page-head">
+    <h1>{% if object %}Edit project {{ object.project_no }}{% else %}New project{% endif %}</h1>
+    {% if object %}<a class="button btn-sm" href="{% url 'projects:defaults' object.pk %}">Project defaults</a>{% endif %}
+  </div>
+  <form method="post" class="fields card">
     {% csrf_token %}
     {{ form.non_field_errors }}
     {% for field in form %}
@@ -20,7 +23,9 @@
         {{ field.errors }}
       </div>
     {% endfor %}
-    <button type="submit">Save</button>
-    <a href="{% if object %}{% url 'projects:detail' object.pk %}{% else %}{% url 'projects:list' %}{% endif %}">Cancel</a>
+    <div class="actions">
+      <button type="submit" class="btn-primary">Save</button>
+      <a class="button btn-ghost" href="{% if object %}{% url 'projects:detail' object.pk %}{% else %}{% url 'projects:list' %}{% endif %}">Cancel</a>
+    </div>
   </form>
 {% endblock %}

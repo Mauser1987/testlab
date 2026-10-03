@@ -1,21 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Register · TestLab{% endblock %}
+{% block main_class %}auth{% endblock %}
 {% block content %}
-  <p class="auth-switch"><a href="{% url 'login' %}">Log in</a> | <strong>Register</strong></p>
-  <h1>Register</h1>
-  {% if registration_open %}
-    <p class="hint">Use your corporate email address. A TestLab administrator approves new accounts before
-      they can be used.</p>
-    <form method="post" action="{% url 'register' %}" class="login">
-      {% csrf_token %}
-      {{ form.non_field_errors }}
-      {% for field in form %}
-        <p>{{ field.label_tag }} {{ field }}</p>
-        {{ field.errors }}
-      {% endfor %}
-      <button type="submit">Register</button>
-    </form>
-  {% else %}
-    <p>Registration is not open. Contact a TestLab administrator for an account.</p>
-  {% endif %}
+  <div class="auth-card">
+    <nav class="auth-switch"><a href="{% url 'login' %}">Log in</a><strong>Register</strong></nav>
+    <h1>Register</h1>
+    {% if registration_open %}
+      <p class="subtitle">Use your corporate email address. A TestLab administrator approves new accounts before
+        they can be used.</p>
+      <form method="post" action="{% url 'register' %}" class="stacked">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+          <div class="field">
+            {{ field.label_tag }}{{ field }}
+            {% if field.help_text %}<small class="help">{{ field.help_text }}</small>{% endif %}
+            {{ field.errors }}
+          </div>
+        {% endfor %}
+        <button type="submit" class="btn-primary">Register</button>
+      </form>
+    {% else %}
+      <p class="alert">Registration is not open. Contact a TestLab administrator for an account.</p>
+    {% endif %}
+  </div>
 {% endblock %}

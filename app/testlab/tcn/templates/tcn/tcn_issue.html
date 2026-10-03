@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Issue {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
@@ -10,15 +11,16 @@
 {% block content %}
   <h1>Issue {{ tcn }}</h1>
 
-  {% if conflict %}<p class="error conflict">{{ conflict }}</p>{% endif %}
+  {% if conflict %}<p class="conflict">{{ conflict }}</p>{% endif %}
 
   {% if errors %}
     <div class="issue-errors">
       <p><strong>{{ tcn }} cannot be issued yet:</strong></p>
       <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
-      <p><a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a></p>
+      <p><a class="button" href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a></p>
     </div>
   {% else %}
+    <div class="card">
     <table class="list summary">
       <tbody>
         <tr><th>Project No.</th><td>{{ project.project_no }}</td></tr>
@@ -31,6 +33,7 @@
         <tr><th>Issued by</th><td>{{ user.get_full_name|default:user.username }} (you), now</td></tr>
       </tbody>
     </table>
+    </div>
 
     {% include "tcn/_changes.html" %}
 
@@ -41,8 +44,8 @@
       {% csrf_token %}
       <input type="hidden" name="row_version" value="{{ tcn.row_version }}">
       <div class="actions">
-        <button type="submit">Confirm issue</button>
-        <a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
+        <button type="submit" class="btn-primary">Confirm issue</button>
+        <a class="button btn-ghost" href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
       </div>
     </form>
   {% endif %}

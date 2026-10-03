@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}New TCN · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
@@ -7,19 +8,19 @@
   </nav>
 {% endblock %}
 {% block content %}
-  <h1>New TCN — {{ project.project_no }}</h1>
-  <form method="post" class="fields">
+  <div class="page-head"><h1>New TCN — {{ project.project_no }}</h1></div>
+  <form method="post" class="fields card">
     {% csrf_token %}
     {{ form.non_field_errors }}
     <div class="field">
-      {{ form.run_no.label_tag }} {{ form.run_no }}
+      {{ form.run_no.label_tag }}{{ form.run_no }}
       <small>Run no. = TCN no. Proposed: the next free number; another number may be entered.</small>
       {{ form.run_no.errors }}
     </div>
     <div class="field">
       <label>{{ form.source_type.label }}</label>
       {% for choice in form.source_type %}
-        <div>
+        <div class="choice">
           {{ choice.tag }} <label class="inline" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
           {% if choice.data.value == "copy" %}{{ form.source }}{% endif %}
         </div>
@@ -28,8 +29,8 @@
       {{ form.source_type.errors }}{{ form.source.errors }}
     </div>
     <div class="actions">
-      <button type="submit">Create</button>
-      <a href="{% url 'projects:detail' project.pk %}">Cancel</a>
+      <button type="submit" class="btn-primary">Create</button>
+      <a class="button btn-ghost" href="{% url 'projects:detail' project.pk %}">Cancel</a>
     </div>
   </form>
 {% endblock %}

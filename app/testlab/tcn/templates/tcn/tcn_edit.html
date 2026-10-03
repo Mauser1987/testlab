@@ -8,9 +8,12 @@
   </nav>
 {% endblock %}
 {% block content %}
-  <div class="tcn-head">
-    <h1>{{ tcn }} <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display|upper }}</span></h1>
-    <p>
+  <div class="page-head tcn-head">
+    <div class="title"><h1>{{ tcn }}</h1> <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display|upper }}</span></div>
+    <ol class="lifecycle" aria-label="TCN lifecycle">
+      <li class="current">Draft</li><li>Preview PDF</li><li>Issue</li><li>Issued</li>
+    </ol>
+    <p class="meta">
       Project No.: <strong>{{ project.project_no }}</strong> ·
       Run/TCN No.: <strong>{{ tcn.tcn_no }}</strong> ·
       {% if tcn.source_kind == "new_revision" %}new revision of {{ tcn.source_tcn }}{% elif tcn.source_tcn %}copied from {{ tcn.source_tcn }}{% else %}from project defaults{% endif %} ·
@@ -20,31 +23,33 @@
 
   {% include "tcn/_changes.html" %}
 
-  {% if conflict %}<p class="error conflict">{{ conflict }} Your changes below have not been saved.</p>{% endif %}
+  {% if conflict %}<p class="conflict">{{ conflict }} Your changes below have not been saved.</p>{% endif %}
 
   <form method="post" class="setup">
     {% csrf_token %}
     {{ header.row_version }}
-    <section class="setup-section">
+    <section class="setup-section card">
       <h2>TCN</h2>
       {% if editor.show_errors %}{{ header.non_field_errors }}{{ header.row_version.errors }}{% endif %}
       {% for field in header.visible_fields %}
         <div class="field">
-          {{ field.label_tag }} {{ field }} {{ field|was:changes }}
-          {% if field.help_text %}<span class="hint">{{ field.help_text }}</span>{% endif %}
+          {{ field.label_tag }}{{ field }}{{ field|was:changes }}
+          {% if field.help_text %}<small class="help">{{ field.help_text }}</small>{% endif %}
           {% if editor.show_errors %}{{ field.errors }}{% endif %}
         </div>
       {% endfor %}
     </section>
     {% include "projects/run_setup_form.html" %}
-    <div class="actions">
-      <button type="submit" name="action" value="save">Save</button>
-      <button type="submit" name="action" value="update" id="update-button" formnovalidate>Update</button>
+    <div class="actions sticky">
+      <button type="submit" name="action" value="save" class="btn-primary">Save</button>
+      <button type="submit" name="action" value="update" id="update-button" formnovalidate title="Redraw the form for the chosen arrangement / Plug Seal without saving">Update</button>
+      <span class="divider"></span>
       <a class="button" href="{% url 'tcn:preview' tcn.pk %}" target="_blank" rel="noopener">Preview PDF</a>
       {% if can_issue %}<a class="button" href="{% url 'tcn:issue' tcn.pk %}">Issue…</a>{% endif %}
       <span class="hint">Preview and Issue use the saved values — save first.</span>
-      <a href="{% url 'projects:detail' project.pk %}">Close</a>
-      <a href="{% url 'tcn:delete' tcn.pk %}">Delete draft</a>
+      <span class="spacer"></span>
+      <a class="button btn-ghost" href="{% url 'projects:detail' project.pk %}">Close</a>
+      <a class="button btn-danger" href="{% url 'tcn:delete' tcn.pk %}">Delete draft</a>
     </div>
   </form>
 {% endblock %}

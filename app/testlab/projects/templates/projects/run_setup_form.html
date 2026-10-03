@@ -4,15 +4,15 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
 {% with changes=changes|default:None %}
 {% if editor.show_errors %}{{ editor.form.non_field_errors }}{% endif %}
 
-<section class="setup-section">
-  <h2>1. Test Run Description</h2>
+<section class="setup-section card">
+  <h2><span class="no">1.</span> Test Run Description</h2>
   {{ editor.form.run_description }}
   {{ editor.form.run_description|was:changes }}
   {% if editor.show_errors %}{{ editor.form.run_description.errors }}{% endif %}
 </section>
 
-<section class="setup-section">
-  <h2>2. Seal Information</h2>
+<section class="setup-section card">
+  <h2><span class="no">2.</span> Seal Information</h2>
   <div class="panels">
     <fieldset class="panel">
       <legend>Seal under test</legend>
@@ -23,7 +23,7 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
         {% if editor.show_errors %}{{ editor.form.arrangement.errors }}{% endif %}
       </div>
       <div class="field">
-        {{ editor.form.reference_drawing.label_tag }} {{ editor.form.reference_drawing }}
+        {{ editor.form.reference_drawing.label_tag }}{{ editor.form.reference_drawing }}
         {{ editor.form.reference_drawing|was:changes }}
         {% if editor.show_errors %}{{ editor.form.reference_drawing.errors }}{% endif %}
       </div>
@@ -63,17 +63,20 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
   {% for form in editor.hidden_position_forms %}{% for field in form %}{{ field.as_hidden }}{% endfor %}{% endfor %}
 </section>
 
-<section class="setup-section">
-  <h2>3. Test Conditions</h2>
+<section class="setup-section card">
+  <h2><span class="no">3.</span> Test Conditions</h2>
   <fieldset class="panel">
     <legend>Common to the Test Run</legend>
-    <p class="hint">Speed applies to the whole shaft, including the Plug Seal.</p>
-    <span class="inline-field">{{ editor.form.test_unit.label_tag }} {{ editor.form.test_unit }}{{ editor.form.test_unit|was:changes }}</span>
-    <span class="inline-field">{{ editor.form.duration.label_tag }} {{ editor.form.duration }} hours{{ editor.form.duration|was:changes }}</span>
-    <span class="inline-field">{{ editor.form.speed.label_tag }} {{ editor.form.speed }} rpm{{ editor.form.speed|was:changes }}</span>
-    {% if editor.show_errors %}{{ editor.form.test_unit.errors }}{{ editor.form.duration.errors }}{{ editor.form.speed.errors }}{% endif %}
+    <div class="inline-fields">
+      <div class="inline-field">{{ editor.form.test_unit.label_tag }}<span class="control">{{ editor.form.test_unit }}</span>{{ editor.form.test_unit|was:changes }}{% if editor.show_errors %}{{ editor.form.test_unit.errors }}{% endif %}</div>
+      <div class="inline-field">{{ editor.form.duration.label_tag }}<span class="control">{{ editor.form.duration }}<span class="unit">hours</span></span>{{ editor.form.duration|was:changes }}{% if editor.show_errors %}{{ editor.form.duration.errors }}{% endif %}</div>
+      <div class="inline-field">{{ editor.form.speed.label_tag }}<span class="control">{{ editor.form.speed }}<span class="unit">rpm</span></span>{{ editor.form.speed|was:changes }}{% if editor.show_errors %}{{ editor.form.speed.errors }}{% endif %}</div>
+    </div>
+    <p class="hint card-note">Speed applies to the whole shaft, including the Plug Seal.</p>
   </fieldset>
-  <table class="grid">
+  <fieldset class="panel">
+    <legend>{% if editor.plug_seal_present %}Process and {% endif %}{{ editor.seal_support_label }} conditions</legend>
+  <table class="grid conditions">
     <thead>
       <tr>
         <th></th>
@@ -88,12 +91,13 @@ on a TCN draft, optional `changes` (input name → change vs the source TCN, for
       {% endfor %}
     </tbody>
   </table>
-  {% if not editor.plug_seal_present %}<p class="hint">No process conditions: they are established with the Plug Seal, which is not installed.</p>{% endif %}
+  {% if not editor.plug_seal_present %}<p class="hint card-note">No process conditions: they are established with the Plug Seal, which is not installed.</p>{% endif %}
+  </fieldset>
   {% for field in editor.hidden_condition_fields %}{{ field.as_hidden }}{% endfor %}
 </section>
 
-<section class="setup-section">
-  <h2>4. Parameters to log</h2>
+<section class="setup-section card">
+  <h2><span class="no">4.</span> Parameters to log</h2>
   {{ editor.form.monitored_parameters|was:changes }}
   <div class="parameter-groups">
     {% for title, items in editor.parameter_groups %}

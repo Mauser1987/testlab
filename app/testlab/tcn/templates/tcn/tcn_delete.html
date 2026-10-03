@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Delete {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
 {% block breadcrumbs %}
   <nav class="breadcrumbs">
     <a href="{% url 'projects:list' %}">Projects</a> ›
@@ -10,7 +11,7 @@
 {% block content %}
   <h1>Delete draft {{ tcn }}</h1>
 
-  {% if error %}<p class="error conflict">{{ error }}</p>{% endif %}
+  {% if error %}<p class="conflict">{{ error }}</p>{% endif %}
 
   <p class="notice">
     {% if tcn.revision %}The draft revision {{ tcn.revision }} is deleted; the issued revisions of
@@ -23,8 +24,8 @@
     {% csrf_token %}
     <input type="hidden" name="row_version" value="{{ tcn.row_version }}">
     <div class="actions">
-      <button type="submit">Delete draft</button>
-      <a href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
+      <button type="submit" class="btn-danger-solid">Delete draft</button>
+      <a class="button btn-ghost" href="{% url 'tcn:edit' tcn.pk %}">Back to the draft</a>
     </div>
   </form>
 {% endblock %}

@@ -9,57 +9,65 @@
 {% block content %}
   <div class="page-head">
     <h1>{{ project.project_no }}</h1>
-    <a class="button" href="{% url 'tcn:create' project.pk %}">New TCN</a>
+    <a class="button btn-primary" href="{% url 'tcn:create' project.pk %}">New TCN</a>
   </div>
 
-  <div class="panels">
-    <fieldset class="panel">
-      <legend>Project</legend>
-      <p>{{ project.description }}{% if project.customer %}<br><span class="hint">Customer:</span> {{ project.customer }}{% endif %}</p>
-      <a href="{% url 'projects:edit' project.pk %}">Edit</a>
-    </fieldset>
+  <div class="card-grid">
+    <section class="card">
+      <div class="card-head">
+        <h2>Project</h2>
+        <a class="button btn-sm" href="{% url 'projects:edit' project.pk %}">Edit</a>
+      </div>
+      <dl class="facts">
+        <dt>Description</dt><dd>{{ project.description }}</dd>
+        <dt>Customer</dt><dd>{% if project.customer %}{{ project.customer }}{% else %}<span class="empty">—</span>{% endif %}</dd>
+      </dl>
+    </section>
     {% with setup=project.default_setup %}
-      <fieldset class="panel">
-        <legend>Project defaults</legend>
-        <p>
-          {{ setup.configuration_display }}
-          {% if setup.test_unit %} · {{ setup.test_unit }}{% endif %}
-          {% if setup.speed %} · {{ setup.speed }} rpm{% endif %}
-          {% if setup.duration %} · {{ setup.duration }} hours{% endif %}
-        </p>
-        <a href="{% url 'projects:defaults' project.pk %}">Edit</a>
-      </fieldset>
+      <section class="card">
+        <div class="card-head">
+          <h2>Project defaults</h2>
+          <a class="button btn-sm" href="{% url 'projects:defaults' project.pk %}">Edit</a>
+        </div>
+        <dl class="facts">
+          <dt>Arrangement</dt><dd>{{ setup.configuration_display }}</dd>
+          <dt>Test unit · speed · duration</dt>
+          <dd>{% if setup.test_unit %}{{ setup.test_unit }}{% else %}<span class="empty">—</span>{% endif %}
+            · {% if setup.speed %}{{ setup.speed }} rpm{% else %}<span class="empty">—</span>{% endif %}
+            · {% if setup.duration %}{{ setup.duration }} hours{% else %}<span class="empty">—</span>{% endif %}</dd>
+        </dl>
+        <p class="hint card-note">New TCNs start from these values; changing them never alters an existing TCN.</p>
+      </section>
     {% endwith %}
   </div>
 
   <h2>TCN register</h2>
   {% if register %}
-    <div class="table-scroll">
+    <div class="table-card table-scroll">
     <table class="list register">
       <thead>
         <tr>
           <th>Run/TCN</th><th>Rev</th><th>Status</th><th>Created</th><th>Prepared by</th><th>Test unit</th>
-          <th class="arrangement">Arrangement</th><th>Speed</th><th class="wrap">Barrier / Buffer / Flush pressure</th><th></th>
+          <th class="text wide">Arrangement</th><th>Speed</th><th class="wrap">Barrier / Buffer / Flush pressure</th><th></th>
         </tr>
       </thead>
       <tbody>
         {% for row in register %}
           {% with tcn=row.tcn setup=row.setup %}
             <tr>
-              <td><a href="{% url 'tcn:edit' tcn.pk %}">TCN{{ tcn.test_run.display_no }}</a></td>
+              <td class="id"><a href="{% url 'tcn:edit' tcn.pk %}" title="Open TCN{{ tcn.test_run.display_no }}">TCN{{ tcn.test_run.display_no }}</a></td>
               <td>{{ tcn.revision }}</td>
               <td><span class="status status-{{ tcn.status }}">{{ tcn.get_status_display }}</span>
-                {% if row.pending_draft %}<br><a href="{% url 'tcn:edit' row.pending_draft.pk %}">draft rev {{ row.pending_draft.revision }}</a>{% endif %}</td>
+                {% if row.pending_draft %}<a class="row-note" href="{% url 'tcn:edit' row.pending_draft.pk %}">draft rev {{ row.pending_draft.revision }}</a>{% endif %}</td>
               <td>{{ tcn.created_date|date:"d-M-Y" }}</td>
               <td>{{ tcn.prepared_by }}</td>
               <td>{{ setup.test_unit }}</td>
-              <td class="arrangement">{{ setup.configuration_display }}</td>
+              <td class="text wide">{{ setup.configuration_display }}</td>
               <td>{% if setup.speed %}{{ setup.speed }} rpm{% endif %}</td>
               <td>{% if setup.seal_support_pressure %}{{ row.seal_support_label }}: {{ setup.seal_support_pressure }} barg{% endif %}</td>
               <td class="row-actions">
-                <a href="{% url 'tcn:edit' tcn.pk %}" title="Open TCN{{ tcn.test_run.display_no }}">Open</a> ·
-                <a href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}" title="Copy to new TCN">Copy</a>
-                {% if tcn.issued_document %} · <a href="{% url 'tcn:document' tcn.pk %}" title="Download PDF">PDF</a>{% endif %}
+                <a class="button btn-sm" href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}" title="Copy to new TCN">Copy</a>
+                {% if tcn.issued_document %}<a class="button btn-sm" href="{% url 'tcn:document' tcn.pk %}" title="Download PDF">PDF</a>{% endif %}
               </td>
             </tr>
           {% endwith %}
@@ -68,6 +76,6 @@
     </table>
     </div>
   {% else %}
-    <p>No TCNs yet. <a href="{% url 'tcn:create' project.pk %}">Create TCN001</a> from the project defaults.</p>
+    <p class="alert">No TCNs yet. <a href="{% url 'tcn:create' project.pk %}">Create TCN001</a> from the project defaults.</p>
   {% endif %}
 {% endblock %}
