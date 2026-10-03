@@ -1,0 +1,45 @@
+{% comment %}Fields of a manual log entry. Expects form and groups [(group, [(measurement, bound field)])].{% endcomment %}
+{% load execution_tags %}
+<div class="entry-grid">
+  <div class="entry-field when">
+    {{ form.observed_at.label_tag }}{{ form.observed_at }}{{ form.observed_at.errors }}
+  </div>
+  {% for name, fields in groups %}
+    <fieldset class="panel entry-group">
+      <legend>{{ name }}</legend>
+      <div class="entry-fields">
+        {% for column, field in fields %}
+          <div class="entry-field{% if column.code in instructed %} instructed-field{% endif %}">
+            <label for="{{ field.id_for_label }}"{% if column.description %} title="{{ column.description }}"{% endif %}>{{ column.label }}{% if column.is_leakage %} collected{% endif %}{% if column.code in instructed %}<span class="instructed" title="to be logged per TCN">•</span>{% endif %}</label>
+            <span class="control">{{ field }}<span class="unit">{{ column.unit }}</span></span>
+            {{ field.errors }}
+          </div>
+        {% endfor %}
+      </div>
+    </fieldset>
+  {% endfor %}
+  <div class="entry-field leakage-period">
+    {{ form.leakage_hours.label_tag }}<span class="control">{{ form.leakage_hours }}<span class="unit">h</span></span>
+    <small class="help">{{ form.leakage_hours.help_text }}</small>
+    {{ form.leakage_hours.errors }}
+  </div>
+  <div class="entry-field event">
+    {{ form.category.label_tag }}{{ form.category }}{{ form.category.errors }}
+  </div>
+  <div class="entry-field note">
+    {{ form.note.label_tag }}{{ form.note }}{{ form.note.errors }}
+  </div>
+</div>
+<script>
+  // Standing at the rig: start typing the first reading straight away, and let
+  // Enter in the note add the reading (Shift+Enter for a new line).
+  (function () {
+    var form = document.currentScript.closest("form");
+    var first = form.querySelector("input.reading");
+    if (first && !form.querySelector(".errorlist")) first.focus();
+    var note = form.querySelector("textarea");
+    if (note) note.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+    });
+  })();
+</script>

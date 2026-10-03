@@ -1,0 +1,36 @@
+{% comment %}Fields of an acceptance criterion. Expects form.{% endcomment %}
+{% if form.non_field_errors %}<ul class="errorlist nonfield">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+<div class="entry-grid acceptance-fields">
+  <div class="entry-field wide">{{ form.criterion.label_tag }}{{ form.criterion }}{{ form.criterion.errors }}</div>
+  <div class="entry-field">{{ form.basis.label_tag }}{{ form.basis }}{{ form.basis.errors }}</div>
+  <div class="entry-field" data-basis="leakage_rate">{{ form.position.label_tag }}{{ form.position }}{{ form.position.errors }}</div>
+  <div class="entry-field" data-basis="wear_rate">{{ form.component.label_tag }}{{ form.component }}{{ form.component.errors }}</div>
+</div>
+<div class="entry-grid acceptance-fields">
+  <div class="entry-field">
+    {{ form.comparison.label_tag }}
+    <span class="control">{{ form.comparison }} {{ form.limit }} {{ form.unit }}</span>
+    {{ form.comparison.errors }}{{ form.limit.errors }}{{ form.unit.errors }}
+    <small class="help">Limit and unit; the unit is fixed for a calculated actual (ml/h, in/h, h).</small>
+  </div>
+  <div class="entry-field wide">{{ form.requirement_text.label_tag }}{{ form.requirement_text }}<small class="help">{{ form.requirement_text.help_text }}</small>{{ form.requirement_text.errors }}</div>
+  <div class="entry-field wide" data-basis="manual">{{ form.actual_text.label_tag }}{{ form.actual_text }}<small class="help">Only when the actual is entered by the engineer.</small>{{ form.actual_text.errors }}</div>
+</div>
+<div class="entry-grid acceptance-fields">
+  <div class="entry-field">{{ form.assessment.label_tag }}{{ form.assessment }}{{ form.assessment.errors }}</div>
+  <div class="entry-field note">{{ form.remark.label_tag }}{{ form.remark }}{{ form.remark.errors }}</div>
+</div>
+<script>
+  // Show only the fields the chosen basis uses (all stay in the form; the server decides).
+  (function () {
+    var root = document.currentScript.parentElement;
+    var basis = root.querySelector("select[name=basis]");
+    function update() {
+      root.querySelectorAll("[data-basis]").forEach(function (field) {
+        field.hidden = field.dataset.basis !== basis.value;
+      });
+    }
+    basis.addEventListener("change", update);
+    update();
+  })();
+</script>

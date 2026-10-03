@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+{% load execution_tags results_tags %}
+{% block title %}Result · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+
+  <div class="result-bar">
+    <span class="status status-draft">{{ result.get_status_display }}</span>
+    <nav class="section-nav" aria-label="Result sections">
+      <a href="#summary">Summary</a><a href="#plots">Plots{% if plots %} ({{ plots|length }}){% endif %}</a><a href="#measurements">Measurements</a><a href="#pictures">Pictures</a><a href="#acceptance">Acceptance</a><a href="#conclusion">Conclusion</a>
+    </nav>
+    <span class="hint">Last changed {{ result.updated_at|date:"d-M-Y H:i" }} by {{ result.updated_by|initials }}</span>
+  </div>
+  {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
+
+  {# ---- Summary: derived from the manual log and DCS data, nothing typed ---- #}
+  <section id="summary" class="result-section">
+    <div class="card-head"><h2>Summary</h2><span class="hint">From the manual log and DCS data · <span class="calc-key">calculated</span></span></div>
+    {# Run summary: one compact full-width strip #}
+    <div class="card run-summary">
+      <h3 class="card-title">Run summary</h3>
+      <dl class="summary-strip">
+        <div><dt>Start (t = 0)</dt><dd>{% if period.start %}{{ period.start|date:"d-M-Y H:i" }}{% else %}<span class="empty">—</span>{% endif %}</dd>{% if period.start_source %}<dd class="hint">{{ period.start_source }}</dd>{% endif %}</div>
+        <div><dt>End</dt><dd>{% if period.end %}{{ period.end|date:"d-M-Y H:i" }}{% else %}<span class="empty">—</span>{% endif %}</dd>{% if period.end_source %}<dd class="hint">{{ period.end_source }}</dd>{% endif %}</div>
+        <div><dt>Logged period</dt><dd class="calc-inline">{% if period.hours is not None %}{{ period.hours|floatformat:2 }} h{% else %}<span class="empty">—</span>{% endif %}</dd><dd class="hint">clock time, stops included</dd></div>
+        <div><dt>Log entries</dt><dd>{{ rows|length }}</dd><dd class="hint">{{ events|length }} event{{ events|length|pluralize }} / note{{ events|length|pluralize }}</dd></div>
+        <div><dt>DCS datasets</dt><dd>{{ datasets|length }}</dd><dd class="hint">{% for dataset in datasets %}{{ dataset.original_name }}{% if not forloop.last %}, {% endif %}{% empty %}none imported{% endfor %}</dd></div>
+      </dl>
+      {% if period.provisional %}<p class="hint card-note"><span class="status status-draft">provisional</span> No LabVIEW recording start known: t = 0 is the first reading.</p>{% endif %}
+    </div>
+
+    {# Engineering result blocks #}
+    <div class="result-blocks">
+      <div class="card">
+        <h3 class="card-title">Leakage</h3>
+        {% if leakage %}
+          <div class="table-scroll"><table class="list compact">
+            <thead><tr><th>Seal</th><th class="number">Collected [ml]</th><th class="number calc">Period [h]</th><th class="number calc" title="Σ volume / Σ collection period">Average [ml/h]</th></tr></thead>
+            <tbody>
+              {% for seal in leakage %}
+                <tr>
+                  <th>{{ seal.label }}</th>
+                  <td class="number">{% if seal.total_volume is not None %}{{ seal.total_volume|number }}{% else %}<span class="empty">—</span>{% endif %}</td>
+                  <td class="number calc">{% if seal.intervals %}{{ seal.hours|floatformat:2 }}{% else %}—{% endif %}</td>
+                  <td class="number calc"{% if seal.reason %} title="{{ seal.reason }}"{% endif %}>{% if seal.average is not None %}{{ seal.average|floatformat:1 }}{% else %}—{% endif %}</td>
+                </tr>
+                {% if seal.unrated_volume %}
+                  <tr class="note-row"><td colspan="4" class="hint">{{ seal.unrated_volume|number }} ml not in the average (collection period unknown): {{ seal.unrated_notes|join:"; " }}</td></tr>
+                {% endif %}
+              {% endfor %}
+            </tbody>
+          </table></div>
+          <p class="hint card-note">Average = total volume / total collection period (clock time), over readings with a known period — not a mean of interval rates.</p>
+        {% else %}
+          <p class="empty">— No leakage measurement in this configuration.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Face wear</h3>
+        {% if wear %}
+          <div class="table-scroll"><table class="list compact">
+            <thead><tr><th>Component</th><th class="number calc">Wear [in]</th><th class="number calc">Period [h]</th><th class="number calc">Rate [in/h]</th></tr></thead>
+            <tbody>
+              {% for item in wear %}
+                <tr>
+                  <th>{{ item.component.label }}</th>
+                  <td class="number calc" title="Pre − Post face length">{% if item.wear is not None %}{{ item.wear|number }}{% else %}—{% endif %}</td>
+                  <td class="number calc" title="{{ item.hours_source }}">{% if item.hours %}{{ item.hours|floatformat:2 }}{% else %}—{% endif %}</td>
+                  <td class="number calc">{% if item.rate is not None %}{{ item.rate|number }}{% else %}—{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+          <p class="hint card-note">Wear = Pre − Post face length; rate over the seal's leakage collection period.</p>
+        {% else %}
+          <p class="empty">— No face wear yet. <a href="#measurements">Enter Pre and Post face length</a>.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if ranges %}
+      <div class="table-card table-scroll">
+        <table class="list compact">
+          <thead><tr><th>Logged parameter</th><th>TCN (instructed)</th><th class="number calc">Min</th><th class="number calc">Max</th><th class="number calc">Readings</th></tr></thead>
+          <tbody>
+            {% for range in ranges %}
+              <tr>
+                <th>{{ range.measurement.full_label }}</th>
+                <td>{{ range.instructed|default:"—" }}</td>
+                <td class="number calc">{{ range.minimum|reading }}</td>
+                <td class="number calc">{{ range.maximum|reading }}</td>
+                <td class="number calc">{{ range.count }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-head">
+        <h3 class="card-title">Events &amp; observations</h3>
+        <a class="button btn-sm" href="{% url 'execution:log' run.pk %}#add">Add in manual log</a>
+      </div>
+      {% if events %}
+        <div class="table-scroll"><table class="list compact">
+          <thead><tr><th>Date / time</th><th class="number calc">Elapsed [h]</th><th>Event</th><th class="text">Note</th><th>By</th></tr></thead>
+          <tbody>
+            {% for row in events %}
+              <tr>
+                <td>{{ row.entry.observed_at|date:"d-M-Y H:i" }}</td>
+                <td class="number calc">{{ row.elapsed_h|floatformat:2 }}</td>
+                <td>{% if row.entry.category %}<span class="event-tag">{{ row.entry.get_category_display }}</span>{% endif %}</td>
+                <td class="text">{{ row.entry.note|linebreaksbr }}</td>
+                <td>{{ row.entry.entered_by|initials }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+      {% else %}
+        <p class="empty">— No events yet. Record them in the manual log with an event type and/or a note.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ---- Plots: DCS plots added from the viewer, with their definition ---- #}
+  <section id="plots" class="result-section">
+    <div class="card-head"><h2>Plots</h2><span class="hint">From the DCS data · each plot keeps its definition and can be redrawn from the dataset</span></div>
+    {% for plot, about in plots %}
+      <figure class="card result-plot" id="plot-{{ plot.pk }}">
+        <a href="{% url 'results:plot_image' plot.pk %}" target="_blank" rel="noopener" title="Open the report image ({{ plot.image_width }} × {{ plot.image_height }} px)">
+          <img src="{% url 'results:plot_image' plot.pk %}" alt="{{ plot.caption|default:'DCS plot' }}" loading="lazy" width="{{ plot.image_width }}" height="{{ plot.image_height }}">
+        </a>
+        <figcaption>
+          {% if recording_refused %}
+            <p class="plot-caption"><strong>Plot {{ forloop.counter }}</strong> {{ plot.caption|default:"" }}</p>
+          {% else %}
+            <form method="post" action="{% url 'results:plot_caption' plot.pk %}" class="plot-caption-form">
+              {% csrf_token %}
+              <label for="caption-{{ plot.pk }}">Plot {{ forloop.counter }}</label>
+              <input type="text" id="caption-{{ plot.pk }}" name="caption" maxlength="300" value="{{ plot.caption }}" placeholder="Caption">
+              <button type="submit" class="btn-sm">Save caption</button>
+            </form>
+          {% endif %}
+          <dl class="facts plot-definition">
+            <dt>Source</dt><dd><a href="{% url 'execution:dcs_detail' plot.dataset_id %}">{{ plot.dataset.original_name }}</a> <span class="hint">SHA-256 {{ plot.dataset.sha256|slice:":12" }}…</span></dd>
+            <dt>Signals</dt><dd>{{ about.signals }}</dd>
+            <dt>Time range</dt><dd>{{ about.window }}</dd>
+            <dt>Axis ranges</dt><dd>{{ about.ranges }}</dd>
+            <dt>Image</dt><dd class="hint">{% if plot.rendering.decimated %}{{ plot.rendering.samples_in_window }} samples per signal shown as min/max of time buckets ({{ plot.rendering.points_per_signal }} points){% else %}all {{ plot.rendering.samples_in_window }} samples per signal{% endif %} · {{ plot.updated_by|initials }} {{ plot.updated_at|date:"d-M-Y H:i" }}</dd>
+          </dl>
+          <div class="picture-actions">
+            <a class="button btn-sm" href="{% url 'execution:dcs_detail' plot.dataset_id %}?plot={{ plot.pk }}#plot-to-result" title="Redraw from the stored definition; adjust and update">Open in DCS viewer</a>
+            {% if not recording_refused %}
+              <form method="post" action="{% url 'results:plot_move' plot.pk %}">{% csrf_token %}<button type="submit" name="direction" value="up" class="btn-sm btn-ghost" title="Earlier">↑</button><button type="submit" name="direction" value="down" class="btn-sm btn-ghost" title="Later">↓</button></form>
+              <a class="button btn-sm btn-ghost" href="{% url 'results:plot_delete' plot.pk %}">Remove</a>
+            {% endif %}
+          </div>
+        </figcaption>
+      </figure>
+    {% empty %}
+      <p class="empty">— No plots yet. {% if datasets %}Open a dataset under <a href="{% url 'execution:dcs' run.pk %}">DCS data</a>, set up the plot and use “Add plot to Result”.{% else %}Import DCS data first.{% endif %}</p>
+    {% endfor %}
+  </section>
+
+  {# ---- Measurements: components as fitted, Pre/Post per quantity ---- #}
+  <section id="measurements" class="result-section">
+    <div class="card-head"><h2>Measurements</h2><span class="hint">Pre and Post as measured; blank = not measured</span></div>
+
+    <form method="post" action="{% url 'results:components' run.pk %}" class="card">
+      {% csrf_token %}
+      {{ identity_formset.management_form }}
+      <h3 class="card-title">Components</h3>
+      <div class="table-scroll">
+        <table class="list compact form-table">
+          <thead><tr><th>Component</th><th>Part drawing</th><th>Material</th><th>Face condition</th><th></th></tr></thead>
+          <tbody>
+            {% for form in identity_rows %}
+              <tr>
+                <th title="{{ form.instance.description }}">{{ form.instance.label }}{{ form.id }}</th>
+                <td>{{ form.part_no }}{{ form.part_no.errors }}</td>
+                <td>{{ form.material }}{{ form.material.errors }}</td>
+                <td>{{ form.condition }}{{ form.condition.errors }}</td>
+                <td class="row-actions">
+                  {% if not recording_refused %}<button type="submit" class="btn-sm btn-ghost" form="remove-{{ form.instance.pk }}" title="Remove (only without measurements or pictures)">Remove</button>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save components</button><span class="hint">Material is copied from the TCN when the component is added.</span></div>{% endif %}
+    </form>
+    {% for form in identity_rows %}
+      <form method="post" action="{% url 'results:component_remove' form.instance.pk %}" id="remove-{{ form.instance.pk }}" hidden>{% csrf_token %}</form>
+    {% endfor %}
+    {% if add_component_form and not recording_refused %}
+      <form method="post" action="{% url 'results:component_add' run.pk %}" class="card inline-add">
+        {% csrf_token %}
+        <label for="{{ add_component_form.component.id_for_label }}">{{ add_component_form.component.label }}</label>
+        {{ add_component_form.component }}
+        <button type="submit" class="btn-sm">Add</button>
+        <span class="hint">Offered by the run configuration (Plug Seal faces, sleeve).</span>
+      </form>
+    {% endif %}
+
+    <form method="post" action="{% url 'results:measurements' run.pk %}" class="card" novalidate>
+      {% csrf_token %}
+      <h3 class="card-title">Pre-test / post-test measurements</h3>
+      {% if measurements_form.non_field_errors %}<ul class="errorlist nonfield">{% for error in measurements_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+      {% with rows=measurements_form.bound_rows %}
+        {% if rows %}
+          <div class="table-scroll">
+            <table class="list compact measurements">
+              <thead><tr>
+                <th>Component</th><th>Measurement</th><th class="number">Pre</th><th class="number">Post</th>
+                <th class="number calc" title="Post − Pre">Δ</th><th class="number calc" title="Pre − Post (material removed)">Wear</th><th>Unit</th>
+              </tr></thead>
+              <tbody>
+                {% for component, quantity, pre, post, stored in rows %}
+                  <tr{% ifchanged component.pk %} class="group-first"{% endifchanged %}>
+                    <th>{% ifchanged component.pk %}{{ component.label }}{% endifchanged %}</th>
+                    <td{% if quantity.description %} title="{{ quantity.description }}"{% endif %}>{{ quantity.label }}</td>
+                    <td class="number">{{ pre }}{{ pre.errors }}</td>
+                    <td class="number">{{ post }}{{ post.errors }}</td>
+                    <td class="number calc">{{ stored.delta|signed }}</td>
+                    <td class="number calc">{% if quantity.wear %}{{ stored.wear|number }}{% endif %}</td>
+                    <td class="unit-cell">{{ quantity.unit }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save measurements</button><span class="hint">Δ and wear are calculated after saving.</span></div>{% endif %}
+        {% else %}
+          <p class="empty">— No component with measurements. Add a seal face above.</p>
+        {% endif %}
+      {% endwith %}
+    </form>
+  </section>
+
+  {# ---- Pictures ---- #}
+  <section id="pictures" class="result-section">
+    <div class="card-head"><h2>Pictures</h2><span class="hint">{{ pictures.count }} picture{{ pictures.count|pluralize }} · originals kept unchanged</span></div>
+
+    {% if not recording_refused %}
+      <form method="post" action="{% url 'results:image_upload' run.pk %}" enctype="multipart/form-data" class="card upload-pictures" novalidate>
+        {% csrf_token %}
+        <div class="entry-grid">
+          <div class="entry-field files">{{ upload_form.files.label_tag }}{{ upload_form.files }}{{ upload_form.files.errors }}</div>
+          <div class="entry-field">{{ upload_form.category.label_tag }}{{ upload_form.category }}{{ upload_form.category.errors }}</div>
+          <div class="entry-field">{{ upload_form.component.label_tag }}{{ upload_form.component }}{{ upload_form.component.errors }}</div>
+          <div class="entry-field note">{{ upload_form.caption.label_tag }}{{ upload_form.caption }}{{ upload_form.caption.errors }}</div>
+        </div>
+        <div class="actions"><button type="submit" class="btn-primary">Upload</button><span class="hint">Pre-test and post-test pictures of the same component are shown side by side.</span></div>
+      </form>
+    {% endif %}
+
+    {% if pictures.cross_sections %}
+      <h3>Seal cross section</h3>
+      <div class="gallery">{% for picture in pictures.cross_sections %}{% include "results/_picture.html" %}{% endfor %}</div>
+    {% endif %}
+
+    {% if pictures.comparisons %}
+      <h3>Pre-test ↔ post-test</h3>
+      <div class="comparisons">
+        {% for comparison in pictures.comparisons %}
+          <div class="comparison card">
+            <div class="card-head">
+              <h4>{% if comparison.component %}{{ comparison.component.label }}{% else %}Whole seal{% endif %}</h4>
+              {% if comparison.component and comparison.pre and comparison.post %}<a class="button btn-sm" href="{% url 'results:compare' run.pk comparison.component.pk %}">Compare large</a>{% endif %}
+            </div>
+            <div class="pre-post">
+              <div class="stage"><div class="stage-label">Pre-test</div>
+                {% for picture in comparison.pre %}{% include "results/_picture.html" %}{% empty %}<p class="empty">— none</p>{% endfor %}
+              </div>
+              <div class="stage"><div class="stage-label">Post-test</div>
+                {% for picture in comparison.post %}{% include "results/_picture.html" %}{% empty %}<p class="empty">— none</p>{% endfor %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if pictures.other %}
+      <h3>Other / supporting</h3>
+      <div class="gallery">{% for picture in pictures.other %}{% include "results/_picture.html" %}{% endfor %}</div>
+    {% endif %}
+    {% if not pictures.count %}<p class="empty">— No pictures yet.</p>{% endif %}
+  </section>
+
+  {# ---- Acceptance ---- #}
+  <section id="acceptance" class="result-section">
+    <div class="card-head"><h2>Acceptance</h2><span class="hint">Pass/Fail is calculated only for a numeric limit on a calculated actual; otherwise the engineer assesses</span></div>
+    {% if evaluations %}
+      <div class="table-card table-scroll">
+        <table class="list acceptance">
+          <thead><tr><th>Criterion</th><th>Requirement</th><th class="number">Actual</th><th>Assessment</th><th class="text">Remark</th><th></th></tr></thead>
+          <tbody>
+            {% for e in evaluations %}
+              <tr>
+                <th>{{ e.item.criterion }}{% if e.item.basis != "manual" %}<span class="row-note hint">{{ e.item.get_basis_display }}{% if e.item.position %} · {{ e.item.get_position_display }}{% endif %}{% if e.item.component %} · {{ e.item.component.label }}{% endif %}</span>{% endif %}</th>
+                <td>{{ e.requirement|default:"—" }}</td>
+                <td class="number{% if e.item.basis != 'manual' %} calc{% endif %}" title="{{ e.source }}">{% if e.actual_text %}{{ e.actual_text }}{% else %}<span class="empty" title="{{ e.source }}">—</span>{% endif %}{% if e.source and e.item.basis != "manual" %}<span class="row-note">{{ e.source }}</span>{% endif %}</td>
+                <td><span class="assessment assessment-{{ e.effective }}">{{ e.effective_label }}</span>
+                  <span class="row-note hint">{% if e.by == "engineer" %}engineer{% if e.derived and e.derived != e.effective %} (calculated: {{ e.derived }}){% endif %}{% elif e.by == "calculated" %}calculated{% else %}to be assessed{% endif %}</span></td>
+                <td class="text">{{ e.item.remark|linebreaksbr }}</td>
+                <td class="row-actions"><a class="button btn-sm" href="{% url 'results:acceptance_edit' e.item.pk %}">Edit</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">— No acceptance criteria yet.</p>
+    {% endif %}
+    {% if not recording_refused %}
+      <details class="card add-criterion"{% if acceptance_form.errors %} open{% endif %}>
+        <summary>Add criterion</summary>
+        <form method="post" action="{% url 'results:acceptance_add' run.pk %}" novalidate>
+          {% csrf_token %}
+          {% include "results/_acceptance_fields.html" with form=acceptance_form %}
+          <div class="actions"><button type="submit" class="btn-primary">Add criterion</button></div>
+        </form>
+      </details>
+    {% endif %}
+  </section>
+
+  {# ---- Conclusion: engineer-authored ---- #}
+  <section id="conclusion" class="result-section">
+    <div class="card-head"><h2>Conclusion</h2><span class="hint">Written by the engineer</span></div>
+    <form method="post" action="{% url 'results:narrative' run.pk %}" class="card fields">
+      {% csrf_token %}
+      {% for field in narrative_form %}
+        <div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+      {% endfor %}
+      {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save</button></div>{% endif %}
+    </form>
+  </section>
+{% endblock %}

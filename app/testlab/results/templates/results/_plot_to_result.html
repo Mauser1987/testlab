@@ -1,0 +1,21 @@
+{% comment %}"Add plot to Result" on the DCS dataset page. Rendered by the plot_to_result tag.{% endcomment %}
+<div class="plot-to-result" id="plot-to-result">
+  {% if recording_refused %}
+    <span class="hint">{{ recording_refused }}</span>
+  {% elif not result %}
+    <span class="hint">To add this plot to the Result, first <a href="{% url 'results:result' run.pk %}">start the Result</a> of Run {{ run.display_no }}.</span>
+  {% else %}
+    {% csrf_token %}
+    {% if plot %}<span class="status status-draft" title="Opened from the Result: the viewer shows its stored definition">Result plot {{ plot.order|add:1 }}</span>{% endif %}
+    <label for="plot-caption">Caption</label>
+    <input type="text" id="plot-caption" maxlength="300" placeholder="e.g. Seal support pressure and leakage during the speed steps" value="{{ plot.caption|default:'' }}">
+    {% if plot %}
+      <button type="button" class="btn-primary" data-plot-action="update">Update plot in Result</button>
+      <button type="button" data-plot-action="add">Add as new plot</button>
+    {% else %}
+      <button type="button" class="btn-primary" data-plot-action="add">Add plot to Result</button>
+    {% endif %}
+    <span class="hint" id="plot-to-result-status" role="status">Keeps the selected signals, axes, zoom and time range; the report image is drawn from them.</span>
+    {{ config|json_script:"dcs-plot-to-result" }}
+  {% endif %}
+</div>

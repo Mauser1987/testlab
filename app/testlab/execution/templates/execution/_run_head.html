@@ -1,0 +1,20 @@
+{% comment %}Header of the test-execution pages of a run. Expects run, project, tcn, tab.{% endcomment %}
+<nav class="breadcrumbs">
+  <a href="{% url 'projects:list' %}">Projects</a> ›
+  <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+  Run {{ run.display_no }}
+</nav>
+<div class="page-head">
+  <div class="title">
+    <h1>Run {{ run.display_no }}</h1>
+    {% if tcn %}<a class="tcn-link" href="{% url 'tcn:edit' tcn.pk %}">{{ tcn }}</a> <span class="status status-{{ tcn.status }}">{{ tcn.get_status_display }}</span>{% endif %}
+  </div>
+  {% if tcn %}
+    <p class="meta">{{ project.description }} · {{ tcn.setup.configuration_display }}{% if tcn.setup.test_unit %} · Test unit {{ tcn.setup.test_unit }}{% endif %}{% if tcn.setup.speed %} · {{ tcn.setup.speed }} rpm{% endif %}</p>
+  {% endif %}
+</div>
+<nav class="tabs" aria-label="Test execution">
+  <a href="{% url 'execution:log' run.pk %}"{% if tab == "log" %} class="active" aria-current="page"{% endif %}>Manual log</a>
+  <a href="{% url 'execution:dcs' run.pk %}"{% if tab == "dcs" %} class="active" aria-current="page"{% endif %}>DCS data</a>
+  <a href="{% url 'results:result' run.pk %}"{% if tab == "result" %} class="active" aria-current="page"{% endif %}>Result</a>
+</nav>

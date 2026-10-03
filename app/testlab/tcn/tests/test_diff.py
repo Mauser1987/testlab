@@ -132,3 +132,9 @@ def test_marker_filter():
     assert "was: (empty)" in was("speed", empty)
     escaped = {"speed": Change("speed", "Speed", "<b>", "1")}
     assert "&lt;b&gt;" in was("speed", escaped)
+
+
+def test_diff_seal_pressure_is_named_with_its_circuit():
+    from testlab.tcn.diff import _parameter_name
+
+    assert _parameter_name("seal_support_diff_pressure", "Buffer") == "Buffer Diff. seal pressure [bar]"

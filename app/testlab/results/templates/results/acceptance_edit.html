@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Criterion · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <form method="post" class="card" novalidate>
+    {% csrf_token %}
+    <h2>Acceptance criterion</h2>
+    {% include "results/_acceptance_fields.html" %}
+    {% if not recording_refused %}
+      <div class="actions">
+        <button type="submit" class="btn-primary">Save</button>
+        <a class="button" href="{% url 'results:result' run.pk %}#acceptance">Cancel</a>
+        <span class="spacer"></span>
+        <button type="submit" name="delete" value="1" class="btn-danger" formnovalidate>Delete criterion</button>
+      </div>
+    {% endif %}
+  </form>
+{% endblock %}

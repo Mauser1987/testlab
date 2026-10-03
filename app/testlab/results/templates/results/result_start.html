@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Result · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card narrow-card">
+    <h2>No Result yet</h2>
+    <p>The Result holds the inspection evidence of this run — Pre/Post measurements and pictures per seal
+      component — and the engineering assessment: acceptance criteria, observations and conclusion.
+      Leakage and logged period are taken from the manual log and DCS data, not typed again.</p>
+    <p class="hint">It starts with the {% if tcn %}{{ tcn.setup.configuration_display }}{% else %}seal{% endif %} faces from the TCN; the Plug Seal and sleeve can be added.</p>
+    {% if recording_refused %}
+      <p class="alert alert-warning">{{ recording_refused }}</p>
+    {% else %}
+      <form method="post" action="{% url 'results:start' run.pk %}" class="actions">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary">Start Result</button>
+      </form>
+    {% endif %}
+  </div>
+{% endblock %}

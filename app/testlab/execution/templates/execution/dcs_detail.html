@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load static results_tags %}
+{% block title %}{{ dataset.original_name }} · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+
+  <div class="card-grid dcs-head">
+    <section class="card">
+      <div class="card-head">
+        <h2>{{ dataset.original_name }}</h2>
+        <a class="button btn-sm" href="{% url 'execution:dcs_raw' dataset.pk %}" title="The imported file, unchanged">Original file</a>
+      </div>
+      <dl class="facts">
+        <dt>Recording started</dt>
+        <dd>{% if dataset.recording_started_at %}{{ dataset.recording_started_at|date:"d-M-Y H:i:s" }}{% else %}<span class="empty">not set</span>{% endif %}
+          <span class="hint">{{ dataset.recording_start_note }}</span>
+          <span class="hint">{% if origin.dataset == dataset %}This recording start is t = 0 of the run.{% elif origin.at %}t = 0 of the run is the earlier recording {{ origin.dataset.original_name }} ({{ origin.at|date:"d-M-Y H:i:s" }}).{% else %}Without a recording start this dataset cannot set t = 0 of the run.{% endif %}</span></dd>
+        <dt>Time range</dt><dd>{{ dataset.time_start_h|floatformat:3 }} – {{ dataset.time_end_h|floatformat:3 }} h ({{ dataset.duration_h|floatformat:2 }} h) · column “{{ time_signal.name }}” [{{ dataset.time_unit|default:"—" }}]</dd>
+        <dt>Samples</dt><dd>{{ dataset.sample_count }} × {{ signals|length }} signals</dd>
+        <dt>Imported</dt><dd>{{ dataset.imported_at|date:"d-M-Y H:i" }} by {{ dataset.imported_by.get_full_name|default:dataset.imported_by.username }}</dd>
+        <dt>File</dt><dd>{{ dataset.size|filesizeformat }} · {{ dataset.encoding }} · SHA-256 <code title="{{ dataset.sha256 }}">{{ dataset.sha256|slice:":12" }}…</code></dd>
+      </dl>
+    </section>
+    <section class="card">
+      <h2>Header and import notes</h2>
+      {% for line in dataset.header_lines %}<pre class="header-line">{{ line }}</pre>{% empty %}<p class="hint">No metadata lines.</p>{% endfor %}
+      {% if dataset.warnings %}
+        <ul class="alert alert-warning plain">{% for warning in dataset.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="hint">Read without warnings.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card dcs-plot">
+    <div class="card-head">
+      <h2>Plot</h2>
+      <span class="hint" id="plot-status">Loading…</span>
+    </div>
+    <div class="signal-bar">
+      <div class="signal-tools">
+        <button type="button" class="btn-sm" data-select="all">All</button>
+        <button type="button" class="btn-sm" data-select="none">None</button>
+        <span class="hint">Tick to show · L / R = left or right axis · drag to zoom, double-click to reset, slider below the plot to move</span>
+      </div>
+      <ul class="signal-list">
+        {% for signal in signals %}
+          <li data-column="{{ signal.column }}">
+            <label><input type="checkbox" class="show"> {{ signal.label }}</label>
+            <span class="axis-toggle" role="group" aria-label="Axis of {{ signal.name }}">
+              <button type="button" data-axis="y" title="Left axis">L</button><button type="button" data-axis="y2" title="Right axis">R</button>
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div id="dcs-plot" class="plot"></div>
+    {% plot_to_result dataset %}
+  </section>
+
+  {{ signals|json_script:"dcs-signals" }}
+  <script>
+    window.TESTLAB_DCS = {
+      dataUrl: "{% url 'execution:dcs_data' dataset.pk %}",
+      storageKey: "testlab.dcs.{{ dataset.pk }}",
+      timeLabel: "Time since recording start [h]"
+    };
+  </script>
+  <script src="{% static 'vendor/plotly/plotly-basic-2.35.2.min.js' %}"></script>
+  <script src="{% static 'testlab/dcs_plot.js' %}"></script>
+{% endblock %}

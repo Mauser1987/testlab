@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Edit reading · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% load execution_tags %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <form method="post" class="card log-entry" novalidate>
+    {% csrf_token %}
+    <div class="card-head">
+      <h2>Edit reading of {{ entry.observed_at|date:"d-M-Y H:i" }}</h2>
+      <span class="hint">Entered by {{ entry.entered_by|initials }} on {{ entry.entered_at|date:"d-M-Y H:i" }}{% if entry.updated_at|date:"U" != entry.entered_at|date:"U" %} · last changed by {{ entry.updated_by|initials }} on {{ entry.updated_at|date:"d-M-Y H:i" }}{% endif %}</span>
+    </div>
+    {% if form.non_field_errors %}<ul class="errorlist nonfield">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    {% include "execution/_entry_fields.html" %}
+    <div class="actions">
+      <button type="submit" class="btn-primary">Save</button>
+      <a class="button btn-ghost" href="{% url 'execution:log' run.pk %}">Cancel</a>
+      <span class="spacer"></span>
+      <a class="button btn-danger" href="{% url 'execution:entry_delete' entry.pk %}">Delete reading</a>
+    </div>
+  </form>
+{% endblock %}

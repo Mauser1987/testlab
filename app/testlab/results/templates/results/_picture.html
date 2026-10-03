@@ -1,0 +1,17 @@
+{% load execution_tags %}{% comment %}One picture. Expects picture, recording_refused.{% endcomment %}
+<figure class="picture">
+  <a href="{% url 'results:image_original' picture.pk %}" target="_blank" rel="noopener" title="Open the original ({{ picture.width }} × {{ picture.height }} px)">
+    <img src="{% url 'results:image_preview' picture.pk %}" alt="{{ picture.caption|default:picture.original_name }}" loading="lazy">
+  </a>
+  <figcaption>
+    {% if picture.caption %}<span class="caption">{{ picture.caption }}</span>{% endif %}
+    <span class="hint">{{ picture.original_name }} · {{ picture.uploaded_by|initials }} {{ picture.uploaded_at|date:"d-M-Y H:i" }}</span>
+    {% if not recording_refused %}
+      <span class="picture-actions">
+        <form method="post" action="{% url 'results:image_move' picture.pk %}">{% csrf_token %}<button type="submit" name="direction" value="up" class="btn-sm btn-ghost" title="Earlier">↑</button><button type="submit" name="direction" value="down" class="btn-sm btn-ghost" title="Later">↓</button></form>
+        <a class="button btn-sm btn-ghost" href="{% url 'results:image_edit' picture.pk %}">Edit</a>
+        <a class="button btn-sm btn-ghost" href="{% url 'results:image_delete' picture.pk %}">Delete</a>
+      </span>
+    {% endif %}
+  </figcaption>
+</figure>

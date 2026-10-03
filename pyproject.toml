@@ -12,6 +12,8 @@ dependencies = [
     # TCN PDF renderer under validation (TESTLAB_TCN_RENDERER=chromium); pinned with its Chromium build
     # (python -m playwright install chromium): the PDF layout must not shift unnoticed.
     "playwright==1.49.1",
+    # Result pictures: validation, size and display copies (the originals are stored unchanged).
+    "pillow>=10",
 ]
 
 [project.optional-dependencies]

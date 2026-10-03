@@ -301,6 +301,12 @@ def delete_draft(tcn, expected_row_version, user):
             names = ", ".join(str(d) for d in derived)
             verb = "was" if len(derived) == 1 else "were"
             raise TcnRuleError(f"{tcn} cannot be deleted: {names} {verb} copied from it.")
+        run = tcn.test_run
+        if tcn.revision == 0 and (run.manual_log_entries.exists() or run.dcs_datasets.exists()):
+            # Deleting rev 0 deletes the run; test evidence is never removed as a side effect.
+            raise TcnRuleError(f"{tcn} cannot be deleted: Run {run.display_no} has manual log readings or DCS data.")
+        if tcn.revision == 0 and hasattr(run, "result"):
+            raise TcnRuleError(f"{tcn} cannot be deleted: Run {run.display_no} has a Test Result.")
         try:
             tcn.delete()  # the model removes its setup and, for rev 0, the TestRun
         except ProtectedError as error:  # a copy made concurrently

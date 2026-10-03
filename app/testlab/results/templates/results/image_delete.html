@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Delete picture · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <form method="post" class="card">
+    {% csrf_token %}
+    <h2>Delete picture?</h2>
+    <p><img class="confirm-thumb" src="{% url 'results:image_preview' image.pk %}" alt=""></p>
+    <p>{{ image.original_name }} — {{ image.get_category_display }}{% if image.component %}, {{ image.component.label }}{% endif %}. The original file is removed from the Result (draft).</p>
+    <div class="actions">
+      <button type="submit" class="btn-danger-solid">Delete</button>
+      <a class="button" href="{% url 'results:result' run.pk %}#pictures">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

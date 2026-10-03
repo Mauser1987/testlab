@@ -314,3 +314,25 @@ def test_defaults_are_per_project(logged_in, user, project):
     logged_in.post(url(project), post_data(project.default_setup, speed="2980"))
     other.default_setup.refresh_from_db()
     assert other.default_setup.speed == ""
+
+
+@pytest.mark.parametrize(("arrangement", "panel"), [("dual_pressurized", "Barrier"), ("dual_unpressurized", "Buffer")])
+def test_diff_seal_pressure_checkbox_for_dual_seals(logged_in, project, arrangement, panel):
+    setup = project.default_setup
+    logged_in.post(url(project), post_data(setup, arrangement=arrangement, monitored_parameters=["seal_support_diff_pressure"]))
+    setup.refresh_from_db()
+    assert setup.monitored_parameters == ["seal_support_diff_pressure"]
+    content = logged_in.get(url(project)).content.decode()
+    legend = content.index(f"<legend>{panel}</legend>", content.index("Parameters to log"))
+    box = content.index('value="seal_support_diff_pressure" checked')
+    assert legend < box < content.index("</fieldset>", legend)
+    assert "Diff. seal pressure [bar]" in content
+
+
+def test_diff_seal_pressure_dropped_for_single(logged_in, project):
+    setup = project.default_setup
+    setup.monitored_parameters = ["seal_support_diff_pressure"]
+    setup.save()
+    logged_in.post(url(project), post_data(setup, arrangement="single", monitored_parameters=["seal_support_diff_pressure"]))
+    setup.refresh_from_db()
+    assert setup.arrangement == "single" and setup.monitored_parameters == []

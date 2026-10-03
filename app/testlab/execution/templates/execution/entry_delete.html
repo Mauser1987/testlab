@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Delete reading · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <h2>Delete the reading of {{ entry.observed_at|date:"d-M-Y H:i" }}?</h2>
+  <p class="notice">The reading and its values are removed. Leakage rates of the next reading are then calculated
+    from the reading before this one. This cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="actions">
+      <button type="submit" class="btn-danger-solid">Delete reading</button>
+      <a class="button btn-ghost" href="{% url 'execution:entry_edit' entry.pk %}">Back</a>
+    </div>
+  </form>
+{% endblock %}

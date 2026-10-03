@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Picture · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card picture-edit">
+    <img src="{% url 'results:image_preview' image.pk %}" alt="{{ image.caption|default:image.original_name }}">
+    <form method="post" class="fields" novalidate>
+      {% csrf_token %}
+      <h2>{{ image.original_name }}</h2>
+      <p class="hint">{{ image.width }} × {{ image.height }} px · {{ image.image_format }} · {{ image.size|filesizeformat }} · SHA-256 {{ image.sha256|truncatechars:17 }}</p>
+      {% for field in form %}
+        <div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+      {% endfor %}
+      <div class="actions">
+        {% if not recording_refused %}<button type="submit" class="btn-primary">Save</button>{% endif %}
+        <a class="button" href="{% url 'results:result' run.pk %}#pictures">Cancel</a>
+        <a class="button btn-ghost" href="{% url 'results:image_original' image.pk %}?download=1">Download original</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

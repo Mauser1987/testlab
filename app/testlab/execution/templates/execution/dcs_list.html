@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}DCS data · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+
+  {% if datasets %}
+    <div class="table-card table-scroll">
+      <table class="list register">
+        <thead><tr>
+          <th class="text wide">Source file</th><th>Recording started</th><th class="number">Duration [h]</th>
+          <th class="number">Samples</th><th class="number">Signals</th><th>Imported</th><th>By</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for dataset in datasets %}
+            <tr>
+              <td class="text wide id"><a href="{% url 'execution:dcs_detail' dataset.pk %}">{{ dataset.original_name }}</a></td>
+              <td>{% if dataset.recording_started_at %}{{ dataset.recording_started_at|date:"d-M-Y H:i:s" }}{% else %}<span class="empty" title="{{ dataset.recording_start_note }}">not set</span>{% endif %}</td>
+              <td class="number">{{ dataset.duration_h|floatformat:2 }}</td>
+              <td class="number">{{ dataset.sample_count }}</td>
+              <td class="number">{{ dataset.value_signals|length }}</td>
+              <td>{{ dataset.imported_at|date:"d-M-Y H:i" }}</td>
+              <td>{{ dataset.imported_by.get_full_name|default:dataset.imported_by.username }}</td>
+              <td class="row-actions"><a class="button btn-sm" href="{% url 'execution:dcs_detail' dataset.pk %}">Plot</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="alert">No DCS data imported for this run yet.</p>
+  {% endif %}
+
+  {% if recording_refused %}
+  <p class="alert alert-warning">{{ recording_refused }}</p>
+  {% else %}
+  <form method="post" enctype="multipart/form-data" class="card fields upload">
+    {% csrf_token %}
+    <h2>Import LabVIEW / DCS export</h2>
+    <div class="field">
+      {{ form.file.label_tag }}{{ form.file }}
+      <small>{{ form.file.help_text }} Tab, semicolon or comma separated text, recognised by its content.</small>
+      {{ form.file.errors }}
+    </div>
+    <div class="actions"><button type="submit" class="btn-primary">Import</button></div>
+  </form>
+  {% endif %}
+{% endblock %}

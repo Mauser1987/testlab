@@ -38,6 +38,7 @@
       <a class="button" href="{% url 'tcn:edit' pending_draft.pk %}">Open draft {{ pending_draft }}</a>
     {% endif %}
     <a class="button" href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}">Copy to new TCN</a>
+    <a class="button" href="{% url 'execution:log' tcn.test_run_id %}">Manual log &amp; DCS data</a>
     <span class="spacer"></span>
     {% if can_cancel %}<a class="button btn-danger" href="{% url 'tcn:cancel' tcn.pk %}">Cancel TCN</a>{% endif %}
   </div>

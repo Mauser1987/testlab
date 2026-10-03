@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Remove plot · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <form method="post" class="card">
+    {% csrf_token %}
+    <h2>Remove plot from the Result?</h2>
+    <p><img class="confirm-thumb" src="{% url 'results:plot_image' plot.pk %}" alt=""></p>
+    <p>{{ plot.caption|default:"Plot without caption" }} — from {{ plot.dataset.original_name }}. The plot definition and its image are removed from the Result (draft); the DCS dataset is not changed.</p>
+    <div class="actions">
+      <button type="submit" class="btn-danger-solid">Remove</button>
+      <a class="button" href="{% url 'results:result' run.pk %}#plots">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

@@ -17,7 +17,6 @@ from . import conditions
 from .arrangements import (
     ALL_MONITORED_PARAMETERS,
     PROCESS_PARAMETERS,
-    SEAL_SUPPORT_PARAMETERS,
     Arrangement,
     SealRole,
     applicable_monitored_parameters,
@@ -27,6 +26,7 @@ from .arrangements import (
     plug_seal_required,
     role_parameters,
     seal_support_label,
+    seal_support_parameters,
     seal_under_test_roles,
 )
 from .models import RunSetup, SealPosition
@@ -150,7 +150,7 @@ class RunSetupEditor:
     def parameter_groups(self):
         checked = set(self.form["monitored_parameters"].value() or [])
         groups = [("Process", PROCESS_PARAMETERS)] if self.plug_seal_present else []
-        groups.append((self.seal_support_label, SEAL_SUPPORT_PARAMETERS))
+        groups.append((self.seal_support_label, seal_support_parameters(self.arrangement)))
         groups += [(SealRole(role).label, role_parameters(role)) for role in SealRole if role in self.roles]
         return [
             (title, [(code, parameter_label(code), code in checked) for code in codes]) for title, codes in groups

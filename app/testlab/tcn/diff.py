@@ -16,7 +16,6 @@ from testlab.projects import conditions
 from testlab.projects.arrangements import (
     PROCESS_PARAMETERS,
     ROLE_SHORT_LABELS,
-    SEAL_SUPPORT_PARAMETERS,
     SealRole,
     parameter_label,
     role_parameters,
@@ -93,7 +92,7 @@ def _parameter_name(code, support_label):
     """Parameter with its group, e.g. "IB Leakage [ml]", "Barrier Pressure [barg]"."""
     if code in PROCESS_PARAMETERS:
         group = "Process"
-    elif code in SEAL_SUPPORT_PARAMETERS:
+    elif code.startswith("seal_support_"):
         group = support_label
     else:
         group = next(ROLE_SHORT_LABELS[role] for role in SealRole if code in role_parameters(role))

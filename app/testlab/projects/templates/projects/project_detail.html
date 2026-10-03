@@ -66,6 +66,8 @@
               <td>{% if setup.speed %}{{ setup.speed }} rpm{% endif %}</td>
               <td>{% if setup.seal_support_pressure %}{{ row.seal_support_label }}: {{ setup.seal_support_pressure }} barg{% endif %}</td>
               <td class="row-actions">
+                <a class="button btn-sm" href="{% url 'execution:log' tcn.test_run_id %}" title="Manual log and DCS data of Run {{ tcn.test_run.display_no }}">Log</a>
+                <a class="button btn-sm" href="{% url 'results:result' tcn.test_run_id %}" title="Result of Run {{ tcn.test_run.display_no }}">Result</a>
                 <a class="button btn-sm" href="{% url 'tcn:create' project.pk %}?source={{ tcn.pk }}" title="Copy to new TCN">Copy</a>
                 {% if tcn.issued_document %}<a class="button btn-sm" href="{% url 'tcn:document' tcn.pk %}" title="Download PDF">PDF</a>{% endif %}
               </td>

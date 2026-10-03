@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "testlab.accounts",
     "testlab.projects",
     "testlab.tcn",
+    "testlab.execution",
+    "testlab.results",
 ]
 
 MIDDLEWARE = [
@@ -156,6 +158,22 @@ if TESTLAB_PDF_CONVERTER not in ("libreoffice", "word", "auto"):
     raise ImproperlyConfigured("TESTLAB_PDF_CONVERTER must be libreoffice, word or auto.")
 TESTLAB_SOFFICE = os.environ.get("TESTLAB_SOFFICE", "")
 TESTLAB_PDF_TIMEOUT = int(os.environ.get("TESTLAB_PDF_TIMEOUT", "120"))
+
+# LabVIEW/DCS exports (execution/datasets.py): largest accepted upload. Files are
+# read into memory once on import; the stored raw file is never changed.
+TESTLAB_DCS_MAX_UPLOAD_MB = int(os.environ.get("TESTLAB_DCS_MAX_UPLOAD_MB", "200"))
+
+# Result pictures (results/images.py): largest accepted picture. The original is
+# stored unchanged; a display copy is derived from it.
+TESTLAB_RESULT_IMAGE_MAX_MB = int(os.environ.get("TESTLAB_RESULT_IMAGE_MAX_MB", "40"))
+
+# INTENTIONAL TEMPORARY POLICY (development and validation phase, decided
+# 2026-10-03): manual log readings, DCS/LabVIEW imports and the Test Result
+# (M2B) are allowed while the run's TCN is still a Draft. This is not missing validation.
+# TODO(production): enforce "Issued TCN → execution permitted" by setting this
+# to 1. The rule is a lifecycle/authorization check (execution/views.py,
+# recording_refusal); ManualLogEntry, DcsDataset, TestResult and TestRun need no change.
+TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN = env_bool("TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN", False)
 
 # Usual project-number format. A mismatch only gives a warning (M1 spec V1).
 TESTLAB_PROJECT_NO_PATTERN = os.environ.get("TESTLAB_PROJECT_NO_PATTERN", r"^\d{4}RSD\d{2}TL$")

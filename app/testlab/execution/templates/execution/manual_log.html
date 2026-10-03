@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% load execution_tags %}
+{% block title %}Manual log · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+
+  {% if recording_refused %}
+  <p class="alert alert-warning" id="add">{{ recording_refused }}</p>
+  {% else %}
+  <form method="post" class="card log-entry" id="add" novalidate>
+    {% csrf_token %}
+    <div class="card-head">
+      <h2>Add reading</h2>
+      <span class="hint">Entered as {{ user|initials }} · Tab moves to the next field, Enter adds the reading · grey numbers are the previous reading</span>
+    </div>
+    {% if form.non_field_errors %}<ul class="errorlist nonfield">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    {% include "execution/_entry_fields.html" %}
+    <div class="actions">
+      <button type="submit" class="btn-primary">Add reading</button>
+      <span class="hint">Elapsed time and leakage rates are calculated.</span>
+    </div>
+  </form>
+  {% endif %}
+
+  <div class="card-head log-head">
+    <h2>Readings</h2>
+    <span class="hint">{{ rows|length }} reading{{ rows|length|pluralize }}, newest first · <span class="calc-key">calculated</span></span>
+  </div>
+  <p class="origin">
+    {% if origin.provisional %}
+      <span class="status status-draft">provisional</span> Elapsed hours count from the first reading until LabVIEW data with a known recording start is imported; t = 0 is then the start of the recording.
+    {% else %}
+      t = 0: start of the LabVIEW recording, {{ origin.at|date:"d-M-Y H:i:s" }}
+      (<a href="{% url 'execution:dcs_detail' origin.dataset.pk %}">{{ origin.dataset.original_name }}</a>). Readings before it have negative elapsed hours.
+    {% endif %}
+  </p>
+  {% if rows %}
+    <div class="table-card table-scroll">
+      <table class="list log">
+        <thead>
+          <tr class="groups">
+            <th colspan="3"></th>
+            {% for name, group, span in table_groups %}<th colspan="{{ span }}" class="group">{{ name }}</th>{% endfor %}
+            <th colspan="2"></th>
+          </tr>
+          <tr>
+            <th class="sticky">Date / time</th><th class="calc number" title="Clock time since t = 0{% if origin.provisional %} (provisional: since the first reading){% endif %}">Elapsed [h]{% if origin.provisional %}<span class="entered-mark">†</span>{% endif %}</th><th>By</th>
+            {% for name, group, span in table_groups %}
+              {% for column in group %}
+                {% if column.is_leakage %}
+                  <th class="number group-start" title="{{ column.full_label }} collected">{{ column.label }} [{{ column.unit }}]</th>
+                  <th class="calc number" title="Collection period">Over [h]</th>
+                  <th class="calc number" title="Leakage rate = collected volume / collection period">Rate [ml/h]</th>
+                {% else %}
+                  <th class="number{% if forloop.first %} group-start{% endif %}" title="{{ column.full_label }}{% if column.description %}: {{ column.description }}{% endif %}{% if column.code in instructed %} — to be logged per TCN{% endif %}">{{ column.label }} [{{ column.unit }}]{% if column.code in instructed %}<span class="instructed" aria-label="to be logged per TCN">•</span>{% endif %}</th>
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            <th class="note">Note / event</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="sticky">{{ row.entry.observed_at|date:"d-M-Y H:i" }}</td>
+              <td class="calc number">{{ row.elapsed_h|floatformat:2 }}</td>
+              <td title="{{ row.entry.entered_by.get_full_name|default:row.entry.entered_by.username }}">{{ row.entry.entered_by|initials }}</td>
+              {% for name, group, span in table_groups %}
+                {% for column in group %}
+                  {% with value=row.values|get:column.code %}
+                    {% if column.is_leakage %}
+                      {% with leak=row.leakage|get:column.code %}
+                        <td class="number group-start">{{ value.value|reading }}</td>
+                        <td class="calc number"{% if leak.period_source %} title="{{ leak.period_source }}"{% endif %}>{% if leak.hours is not None %}{{ leak.hours|floatformat:2 }}{% if leak.period_source == "entered" %}<span class="entered-mark" title="entered">*</span>{% endif %}{% endif %}</td>
+                        <td class="calc number"{% if leak.note %} title="{{ leak.note }}"{% endif %}>{% if leak.rate is not None %}{{ leak.rate|floatformat:1 }}{% elif leak.note and leak.volume is not None %}<span class="empty">n/a</span>{% endif %}</td>
+                      {% endwith %}
+                    {% else %}
+                      <td class="number{% if forloop.first %} group-start{% endif %}">{{ value.value|reading }}</td>
+                    {% endif %}
+                  {% endwith %}
+                {% endfor %}
+              {% endfor %}
+              <td class="note">{% if row.entry.category %}<span class="event-tag">{{ row.entry.get_category_display }}</span> {% endif %}{{ row.entry.note|linebreaksbr }}</td>
+              <td class="row-actions"><a class="button btn-sm" href="{% url 'execution:entry_edit' row.entry.pk %}">Edit</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">Elapsed: clock time since t = 0 (stops and static periods included).
+      Leakage as logged, collected since the previous reading (clock time) unless a collection period was entered (<span class="entered-mark">*</span>).
+      • = to be logged per the TCN “Parameters to log”.</p>
+  {% else %}
+    <p class="alert">No readings yet.</p>
+  {% endif %}
+{% endblock %}

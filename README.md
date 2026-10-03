@@ -23,6 +23,8 @@ M1 is implemented commit by commit following §14 of the M1 specification.
 | 10 | Revisions, cancel, delete draft (new revision from S9, cancel with reason S10, delete draft with confirmation) | done |
 | 10a | Stabilization (spec §17): controlled TCN document is a PDF; registration with corporate email domain and administrator approval | done |
 | 11–13 | Test Data Sheet, PostgreSQL, acceptance | not started |
+| M2A | Test execution evidence: manual log and LabVIEW/DCS datasets per Test Run (under review) | in progress |
+| M2B | Test Result: inspection measurements and pictures per seal component, acceptance, conclusion (under review) | in progress |
 
 What works today:
 
@@ -85,6 +87,45 @@ What works today:
   name, corporate email address and password; only the domains in
   `TESTLAB_ALLOWED_EMAIL_DOMAINS` may register. New accounts wait for an
   administrator to approve them (below). Users log in with their email address.
+
+- **Manual log (M2A)** — "Log" on a register row opens the run's test
+  execution pages. A reading has a date/time, the measurements of the run's
+  configuration (speed, torque, Process with the Plug Seal, Barrier/Buffer/
+  Flush, face temperature and collected leakage per seal; for dual seals the
+  diff. seal pressure — pumping device head, bar — only when the TCN ticks it
+  in "Parameters to log") and a note; the
+  person is the logged-in user (shown by initials). Elapsed hours (clock
+  time since t = 0, the start of the run's LabVIEW recording; provisional
+  from the first reading until that is imported) and leakage rates
+  (collected volume as logged / clock time since the previous reading, or
+  an entered collection period) are calculated, never typed.
+- **DCS data (M2A)** — a LabVIEW/DCS text export (any file name, no
+  extension needed) is stored unchanged with its SHA-256; signals, units,
+  time range and recording start are read from its content. The plot
+  (Plotly, served locally) shows selectable signals on left/right axes
+  with zoom, range slider and unified hover.
+- **Events (M2B)** — a manual log entry may carry an event type (start /
+  restart, stop, adjustment, leakage collection, abnormal observation,
+  inspection, other) besides its note: the log is the run's event timeline.
+- **Result (M2B)** — the run's Result tab (also *Result* beside *Log* on the
+  project page): one page with Summary, Plots, Measurements, Pictures,
+  Acceptance and Conclusion. The Summary is derived, never typed: a compact
+  run summary (t = 0, end, logged period, log entries, DCS datasets), leakage per seal (total collected, collection
+  period, average = total volume / total period — not a mean of interval
+  rates), face wear and wear rate, logged min–max beside the TCN value, and
+  the events. Measurements are Pre and Post per component (IB/OB/Test/Plug
+  stator and rotor, sleeve) and quantity (face waviness, taper, length,
+  roughness Ra); Δ = Post − Pre and wear = Pre − Post face length are
+  calculated. Plots come from the DCS viewer (*Add plot to Result*): the
+  Result keeps the plot definition — source dataset, signals and their axis,
+  time window, axis ranges, caption — and a report image drawn from it;
+  *Open in DCS viewer* redraws it from the dataset to adjust and update it.
+  Pictures keep the original file unchanged, show pre-test and
+  post-test of a component side by side, and have a large compare view.
+  Acceptance criteria hold requirement, actual, assessment (Pass, Fail, Not
+  evaluated, Not applicable) and remark; Pass/Fail is only calculated for a
+  numeric limit on a calculated leakage or wear rate. Observations,
+  conclusion and recommendation are written by the engineer.
 
 Out of M1: legacy Excel import, Test Programs, Results, Summaries, Final
 Reports, DCS/LabVIEW data.
@@ -311,7 +352,7 @@ app/
 ├── tests/                      cross-cutting tests (login required); fixtures/ (AT-2 expected text)
 └── testlab/
     ├── templates/              base layout, login
-    ├── static/testlab/         CSS
+    ├── static/testlab/         CSS, dcs_plot.js; static/vendor/plotly/ (local Plotly, no CDN)
     ├── accounts/               registration, email login backend, user admin with approval
     ├── projects/
     │   ├── models.py           Project, RunSetup, SealPosition
@@ -331,6 +372,21 @@ app/
     │   ├── forms.py, views.py, urls.py, templates/tcn/
     │   ├── migrations/
     │   └── tests/
+    ├── execution/              M2A test execution evidence of a TestRun
+    │   ├── models.py           ManualLogEntry/ManualMeasurement, DcsDataset (raw file + parsed metadata)
+    │   ├── measurements.py     what can be read out per configuration (codes shared with "Parameters to log")
+    │   ├── manual_log.py       elapsed hours, leakage rates, saving entries
+    │   ├── labview.py          LabVIEW/DCS export parser (content-based)
+    │   ├── datasets.py         import/storage, column cache, min/max decimation for plots
+    │   └── views.py, urls.py, templates/execution/, tests/
+    ├── results/                M2B Test Result of a TestRun
+    │   ├── models.py           TestResult, ResultComponent, InspectionMeasurement, ResultImage, ResultPlot, AcceptanceItem
+    │   ├── inspection.py       component identities and measurement quantities; Δ and wear
+    │   ├── evidence.py         derived leakage, logged period, wear rate, logged ranges, events
+    │   ├── acceptance.py       actuals and Pass/Fail where unambiguous
+    │   ├── images.py           picture storage: original unchanged + display copy
+    │   ├── plots.py            DCS plots: definition checked against the dataset + report image
+    │   └── services.py, forms.py, views.py, urls.py, templates/results/, tests/
     └── documents/
         ├── tcn_context.py      TCN render context: labels, units, NA rule, column sets
         ├── render.py           tcn_template(): HTML template bundle → PDF (WeasyPrint); DOCX renderer (transitional)
@@ -367,9 +423,21 @@ reference/                      historical source documents (read-only)
 | `TESTLAB_SOFFICE` | found on PATH / usual install dirs | DOCX renderer only: path of LibreOffice `soffice` (`soffice.com` on Windows) |
 | `TESTLAB_PDF_TIMEOUT` | `120` | DOCX renderer only: seconds allowed per PDF conversion |
 | `TESTLAB_ALLOWED_EMAIL_DOMAINS` | *(empty: registration closed)* | Comma-separated email domains that may register, e.g. `example.com` |
+| `TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN` | `0` | `1`: manual log readings, DCS imports and Result changes only once the run's TCN is issued (production, see *Temporary policy* below); `0` also allows drafts |
+| `TESTLAB_DCS_MAX_UPLOAD_MB` | `200` | Largest LabVIEW/DCS export accepted for import |
+| `TESTLAB_RESULT_IMAGE_MAX_MB` | `40` | Largest Result picture accepted |
 | `TESTLAB_STATIC_ROOT` | `<repo>/staticfiles` | Target of `collectstatic` |
 | `TESTLAB_HOST`, `TESTLAB_PORT` | `127.0.0.1`, `8000` | Run scripts only: address and port of the development server (`--lan` = all interfaces) |
 | `TESTLAB_PYTHON` | `py -3.12` / `python3.12` … | Setup scripts only: Python interpreter that creates `.venv` |
+
+**Temporary policy — execution data for Draft TCNs.** During the current
+development and validation phase, manual log readings, DCS/LabVIEW imports
+and the Test Result are intentionally allowed while the run's TCN is still a Draft; this is not
+missing validation. TODO for controlled production use: set
+`TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN=1` (Issued TCN → execution permitted).
+The rule is a lifecycle/authorization check in
+`app/testlab/execution/views.py` (`recording_refusal`); the ManualLogEntry,
+DcsDataset, TestResult and TestRun models need no change.
 
 Production runs one central Django application with **PostgreSQL**
 (`pip install -e ".[postgres]"`), set up separately from the development

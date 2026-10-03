@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load results_tags %}
+{% block title %}{{ component.label }} Pre ↔ Post · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card-head">
+    <h2>{{ component.label }} — pre-test ↔ post-test</h2>
+    <a class="button btn-sm" href="{% url 'results:result' run.pk %}#pictures">Back to Result</a>
+  </div>
+  {% if measurements %}
+    <p class="compare-values">
+      {% for m in measurements %}<span>{{ m.definition.label }}: {{ m.pre_value|number|default:"—" }} → {{ m.post_value|number|default:"—" }} {{ m.unit }}{% if m.delta is not None %} <span class="calc-key">Δ {{ m.delta|signed }}</span>{% endif %}</span>{% endfor %}
+    </p>
+  {% endif %}
+  <div class="pre-post large">
+    <div class="stage"><div class="stage-label">Pre-test</div>
+      {% for picture in pre %}
+        <figure class="picture"><a href="{% url 'results:image_original' picture.pk %}" target="_blank" rel="noopener"><img src="{% url 'results:image_preview' picture.pk %}" alt="{{ picture.caption|default:picture.original_name }}"></a>
+          <figcaption>{{ picture.caption }} <span class="hint">{{ picture.original_name }}</span></figcaption></figure>
+      {% empty %}<p class="empty">— none</p>{% endfor %}
+    </div>
+    <div class="stage"><div class="stage-label">Post-test</div>
+      {% for picture in post %}
+        <figure class="picture"><a href="{% url 'results:image_original' picture.pk %}" target="_blank" rel="noopener"><img src="{% url 'results:image_preview' picture.pk %}" alt="{{ picture.caption|default:picture.original_name }}"></a>
+          <figcaption>{{ picture.caption }} <span class="hint">{{ picture.original_name }}</span></figcaption></figure>
+      {% empty %}<p class="empty">— none</p>{% endfor %}
+    </div>
+  </div>
+{% endblock %}

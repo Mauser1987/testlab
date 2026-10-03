@@ -7,6 +7,7 @@ from testlab.projects.arrangements import (
     applicable_monitored_parameters,
     applicable_roles,
     canonical_order,
+    parameter_label,
     plug_seal_required,
     seal_support_label,
     seal_under_test_roles,
@@ -65,6 +66,7 @@ def test_monitored_parameters_dual_with_plug_in_canonical_order():
     assert applicable_monitored_parameters(DP, True) == [
         "process_pressure", "process_inlet_temp", "process_outlet_temp", "process_flow",
         "seal_support_pressure", "seal_support_inlet_temp", "seal_support_outlet_temp", "seal_support_flow",
+        "seal_support_diff_pressure",
         "plug_face_temp", "plug_leakage",
         "inboard_face_temp", "inboard_leakage",
         "outboard_face_temp", "outboard_leakage",
@@ -101,3 +103,20 @@ def test_canonical_order():
         "inboard_face_temp",
         "outboard_leakage",
     ]
+
+
+@pytest.mark.parametrize("arrangement, plug", [(DP, False), (DP, True), (DU, False), (DU, True)])
+def test_diff_seal_pressure_can_be_logged_for_dual_seals(arrangement, plug):
+    """Head of the pumping device of a dual seal; a seal-support parameter."""
+    codes = applicable_monitored_parameters(arrangement, plug)
+    assert codes[codes.index("seal_support_flow") + 1] == "seal_support_diff_pressure"
+
+
+@pytest.mark.parametrize("plug", [True])
+def test_no_diff_seal_pressure_for_single(plug):
+    assert "seal_support_diff_pressure" not in applicable_monitored_parameters(S, plug)
+
+
+def test_diff_seal_pressure_label_in_bar():
+    assert parameter_label("seal_support_diff_pressure") == "Diff. seal pressure [bar]"
+    assert parameter_label("seal_support_pressure") == "Pressure [barg]"
