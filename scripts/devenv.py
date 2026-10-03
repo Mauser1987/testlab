@@ -45,7 +45,7 @@ DEFAULT_PORT = 8000
 DEV_RENDERER = "chromium"
 
 # Imported by `run` to tell an incomplete virtualenv from a working one.
-REQUIRED_MODULES = ("django", "dj_database_url", "docxtpl", "playwright")
+REQUIRED_MODULES = ("django", "dj_database_url", "docxtpl", "playwright", "PIL")  # PIL: Pillow
 
 SETUP_COMMAND = r"scripts\setup.bat" if IS_WINDOWS else "./scripts/setup.sh"
 RUN_COMMAND = r"scripts\run_app.bat" if IS_WINDOWS else "./scripts/run_app.sh"
