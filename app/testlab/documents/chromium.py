@@ -17,6 +17,7 @@ import base64
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from django.conf import settings
@@ -55,12 +56,13 @@ def print_pdf(files, document, header, footer, base_url):
         "timeout_ms": timeout * 1000,
     }
     try:
-        result = subprocess.run(
-            [sys.executable, str(WORKER)],
-            input=json.dumps(job).encode("utf-8"),
-            capture_output=True,
-            timeout=timeout,
-        )
+        # The job is handed over as a file, not through a pipe: on Windows, writing a pipe the worker does
+        # not read blocks without regard to the timeout, so a worker stuck before reading would never be ended.
+        with tempfile.TemporaryFile() as job_file:
+            job_file.write(json.dumps(job).encode("utf-8"))
+            job_file.seek(0)
+            result = subprocess.run([sys.executable, str(WORKER)], stdin=job_file, capture_output=True,
+                                    timeout=timeout)  # fmt: skip
     except subprocess.TimeoutExpired as error:
         raise PdfConversionError(
             f"Chromium did not finish the PDF within {timeout} seconds (TESTLAB_PDF_TIMEOUT)."

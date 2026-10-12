@@ -1,0 +1,7 @@
+/* Final Report: additions to the Test Run Report styles (report.css). */
+
+/* Each run and the closing conclusion start on a new page. */
+div.run, section.closing { break-before: page; }
+
+table.grid.summary { font-size: 8pt; }
+table.grid.summary td, table.grid.summary tbody th { padding: 2pt 3pt; }

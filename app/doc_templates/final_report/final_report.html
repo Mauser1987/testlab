@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final Report {{ report_no }}</title>
+<meta name="author" content="TestLab">
+<style>
+  {# Same declarations (same data) as header.html and footer.html; see report.css. #}
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  @font-face { font-family: "Carlito"; font-weight: bold; src: url({% bundle_data_uri "fonts/Carlito-Bold.ttf" %}); }
+</style>
+{# report.css: the Test Run Report styles; the run sections are rendered by its template. #}
+<link rel="stylesheet" href="report.css">
+<link rel="stylesheet" href="final_report.css">
+</head>
+<body class="draft">
+<div class="watermark" aria-hidden="true">DRAFT</div>
+<main>
+  <section class="identification">
+    <h1>Final Test Report</h1>
+    <p class="report-title">{{ project.description }}</p>
+    <table class="facts">
+      <colgroup><col class="label"><col class="value"><col class="label"><col class="value"></colgroup>
+      <tr><th>Report No.</th><td>{{ report_no }}</td><th>Customer</th><td>{{ project.customer|default:"—" }}</td></tr>
+      <tr><th>Project No.</th><td>{{ project.project_no }}</td><th>Report status</th><td><strong>DRAFT</strong> <span class="note">not an issued document</span></td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>1. Introduction</h2>
+    {% for paragraph in texts.introduction %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% empty %}<p class="note">Not written yet.</p>{% endfor %}
+  </section>
+
+  <section>
+    <h2>2. Executive Summary</h2>
+    {% for paragraph in texts.executive_summary %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% empty %}<p class="note">Not written yet.</p>{% endfor %}
+    <table class="grid summary">
+      <thead><tr><th>Section</th><th>Run / TCN</th><th>Dates</th><th class="num">Running [h]</th><th class="num">Speed [rpm]</th><th>Medium</th><th>Pressure</th><th>Average dynamic leakage [ml/h]</th><th>Face wear</th><th>Acceptance</th></tr></thead>
+      <tbody>
+        {% for row in summary %}
+          <tr>
+            <td>{{ row.section }}</td>
+            <th>Run {{ row.run_no }} · {{ row.tcn_no }}</th>
+            <td>{{ row.dates }}</td>
+            <td class="num">{{ row.running_hours }}</td>
+            <td class="num">{{ row.speed }}</td>
+            <td>{% for line in row.media %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+            <td>{% for line in row.pressures %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+            <td>{% for line in row.leakage %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+            <td>{% for line in row.wear %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+            <td>{% for line in row.acceptance %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">Generated from the final Result of each run. Speed and pressure: lowest – highest actual reading, else the TCN instruction. Acceptance: number of assessments on record per outcome; see the run's section.</p>
+  </section>
+
+  <section>
+    <h2>3. Field Conditions</h2>
+    {% for paragraph in texts.field_conditions %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% empty %}<p class="note">Not written yet.</p>{% endfor %}
+  </section>
+
+  <section>
+    <h2>4. Test Conditions</h2>
+    {% for paragraph in texts.test_conditions %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% empty %}<p class="note">Not written yet.</p>{% endfor %}
+  </section>
+
+  <section>
+    <h2>{{ results_section }}. Test Results</h2>
+    <p class="note">One section per run, as in the run's Customer Test Run Report: {% for run in runs %}{{ run.summary.section }} Run {{ run.summary.run_no }} (Result revision {{ run.revision }}{% if run.document %}, {{ run.document }}{% endif %}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>
+  </section>
+
+  {# The run sections: rendered by the Test Run Report template from the frozen records (reports/assembly.py). #}
+  {% for run in runs %}
+  <div class="run">
+    {{ run.html|safe }}
+  </div>
+  {% endfor %}
+
+  <section class="closing">
+    <h2>{{ results_section|add:1 }}. Conclusion</h2>
+    {% for paragraph in texts.conclusion %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% empty %}<p class="note">Not written yet.</p>{% endfor %}
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{# Chromium header template: repeated on every page, in the top page margin (report.css @page). #}
+{# Self-contained: it cannot load files, so font and logo are inlined from the bundle. #}
+{# Class names title, date, url, pageNumber, totalPages are filled in by Chromium: not used for own content. #}
+<style>
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  @font-face { font-family: "Carlito"; font-weight: bold; src: url({% bundle_data_uri "fonts/Carlito-Bold.ttf" %}); }
+  .report-header { width: 100%; box-sizing: border-box; padding: 9mm 18mm 0; font-family: "Carlito"; font-size: 9pt;
+                   font-variant-ligatures: none; line-height: 1.2; color: #000; -webkit-print-color-adjust: exact; }
+  .report-header table { width: 100%; table-layout: fixed; border-collapse: collapse; border-bottom: 0.75pt solid #808080; }
+  .report-header td { padding: 0 0 3pt; vertical-align: middle; }
+  .report-header img { width: 26mm; height: 9.9mm; display: block; }
+  .report-header .doc-title { text-align: center; font-size: 14pt; font-weight: bold; }
+  .report-header .numbers { text-align: right; }
+  .report-header .draft { margin: 0; padding-top: 3pt; text-align: center; font-weight: bold; font-size: 10pt;
+                          letter-spacing: 0.06em; color: #c00000; }
+</style>
+<header class="report-header">
+  <table>
+    <tr>
+      <td class="logo"><img src="{% bundle_data_uri "logo.jpg" %}" alt="Flowserve"></td>
+      <td class="doc-title">Final Test Report</td>
+      <td class="numbers">Report No.: {{ report_no }}<br>Project No.: {{ project.project_no }}</td>
+    </tr>
+  </table>
+  <p class="draft">DRAFT — not an issued document</p>
+</header>

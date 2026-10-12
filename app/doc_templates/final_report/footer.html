@@ -1,0 +1,20 @@
+{# Chromium footer template: repeated on every page, in the bottom page margin (report.css @page). #}
+{# pageNumber / totalPages are filled in by Chromium. #}
+<style>
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  .report-footer { width: 100%; box-sizing: border-box; padding: 0 18mm 8mm; font-family: "Carlito"; font-size: 8.5pt;
+                   font-variant-ligatures: none; line-height: 1.2; color: #000; -webkit-print-color-adjust: exact; }
+  .report-footer table { width: 100%; table-layout: fixed; border-collapse: collapse; border-top: 0.75pt solid #808080; }
+  .report-footer td { padding: 3pt 0 0; vertical-align: top; }
+  .report-footer .page-number { text-align: center; }
+  .report-footer .generated { text-align: right; }
+</style>
+<footer class="report-footer">
+  <table>
+    <tr>
+      <td class="status">{{ report_no }} · DRAFT</td>
+      <td class="page-number">Page <span class="pageNumber"></span> of <span class="totalPages"></span></td>
+      <td class="generated">Draft generated {{ generated }}</td>
+    </tr>
+  </table>
+</footer>

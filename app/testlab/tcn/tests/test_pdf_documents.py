@@ -40,7 +40,7 @@ def logged_in(client, user):
 
 
 def stored_files(file_storage):
-    return sorted(str(path.relative_to(file_storage)) for path in file_storage.rglob("*") if path.is_file())
+    return sorted(path.relative_to(file_storage).as_posix() for path in file_storage.rglob("*") if path.is_file())
 
 
 def document(client, tcn):

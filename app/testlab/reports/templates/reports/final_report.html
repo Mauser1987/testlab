@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Final Report · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> › <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> › Final Report
+  </nav>
+{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <h1>Final Report {{ report_no }}</h1>
+    <p class="meta">{{ project.project_no }} · {{ project.description }}</p>
+  </div>
+  <p class="hint">The customer report over the runs of the project. Each included run is shown as in its Customer Test Run Report, from the frozen record of its latest final revision; the summary table is generated from the same records. The texts are written here. Rough version: a draft PDF only — it is not issued or stored.</p>
+
+  <form method="post" class="card fields">
+    {% csrf_token %}
+    <h2>Runs</h2>
+    {% if rows %}
+      <div class="table-scroll">
+        <table class="list compact">
+          <thead><tr><th>Include</th><th>Order</th><th>Run</th><th>Result</th><th>Customer report contents</th></tr></thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td><input type="checkbox" name="include_{{ row.result.pk }}" id="include_{{ row.result.pk }}"{% if row.position %} checked{% endif %}></td>
+                <td><input type="number" name="order_{{ row.result.pk }}" min="1" max="999" value="{{ row.position|default:'' }}" style="width: 5em" aria-label="Order of run {{ row.run.display_no }}"></td>
+                <th><label for="include_{{ row.result.pk }}">Run {{ row.run.display_no }}</label></th>
+                <td>Final, revision {{ row.revision.number }}{% if row.revising %} <span class="hint">· revision {{ row.revision.number|add:1 }} in progress: the report uses revision {{ row.revision.number }}</span>{% endif %}</td>
+                <td><a href="{% url 'results:report_contents' row.run.pk 'customer' %}">Report contents</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <small>Order: 1, 2, 3 … Runs left blank follow in run order.</small>
+    {% else %}
+      <p class="empty">— No run of this project has a final Result yet. The Final Report is built from final Results.</p>
+    {% endif %}
+
+    <h2>Texts</h2>
+    {% for field in form %}
+      <div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+    {% endfor %}
+    <div class="actions">
+      <button type="submit" class="btn-primary">Save</button>
+      {% if included %}<a class="button" href="{% url 'reports:preview' project.pk %}" target="_blank" rel="noopener">Draft PDF</a>{% endif %}
+    </div>
+    {% if report %}<p class="hint">Last saved {{ report.updated_at|date:"d-M-Y H:i" }} by {{ report.updated_by.get_full_name|default:report.updated_by.username }}. The draft PDF shows what is saved.</p>{% endif %}
+  </form>
+{% endblock %}

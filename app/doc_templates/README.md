@@ -80,3 +80,12 @@ upright); plots are the stored report PNGs of the Result.
 
 Do not give elements the classes `title`, `date`, `url`, `pageNumber` or
 `totalPages` in the header/footer for own content: Chromium fills them in.
+
+## `final_report/` — Final Report of a project (rough version)
+
+`final_report.html` (the document), `header.html`, `footer.html` and
+`final_report.css`. It is printed together with the files of `run_report/`
+(styles, fonts, logo): each run's section is rendered by
+`run_report/report.html` from the run's frozen record and placed in the
+document as it is, with its section numbers under 5.<n>
+(`testlab/reports/assembly.py`). Draft only: no template hash is stored.

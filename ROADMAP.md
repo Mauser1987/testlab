@@ -5,8 +5,9 @@ at the end of each working session.
 
 ## Where we are
 
-- `main` at `0522b99` holds everything up to M2F-B2 (Result revisions),
-  pushed to GitHub. 823 tests pass.
+- `main` on GitHub holds everything up to M2F-B2 (Result revisions) and
+  the test workflow. The rough Final Report is uncommitted (832 tests pass
+  with it).
 - Built: Project, Test Program (minimal), TCN, Test Execution (manual log,
   DCS data, running intervals, Excel log import), Test Result (components,
   pictures, plots, seal-face measurements, acceptance), Test Run Report
@@ -16,11 +17,12 @@ at the end of each working session.
   configuration, conditions and results, leakage, logged data,
   measurements, pictures, conclusion). To confirm: that no separate Test
   Summary document is wanted.
-- Not built: the **Final Report**, the customer document for a whole
-  project (introduction, executive summary with a table over all runs,
-  field and test conditions, each run's results, appendices). The Test
-  Program holds acceptance requirements only; its texts, which the Final
-  Report reuses, are not in the app.
+- The **Final Report** exists in a rough version (2026-10-12, project page
+  → Final Report): texts, included runs, generated summary table, one
+  section per run from the frozen records, draft PDF. Missing: issuing and
+  freezing, revisions, appendices (drawings, P&ID), and the Test Program
+  texts it could start from (the Test Program holds acceptance
+  requirements only).
 - Validated on Windows: up to M2D and the Chromium report (2026-10-05).
   M2E, running intervals, log import, M2F-a, B1 and B2 are not.
 - `data/` is **test data and can be thrown away**, but it is made from
@@ -44,10 +46,16 @@ at the end of each working session.
 1. **Tests on Windows at every push.** `.github/workflows/tests.yml` runs
    the test suite on a fresh checkout on Windows and Linux. Added
    2026-10-12.
-2. **Rough Final Report.** A crude version, so the whole lifecycle exists
-   end to end: pick final Results of a project, order them, generated
-   summary table over the runs, a few free texts, one PDF. Proposal first.
-   Its needs decide the form of the changes below.
+2. **Rough Final Report.** Done 2026-10-12, to be tried on real projects.
+   What it showed so far:
+   - The run sections reuse the Customer Test Run Report as it is, so its
+     per-run status line ("Preview", "Customer report") appears inside the
+     Final Report; a Final Report profile of the run section may be wanted.
+   - The summary table reads speed, medium and pressure from the
+     conditions table by row name; a record field for them would be
+     sturdier.
+   - Only one run of the real data is final, so the report over several
+     runs is proven by the automated tests only.
 3. **Decide on evidence corrections, with real cases in hand.** Today the
    manual log, DCS data and running intervals are locked for good after the
    first Final. The alternative: a correction is a new entry that replaces

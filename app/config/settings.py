@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "testlab.tcn",
     "testlab.execution",
     "testlab.results",
+    "testlab.reports",
 ]
 
 MIDDLEWARE = [
