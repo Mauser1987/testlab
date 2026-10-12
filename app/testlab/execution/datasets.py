@@ -28,7 +28,7 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.utils import timezone
 
-from . import labview
+from . import labview, signal_mapping
 from .models import DcsDataset
 
 DEFAULT_PLOT_POINTS = 4000
@@ -86,7 +86,7 @@ def import_dataset(test_run, uploaded, user):
             started_at = parsed.recording_started_at
             if started_at is not None:
                 started_at = timezone.make_aware(started_at)
-            return DcsDataset.objects.create(
+            dataset = DcsDataset.objects.create(
                 test_run=test_run,
                 raw_file=raw_name,
                 original_name=original_name[:255],
@@ -110,6 +110,11 @@ def import_dataset(test_run, uploaded, user):
                 recording_start_note=parsed.recording_start_note,
                 warnings=parsed.warnings,
             )
+            if signal_mapping.apply_known_mapping(dataset):  # same format reviewed before: reused
+                from . import running_intervals  # builds on this module
+
+                running_intervals.ensure_current(dataset, user)  # detected: provisional until reviewed
+            return dataset
     except BaseException:
         for stored_name in written:
             storage.delete(stored_name)

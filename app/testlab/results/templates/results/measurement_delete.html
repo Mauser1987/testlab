@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Delete measurement · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <form method="post" class="card">
+    {% csrf_token %}
+    <h2>Delete {{ measurement }}?</h2>
+    <p>{% if measurement.reported %}This is the reported measurement of its slot: the summary will show it as missing until another one is reported. {% endif %}The record{% if files %} and its original file{{ files|length|pluralize }} ({% for f in files %}{{ f.original_name }}{% if not forloop.last %}, {% endif %}{% endfor %}){% endif %} are removed from the Result (draft).</p>
+    <div class="actions">
+      <button type="submit" class="btn-danger-solid">Delete</button>
+      <a class="button" href="{% url 'results:measurement' measurement.pk %}">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

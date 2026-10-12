@@ -135,37 +135,42 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
-# Word templates of generated documents (M1 spec §9.1).
+# Document templates of generated PDFs (documents/render.py): HTML template bundles.
 TESTLAB_TEMPLATE_DIR = Path(os.environ.get("TESTLAB_TEMPLATE_DIR", APP_DIR / "doc_templates"))
 
-# TCN document renderer (documents/render.py): `html` (HTML template bundle →
-# WeasyPrint → PDF), `chromium` (HTML template bundle → Playwright/Chromium →
-# PDF, under validation, M1 spec §19) or `docx` (Word template → DOCX → PDF
-# conversion below). A migration mechanism only: once Chromium is validated
-# it becomes the only renderer and this setting is removed.
-TESTLAB_TCN_RENDERER = os.environ.get("TESTLAB_TCN_RENDERER", "html").strip().lower()
-if TESTLAB_TCN_RENDERER not in ("html", "chromium", "docx"):
-    raise ImproperlyConfigured("TESTLAB_TCN_RENDERER must be html, chromium or docx.")
-
-# PDF conversion of the docx renderer (documents/pdf.py). TESTLAB_PDF_CONVERTER: `libreoffice`
-# (LibreOffice headless, the server), `word` (Microsoft Word on a Windows
-# workstation, needs pywin32) or `auto` (LibreOffice when found, else Word).
-# TESTLAB_SOFFICE: path of soffice (soffice.com on Windows); empty = look on
-# PATH and in the usual install locations. TESTLAB_PDF_TIMEOUT: seconds per
-# conversion (also the limit of the chromium renderer).
-TESTLAB_PDF_CONVERTER = os.environ.get("TESTLAB_PDF_CONVERTER", "libreoffice").strip().lower()
-if TESTLAB_PDF_CONVERTER not in ("libreoffice", "word", "auto"):
-    raise ImproperlyConfigured("TESTLAB_PDF_CONVERTER must be libreoffice, word or auto.")
-TESTLAB_SOFFICE = os.environ.get("TESTLAB_SOFFICE", "")
+# Seconds Chromium may take to print one PDF (documents/chromium.py).
 TESTLAB_PDF_TIMEOUT = int(os.environ.get("TESTLAB_PDF_TIMEOUT", "120"))
 
 # LabVIEW/DCS exports (execution/datasets.py): largest accepted upload. Files are
 # read into memory once on import; the stored raw file is never changed.
 TESTLAB_DCS_MAX_UPLOAD_MB = int(os.environ.get("TESTLAB_DCS_MAX_UPLOAD_MB", "200"))
+# Largest Excel manual log accepted for import (M2F), in MB.
+TESTLAB_LOG_IMPORT_MAX_MB = int(os.environ.get("TESTLAB_LOG_IMPORT_MAX_MB", "20"))
 
 # Result pictures (results/images.py): largest accepted picture. The original is
 # stored unchanged; a display copy is derived from it.
 TESTLAB_RESULT_IMAGE_MAX_MB = int(os.environ.get("TESTLAB_RESULT_IMAGE_MAX_MB", "40"))
+
+# Shaft running (results/runtime.py): a speed at or above this value [rpm] counts as running.
+# Manual log readings use it directly (the value used is in the final report snapshot). For a DCS
+# recording it is only the default of a new running-interval determination
+# (execution/running_intervals.py), which stores the values it used, together with the defaults of
+# its dropout bridge and spike filter [s]. Changing these never changes a stored determination.
+TESTLAB_RUNNING_SPEED_RPM = float(os.environ.get("TESTLAB_RUNNING_SPEED_RPM", "50"))
+TESTLAB_RUNNING_MAX_DROPOUT_S = float(os.environ.get("TESTLAB_RUNNING_MAX_DROPOUT_S", "60"))
+TESTLAB_RUNNING_MIN_RUN_S = float(os.environ.get("TESTLAB_RUNNING_MIN_RUN_S", "120"))
+# A manual Stop event or speed reading this close [min] to a DCS start/stop is not reported as a
+# discrepancy with the DCS running intervals (clocks and minute-resolution log times differ).
+TESTLAB_RUNNING_DISCREPANCY_MIN = float(os.environ.get("TESTLAB_RUNNING_DISCREPANCY_MIN", "5"))
+
+# Seal-face instrument files (results/seal_faces.py: Mahr TXT, ROUNDPAK CSV): largest accepted file.
+# Stored unchanged as the evidence of the measurement.
+TESTLAB_MEASUREMENT_MAX_MB = int(os.environ.get("TESTLAB_MEASUREMENT_MAX_MB", "20"))
+
+# Report profiles (M2F-B): below this share [%] of the shaft-running time covered by dynamic leakage
+# collections, a report that hides the leakage details states the coverage (a mandatory qualification,
+# not an acceptance criterion).
+TESTLAB_LEAKAGE_COVERAGE_WARNING_PCT = float(os.environ.get("TESTLAB_LEAKAGE_COVERAGE_WARNING_PCT", "95"))
 
 # INTENTIONAL TEMPORARY POLICY (development and validation phase, decided
 # 2026-10-03): manual log readings, DCS/LabVIEW imports and the Test Result

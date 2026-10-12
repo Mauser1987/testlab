@@ -11,6 +11,10 @@
  * signals and axes, time window, axis ranges, caption — with a report image
  * drawn from that definition by the same figure code. Opened from a Result
  * plot (?plot=<id>), the viewer starts from the stored definition instead.
+ *
+ * Running intervals (shaft rotating) are shaded on screen, and "Full
+ * recording | Running intervals" only zooms the time axis. Neither is part
+ * of a plot added to the Result: its image and definition stay as chosen.
  */
 (function () {
   "use strict";
@@ -26,6 +30,9 @@
   var state = stored ? fromDefinition(stored) : load() || defaults();
   var initialRanges = stored ? { x: stored.time_range, y: stored.y_range, y2: stored.y2_range } : null;
   var REPORT = { width: 1200, height: 600, scale: 2 }; // report image: 2400 × 1200 px
+  var runningConfig = document.getElementById("dcs-running");
+  var running = runningConfig ? JSON.parse(runningConfig.textContent) : null;
+  var intervals = running && running.intervals ? running.intervals : [];
 
   function fromDefinition(definition) {
     var result = defaults();
@@ -95,6 +102,13 @@
       if (ranges.x) layout.xaxis.range = ranges.x.slice();
       if (ranges.y) layout.yaxis.range = ranges.y.slice();
       if (ranges.y2) layout.yaxis2.range = ranges.y2.slice();
+    }
+    if (!report && intervals.length) {
+      var fill = running.provisional ? "rgba(214, 140, 0, 0.10)" : "rgba(30, 140, 70, 0.10)";
+      layout.shapes = intervals.map(function (i) {
+        return { type: "rect", xref: "x", yref: "paper", x0: i[0], x1: i[1], y0: 0, y1: 1,
+                 fillcolor: fill, line: { width: 0 }, layer: "below" };
+      });
     }
     if (report) {
       delete layout.xaxis.rangeslider;
@@ -240,6 +254,19 @@
     button.addEventListener("click", function () {
       signals.forEach(function (s) { state.shown[s.column] = button.dataset.select === "all"; });
       syncControls(); save(); draw();
+    });
+  });
+
+  document.querySelectorAll("[data-view]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      document.querySelectorAll("[data-view]").forEach(function (b) { b.classList.toggle("active", b === button); });
+      if (button.dataset.view === "running" && intervals.length) {
+        var first = intervals[0][0], last = intervals[intervals.length - 1][1];
+        var pad = Math.max((last - first) * 0.01, 1 / 360); // a little context, at least 10 s
+        Plotly.relayout(plot, { "xaxis.range": [first - pad, last + pad] });
+      } else {
+        Plotly.relayout(plot, { "xaxis.autorange": true });
+      }
     });
   });
 

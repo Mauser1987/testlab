@@ -4,31 +4,15 @@
 <meta charset="utf-8">
 <title>Test Change Notice</title>
 <meta name="author" content="TestLab">
+<style>
+  {# Same declarations (same data) as header.html and footer.html; see tcn.css. #}
+  @font-face { font-family: "Carlito"; font-weight: normal; src: url({% bundle_data_uri "fonts/Carlito-Regular.ttf" %}); }
+  @font-face { font-family: "Carlito"; font-weight: bold; src: url({% bundle_data_uri "fonts/Carlito-Bold.ttf" %}); }
+</style>
 <link rel="stylesheet" href="tcn.css">
 </head>
 <body{% if is_draft %} class="draft"{% endif %}>
-
-<header class="page-header">
-  <table>
-    <tr>
-      <td class="logo"><img src="logo.jpg" alt="Flowserve"></td>
-      <td class="title">Test Change Notice</td>
-      <td class="numbers">Project No.: {{ project_no }}<br>Run/TCN No.: {{ tcn_no }}</td>
-    </tr>
-  </table>
-  {% if is_draft %}<p class="draft">DRAFT — not issued</p>{% endif %}
-</header>
-
-<footer class="page-footer">
-  <table>
-    <tr>
-      <td class="prepared">Prepared by: {{ prepared_by }}</td>
-      <td class="page-number"></td>
-      <td class="created">Created: {{ created_date }}</td>
-    </tr>
-  </table>
-</footer>
-
+{# Page header and footer (logo, numbers, draft marking, Page x of y): header.html and footer.html. #}
 <main>
   <h2>Project Description:</h2>
   <p class="text">{{ project_description }}</p>
@@ -67,7 +51,12 @@
     <tr><td class="label">Inlet Temperature:</td>{% for col in condition_columns %}<td>{{ col.inlet_temperature }}</td>{% endfor %}</tr>
     <tr><td class="label">Flow:</td>{% for col in condition_columns %}<td>{{ col.flow }}</td>{% endfor %}</tr>
   </table>
+  {% if requirement_changes %}
+  <h2>Acceptance Requirement Changes:</h2>
+  {% for change in requirement_changes %}
+  <p class="text requirement-change"><strong>{% if change.ref %}{{ change.ref }} {% endif %}{{ change.criterion }}</strong>: {{ change.action }}{% if change.requirement %}: {{ change.requirement }}{% endif %}{% if change.was %} (Test Program: {{ change.was }}){% endif %}. Reason: {{ change.reason }}</p>
+  {% endfor %}
+  {% endif %}
 </main>
-
 </body>
 </html>

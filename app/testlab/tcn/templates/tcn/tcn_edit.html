@@ -52,4 +52,33 @@
       <a class="button btn-danger" href="{% url 'tcn:delete' tcn.pk %}">Delete draft</a>
     </div>
   </form>
+
+  <section class="setup-section card" id="requirement-changes">
+    <h2>Acceptance requirement changes</h2>
+    <p class="hint">Changes to the <a href="{% url 'projects:program' project.pk %}">Test Program</a> acceptance requirements for this run: replace one, make one not applicable, or add one. Printed on the TCN; in force for the run once this revision is issued. Operating set points above are instructions, not acceptance limits.</p>
+    {% if requirement_changes %}
+      <div class="table-scroll"><table class="list compact">
+        <thead><tr><th>Change</th><th>Program requirement</th><th>Requirement for this run</th><th>Reason</th><th></th></tr></thead>
+        <tbody>
+          {% for change in requirement_changes %}
+            <tr>
+              <td>{{ change.get_action_display }}</td>
+              <td>{% if change.program_requirement %}{{ change.program_requirement.ref }} {{ change.program_requirement.criterion }}{% else %}—{% endif %}</td>
+              <td>{% if change.action != "not_applicable" %}{{ change.criterion }}: {% if change.comparison %}{{ change.get_comparison_display }} {{ change.limit.normalize }} {{ change.unit }}{% endif %} {{ change.requirement_text }}{% else %}not applicable{% endif %}</td>
+              <td class="text">{{ change.reason|linebreaksbr }}</td>
+              <td class="row-actions"><a class="button btn-sm" href="{% url 'tcn:requirement_change' change.pk %}">Edit</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    {% endif %}
+    <details class="add-criterion"{% if requirement_form.errors %} open{% endif %}>
+      <summary>Add change</summary>
+      <form method="post" action="{% url 'tcn:requirement_change_add' tcn.pk %}" novalidate>
+        {% csrf_token %}
+        {% include "tcn/_requirement_change_fields.html" with form=requirement_form %}
+        <div class="actions"><button type="submit" class="btn-primary">Add change</button></div>
+      </form>
+    </details>
+  </section>
 {% endblock %}

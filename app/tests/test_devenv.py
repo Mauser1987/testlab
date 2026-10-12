@@ -56,19 +56,18 @@ def server(argv, environ):
     return devenv.server_settings(devenv.parse_args(["run", *argv]), environ)
 
 
-def test_default_is_localhost_only_with_chromium_renderer():
+def test_default_is_localhost_only():
     host, port, env, urls = server([], {})
     assert (host, port) == ("127.0.0.1", 8000)
     assert urls == ["http://127.0.0.1:8000/"]
     assert "TESTLAB_ALLOWED_HOSTS" not in env
-    assert env["TESTLAB_TCN_RENDERER"] == "chromium"
+    assert "TESTLAB_TCN_RENDERER" not in env  # one renderer: nothing to choose
 
 
 def test_environment_configuration_is_preserved():
-    environ = {"TESTLAB_TCN_RENDERER": "html", "TESTLAB_DEBUG": "1", "TESTLAB_PORT": "8100"}
+    environ = {"TESTLAB_DEBUG": "1", "TESTLAB_PORT": "8100"}
     host, port, env, _ = server([], environ)
     assert port == 8100
-    assert env["TESTLAB_TCN_RENDERER"] == "html"
     assert env["TESTLAB_DEBUG"] == "1"
 
 

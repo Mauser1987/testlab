@@ -22,5 +22,5 @@
       <td class="numbers">Project No.: {{ identification.project_no }}<br>Run {{ identification.run_no }} · {{ identification.tcn_no }}{% if identification.tcn_revision %} rev {{ identification.tcn_revision }}{% endif %}</td>
     </tr>
   </table>
-  {% if is_draft %}<p class="draft">DRAFT — preview, not a controlled record</p>{% endif %}
+  {% if is_draft %}<p class="draft">DRAFT — preview, not a controlled record</p>{% elif is_preview %}<p class="draft">PREVIEW — not an issued document</p>{% endif %}
 </header>

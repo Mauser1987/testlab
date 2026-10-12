@@ -25,7 +25,8 @@
 
   <div class="card-head log-head">
     <h2>Readings</h2>
-    <span class="hint">{{ rows|length }} reading{{ rows|length|pluralize }}, newest first · <span class="calc-key">calculated</span></span>
+    <span class="hint">{{ rows|length }} reading{{ rows|length|pluralize }}, newest first · <span class="calc-key">calculated</span>
+      <a class="button btn-sm" href="{% url 'execution:log_import' run.pk %}">Import Excel…</a></span>
   </div>
   <p class="origin">
     {% if origin.provisional %}
@@ -65,7 +66,11 @@
             <tr>
               <td class="sticky">{{ row.entry.observed_at|date:"d-M-Y H:i" }}</td>
               <td class="calc number">{{ row.elapsed_h|floatformat:2 }}</td>
-              <td title="{{ row.entry.entered_by.get_full_name|default:row.entry.entered_by.username }}">{{ row.entry.entered_by|initials }}</td>
+              {% if row.entry.source_row %}{% with source=row.entry.source_row %}
+                <td class="imported" title="As written in {{ source.batch.original_name }} row {{ source.sheet_row }}; imported by {{ source.batch.imported_by.get_full_name|default:source.batch.imported_by.username }} {{ source.batch.imported_at|date:'d-M-Y H:i' }}">{{ source.source_operator|default:"—" }}<a class="import-mark" href="{% url 'execution:log_import_detail' source.batch.pk %}#row-{{ source.sheet_row }}" aria-label="imported">⇩</a></td>
+              {% endwith %}{% else %}
+                <td title="{{ row.entry.entered_by.get_full_name|default:row.entry.entered_by.username }}">{{ row.entry.entered_by|initials }}</td>
+              {% endif %}
               {% for name, group, span in table_groups %}
                 {% for column in group %}
                   {% with value=row.values|get:column.code %}
@@ -90,7 +95,8 @@
     </div>
     <p class="hint">Elapsed: clock time since t = 0 (stops and static periods included).
       Leakage as logged, collected since the previous reading (clock time) unless a collection period was entered (<span class="entered-mark">*</span>).
-      • = to be logged per the TCN “Parameters to log”.</p>
+      • = to be logged per the TCN “Parameters to log”.
+      ⇩ = imported from an Excel log: “By” is the operator as written in the workbook.</p>
   {% else %}
     <p class="alert">No readings yet.</p>
   {% endif %}

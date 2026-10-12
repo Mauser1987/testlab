@@ -10,6 +10,7 @@
       <h2>Edit reading of {{ entry.observed_at|date:"d-M-Y H:i" }}</h2>
       <span class="hint">Entered by {{ entry.entered_by|initials }} on {{ entry.entered_at|date:"d-M-Y H:i" }}{% if entry.updated_at|date:"U" != entry.entered_at|date:"U" %} · last changed by {{ entry.updated_by|initials }} on {{ entry.updated_at|date:"d-M-Y H:i" }}{% endif %}</span>
     </div>
+    {% if entry.source_row %}<p class="hint">Imported from <a href="{% url 'execution:log_import_detail' entry.source_row.batch.pk %}#row-{{ entry.source_row.sheet_row }}">{{ entry.source_row.batch.original_name }} row {{ entry.source_row.sheet_row }}</a>{% if entry.source_row.source_operator %}, by {{ entry.source_row.source_operator }} as written in the workbook{% endif %}. A change here is kept in TestLab; the import record keeps the workbook as it was.</p>{% endif %}
     {% if form.non_field_errors %}<ul class="errorlist nonfield">{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     {% include "execution/_entry_fields.html" %}
     <div class="actions">

@@ -77,6 +77,10 @@
           <tr><th>Flow</th>{% for col in snapshot.condition_columns %}<td>{{ col.flow }}</td>{% endfor %}</tr>
         </tbody>
       </table></div>
+      {% if snapshot.requirement_changes %}
+        <h3>Acceptance Requirement Changes</h3>
+        <ul>{% for change in snapshot.requirement_changes %}<li>{% if change.ref %}{{ change.ref }} {% endif %}{{ change.criterion }}: {{ change.action }}{% if change.requirement %}: {{ change.requirement }}{% endif %}{% if change.was %} (Test Program: {{ change.was }}){% endif %}. Reason: {{ change.reason }}</li>{% endfor %}</ul>
+      {% endif %}
     </section>
   {% else %}
     <p class="alert">No issued document is stored for this TCN.</p>

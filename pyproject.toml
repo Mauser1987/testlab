@@ -6,21 +6,19 @@ requires-python = ">=3.12"
 dependencies = [
     "django>=5.2,<5.3",
     "dj-database-url>=2.1",
-    "docxtpl>=0.20",
-    # TCN PDF renderer; needs the Pango system library. One major version: the PDF layout must not shift unnoticed.
-    "weasyprint>=70,<71",
-    # TCN PDF renderer under validation (TESTLAB_TCN_RENDERER=chromium); pinned with its Chromium build
+    # PDF renderer (TCN, Test Run Report); pinned with its Chromium build
     # (python -m playwright install chromium): the PDF layout must not shift unnoticed.
     "playwright==1.49.1",
     # Result pictures: validation, size and display copies (the originals are stored unchanged).
     "pillow>=10",
+    # Excel manual-log import (.xlsx only; legacy .xls must be saved as .xlsx first).
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-django>=4.9", "pypdf>=5"]
+# tinyhtml5: text of rendered document templates in regression tests.
+dev = ["pytest>=8", "pytest-django>=4.9", "pypdf>=5", "tinyhtml5>=2"]
 postgres = ["psycopg[binary]>=3.2"]
-# Optional Microsoft Word PDF backend (TESTLAB_PDF_CONVERTER=word); installs nothing outside Windows.
-word = ["pywin32>=306; sys_platform == 'win32'"]
 
 [tool.setuptools]
 # Application, not a library: the install only pulls in dependencies.
@@ -33,7 +31,5 @@ pythonpath = ["app"]
 testpaths = ["app"]
 python_files = ["test_*.py"]
 markers = [
-    "libreoffice: uses the real LibreOffice PDF conversion (skipped when soffice is not installed)",
-    "word: uses the real Microsoft Word PDF conversion (skipped unless Windows with Word and pywin32)",
-    "chromium: uses the real Playwright/Chromium PDF renderer (skipped when Chromium is not installed)",
+    "chromium: prints real PDFs with Playwright/Chromium (skipped when Chromium is not installed); other tests use a fast stand-in",
 ]

@@ -1,54 +1,25 @@
-/* TCN print layout: the A4 layout of tcn.docx (and reference/tcn/TCN001.pdf).
-   Only the bundled Carlito (metric-compatible with Calibri) is used, so the
-   PDF does not depend on the fonts installed on the machine. */
+/* TCN print layout for Chromium: the A4 layout of reference/tcn/TCN001.pdf.
+   Header and footer are Chromium header/footer templates (header.html,
+   footer.html) placed in the page margins below. Only the bundled Carlito
+   (metric-compatible with Calibri) is used, never machine fonts. */
 
-@font-face { font-family: "Carlito"; font-weight: normal; src: url("fonts/Carlito-Regular.ttf"); }
-@font-face { font-family: "Carlito"; font-weight: bold; src: url("fonts/Carlito-Bold.ttf"); }
+/* The Carlito faces are declared in tcn.html, inlined from the bundle: Chromium lays out the
+   header and footer templates without waiting for fonts, so they can only use a font the page
+   has already loaded from the very same source. */
 
-@page {
-  size: A4;
-  margin: 28mm 20mm 22mm 20mm;
-  @top-left {
-    content: element(page-header);
-    width: 100%;
-    vertical-align: top;
-    padding-top: 10mm;
-  }
-  @bottom-left {
-    content: element(page-footer);
-    width: 100%;
-    vertical-align: bottom;
-    padding-bottom: 10mm;
-  }
-}
-
-/* Previews: room for the draft marking under the header rule (a margin box does not push the body down). */
+/* Exact A4: Chromium's format="A4" is rounded to 8.27 × 11.7 in (595.92 × 842.88 pt). */
+@page { size: 210mm 297mm; margin: 28mm 20mm 22mm 20mm; }
+/* Previews: room for the draft marking under the header rule. */
 @page draft { margin-top: 35mm; }
 body.draft { page: draft; }
 
+/* Ligatures off: "ti", "fi" … stay separate characters, so the PDF text is extracted reliably. */
 html { font-family: "Carlito"; font-size: 11pt; font-variant-ligatures: none; line-height: 1.22; color: #000; }
 body { margin: 0; }
 p { margin: 0; }
 table { border-collapse: collapse; }
 td, th { padding: 0; vertical-align: top; }
 
-/* Header and footer: repeated on every page. */
-.page-header { position: running(page-header); }
-.page-header table { width: 100%; table-layout: fixed; border-bottom: 0.75pt solid #808080; }
-.page-header td { vertical-align: middle; padding-bottom: 4pt; }
-.page-header .logo img { width: 30mm; height: 11.4mm; display: block; }
-.page-header .title { text-align: center; font-size: 16pt; }
-.page-header .numbers { text-align: right; }
-.page-header .draft { text-align: center; font-weight: bold; color: #c00000; padding-top: 4pt; }
-
-.page-footer { position: running(page-footer); }
-.page-footer table { width: 100%; table-layout: fixed; border-top: 0.75pt solid #808080; }
-.page-footer td { padding-top: 4pt; }
-.page-footer .page-number { text-align: center; }
-.page-footer .page-number::after { content: "Page " counter(page) " of " counter(pages); }
-.page-footer .created { text-align: right; }
-
-/* Body */
 h2 { font-size: 11pt; font-weight: bold; margin: 8pt 0 2pt; break-after: avoid; }
 .text, .run-line.level-0 { margin-left: 10mm; }
 .run-line.level-1 { margin-left: 13mm; }

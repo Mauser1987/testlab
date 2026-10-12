@@ -6,14 +6,21 @@
   {% include "execution/_run_head.html" %}
 
   <div class="result-bar">
-    <span class="status status-draft">{{ result.get_status_display }}</span>
+    <span class="status status-{% if result.is_final %}issued{% else %}draft{% endif %}">{{ result.get_status_display }}{% if revision_no %} · revision {{ revision_no }}{% endif %}</span>
     <nav class="section-nav" aria-label="Result sections">
-      <a href="#summary">Summary</a><a href="#plots">Plots{% if plots %} ({{ plots|length }}){% endif %}</a><a href="#measurements">Measurements</a><a href="#pictures">Pictures</a><a href="#acceptance">Acceptance</a><a href="#conclusion">Conclusion</a>
+      <a href="#summary">Summary</a><a href="#plots">Plots{% if plots %} ({{ plots|length }}){% endif %}</a><a href="#measurements">Measurements</a><a href="#pictures">Pictures</a><a href="#acceptance">Acceptance</a><a href="#conclusion">Conclusion</a><a href="#report">Report</a>
     </nav>
-    <span class="hint">Last changed {{ result.updated_at|date:"d-M-Y H:i" }} by {{ result.updated_by|initials }}</span>
-    <a class="button btn-primary report-preview" href="{% url 'results:report_preview' run.pk %}" target="_blank" rel="noopener" title="Draft Test Run Report (PDF), generated from the current data">Preview Report</a>
+    {% if result.is_final %}
+      <span class="hint">Finalized {{ result.finalized_at|date:"d-M-Y H:i" }} by {{ result.finalized_by|initials }}</span>
+      <a class="button btn-primary report-preview" href="{% url 'results:report_final' run.pk %}" title="The stored final Test Run Report (PDF)">Download Final Report</a>
+    {% else %}
+      <span class="hint">Last changed {{ result.updated_at|date:"d-M-Y H:i" }} by {{ result.updated_by|initials }}</span>
+      <a class="button report-preview" href="{% url 'results:report_preview' run.pk %}" target="_blank" rel="noopener" title="Draft Test Run Report (PDF), generated from the current data">Preview Report</a>
+      <a class="button btn-primary" href="#report">Finalize Report…</a>
+    {% endif %}
   </div>
   {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
+  {% if result.is_revising %}<p class="alert alert-warning" id="revision"><strong>Revision {{ revision_no }} in progress</strong> — opened {{ result.revision_opened_at|date:"d-M-Y H:i" }} by {{ result.revision_opened_by|initials }}: {{ result.revision_reason }}<br>The Result can be corrected and is finalized again as revision {{ revision_no }}. The manual log and DCS data stay locked. What was on record in an earlier revision cannot be deleted: add a new measurement to replace one, leave a picture or plot out under Report contents. The documents already issued stay valid until revision {{ revision_no }} is final.</p>{% endif %}
 
   {# ---- Summary: derived from the manual log and DCS data, nothing typed ---- #}
   <section id="summary" class="result-section">
@@ -24,11 +31,18 @@
       <dl class="summary-strip">
         <div><dt>Start (t = 0)</dt><dd>{% if period.start %}{{ period.start|date:"d-M-Y H:i" }}{% else %}<span class="empty">—</span>{% endif %}</dd>{% if period.start_source %}<dd class="hint">{{ period.start_source }}</dd>{% endif %}</div>
         <div><dt>End</dt><dd>{% if period.end %}{{ period.end|date:"d-M-Y H:i" }}{% else %}<span class="empty">—</span>{% endif %}</dd>{% if period.end_source %}<dd class="hint">{{ period.end_source }}</dd>{% endif %}</div>
-        <div><dt>Logged period</dt><dd class="calc-inline">{% if period.hours is not None %}{{ period.hours|floatformat:2 }} h{% else %}<span class="empty">—</span>{% endif %}</dd><dd class="hint">clock time, stops included</dd></div>
+        <div><dt>Elapsed clock time</dt><dd class="calc-inline">{% if period.hours is not None %}{{ period.hours|floatformat:2 }} h{% else %}<span class="empty">—</span>{% endif %}</dd><dd class="hint">logged period, stops included</dd></div>
+        <div><dt>Shaft-running hours</dt><dd class="calc-inline">{% if timeline.known %}{{ timeline.running_h|floatformat:2 }} h{% if timeline.provisional %} <span class="status status-draft">provisional</span>{% endif %}{% else %}<span class="empty">—</span>{% endif %}</dd><dd class="hint">{% if timeline.known %}{% with spans=timeline.running_spans %}{{ spans|length }} interval{{ spans|length|pluralize }} · {% endwith %}{{ timeline.stopped_h|floatformat:2 }} h stopped{% if timeline.unknown_h > 0.005 %} · <strong>{{ timeline.unknown_h|floatformat:2 }} h unknown</strong>{% endif %}{% else %}no evidence{% endif %}</dd></div>
         <div><dt>Log entries</dt><dd>{{ rows|length }}</dd><dd class="hint">{{ events|length }} event{{ events|length|pluralize }} / note{{ events|length|pluralize }}</dd></div>
         <div><dt>DCS datasets</dt><dd>{{ datasets|length }}</dd><dd class="hint">{% for dataset in datasets %}{{ dataset.original_name }}{% if not forloop.last %}, {% endif %}{% empty %}none imported{% endfor %}</dd></div>
       </dl>
       {% if period.provisional %}<p class="hint card-note"><span class="status status-draft">provisional</span> No LabVIEW recording start known: t = 0 is the first reading.</p>{% endif %}
+      <p class="hint card-note">Running hours from: {{ timeline.sources|join:"; "|default:"no evidence of the shaft state yet" }}. A period without evidence (no speed reading or start/stop event at both ends, no reviewed DCS speed signal, missing DCS data) is unknown, never counted as running.{% for note in timeline.notes %} {{ note }}.{% endfor %}</p>
+      {% if timeline.provisional %}<p class="hint card-note"><span class="status status-draft">provisional</span> Running intervals not confirmed yet: {% for dataset in timeline.provisional %}<a href="{% url 'execution:dcs_detail' dataset.pk %}#running">{{ dataset.original_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}. The running hours and the DCS ranges use them provisionally.</p>{% endif %}
+      {% if discrepancies %}
+        <div class="alert alert-warning card-note"><strong>Manual log and DCS disagree</strong> — for engineering review, not resolved automatically:
+          <ul class="plain">{% for d in discrepancies %}<li>{{ d.message }}</li>{% endfor %}</ul></div>
+      {% endif %}
     </div>
 
     {# Engineering result blocks #}
@@ -37,22 +51,25 @@
         <h3 class="card-title">Leakage</h3>
         {% if leakage %}
           <div class="table-scroll"><table class="list compact">
-            <thead><tr><th>Seal</th><th class="number">Collected [ml]</th><th class="number calc">Period [h]</th><th class="number calc" title="Σ volume / Σ collection period">Average [ml/h]</th></tr></thead>
+            <thead><tr><th>Seal</th><th class="number">Measured [ml]</th><th class="number calc">Dynamic [ml]</th><th class="number calc">Running [h]</th><th class="number calc" title="Σ dynamic volumes / Σ their running hours">Average dynamic [ml/h]</th></tr></thead>
             <tbody>
               {% for seal in leakage %}
                 <tr>
                   <th>{{ seal.label }}</th>
                   <td class="number">{% if seal.total_volume is not None %}{{ seal.total_volume|number }}{% else %}<span class="empty">—</span>{% endif %}</td>
-                  <td class="number calc">{% if seal.intervals %}{{ seal.hours|floatformat:2 }}{% else %}—{% endif %}</td>
+                  <td class="number calc">{% if seal.dynamic %}{{ seal.dynamic_volume|number }}{% else %}—{% endif %}</td>
+                  <td class="number calc">{% if seal.dynamic %}{{ seal.dynamic_hours|floatformat:2 }}{% else %}—{% endif %}</td>
                   <td class="number calc"{% if seal.reason %} title="{{ seal.reason }}"{% endif %}>{% if seal.average is not None %}{{ seal.average|floatformat:1 }}{% else %}—{% endif %}</td>
                 </tr>
-                {% if seal.unrated_volume %}
-                  <tr class="note-row"><td colspan="4" class="hint">{{ seal.unrated_volume|number }} ml not in the average (collection period unknown): {{ seal.unrated_notes|join:"; " }}</td></tr>
-                {% endif %}
+                {% if seal.reason and seal.total_volume is not None %}<tr class="note-row"><td colspan="5" class="hint">{{ seal.reason }}</td></tr>{% endif %}
+                {% if seal.uncovered_running_h > 0.005 %}<tr class="note-row"><td colspan="5" class="hint">{{ seal.uncovered_running_h|floatformat:2 }} running h not covered by a dynamic collection.</td></tr>{% endif %}
+                {% if seal.static_average is not None %}<tr class="note-row"><td colspan="5" class="hint">Static (stopped throughout): {{ seal.static_volume|number }} ml / {{ seal.static_hours|floatformat:2 }} h = {{ seal.static_average|floatformat:1 }} ml/h — not dynamic leakage.</td></tr>{% endif %}
+                {% for c in seal.mixed %}<tr class="note-row"><td colspan="5" class="hint">Mixed period until {{ c.end|date:"d-M H:i" }}: {{ c.volume|number }} ml / {{ c.hours|floatformat:2 }} h = {{ c.rate|floatformat:1 }} ml/h mixed-period collection rate (running and stopped) — not dynamic leakage.</td></tr>{% endfor %}
+                {% for c in seal.excluded %}{% if c.kind != "static" and c.kind != "mixed" %}<tr class="note-row"><td colspan="5" class="hint">Not used: {{ c.end|date:"d-M H:i" }}{% if c.volume is not None %} {{ c.volume|number }} ml{% endif %} — {{ c.reason }}</td></tr>{% endif %}{% endfor %}
               {% endfor %}
             </tbody>
           </table></div>
-          <p class="hint card-note">Average = total volume / total collection period (clock time), over readings with a known period — not a mean of interval rates.</p>
+          <p class="hint card-note">Average dynamic leakage = Σ volumes of collections with the shaft running throughout / Σ their running hours (same intervals) — not a mean of interval rates. Blank = not measured; 0 = measured zero.</p>
         {% else %}
           <p class="empty">— No leakage measurement in this configuration.</p>
         {% endif %}
@@ -62,21 +79,23 @@
         <h3 class="card-title">Face wear</h3>
         {% if wear %}
           <div class="table-scroll"><table class="list compact">
-            <thead><tr><th>Component</th><th class="number calc">Wear [in]</th><th class="number calc">Period [h]</th><th class="number calc">Rate [in/h]</th></tr></thead>
+            <thead><tr><th>Component</th><th class="number calc" title="Post − Pre, as measured">Δ</th><th class="number calc" title="Pre − Post face length: material removed">Wear</th><th class="number calc">Running [h]</th><th class="number calc">Rate [/h]</th></tr></thead>
             <tbody>
               {% for item in wear %}
                 <tr>
-                  <th>{{ item.component.label }}</th>
-                  <td class="number calc" title="Pre − Post face length">{% if item.wear is not None %}{{ item.wear|number }}{% else %}—{% endif %}</td>
-                  <td class="number calc" title="{{ item.hours_source }}">{% if item.hours %}{{ item.hours|floatformat:2 }}{% else %}—{% endif %}</td>
-                  <td class="number calc">{% if item.rate is not None %}{{ item.rate|number }}{% else %}—{% endif %}</td>
+                  <th>{{ item.component.label }} <span class="hint">[{{ item.unit }}]</span></th>
+                  <td class="number calc">{% if item.delta is not None %}{{ item.delta|signed }}{% else %}—{% endif %}</td>
+                  <td class="number calc">{% if item.loss is not None %}{{ item.loss|number }}{% else %}—{% endif %}</td>
+                  <td class="number calc" title="{{ item.hours_source }}">{% if item.hours is not None %}{{ item.hours|floatformat:2 }}{% else %}—{% endif %}</td>
+                  <td class="number calc"{% if item.reason %} title="{{ item.reason }}"{% endif %}>{% if item.rate is not None %}{{ item.rate|number }}{% else %}—{% endif %}</td>
                 </tr>
+                {% if item.reason %}<tr class="note-row"><td colspan="5" class="hint">{{ item.reason }}</td></tr>{% endif %}
               {% endfor %}
             </tbody>
           </table></div>
-          <p class="hint card-note">Wear = Pre − Post face length; rate over the seal's leakage collection period.</p>
+          <p class="hint card-note">Wear = Pre − Post face length (shorter = material removed); Δ = Post − Pre as measured. Rate over the shaft-running hours between the inspections.</p>
         {% else %}
-          <p class="empty">— No face wear yet. <a href="#measurements">Enter Pre and Post face length</a>.</p>
+          <p class="empty">— No face wear yet. <a href="#measurements">Add Pre and Post face length measurements</a>.</p>
         {% endif %}
       </div>
     </div>
@@ -84,19 +103,22 @@
     {% if ranges %}
       <div class="table-card table-scroll">
         <table class="list compact">
-          <thead><tr><th>Logged parameter</th><th>TCN (instructed)</th><th class="number calc">Min</th><th class="number calc">Max</th><th class="number calc">Readings</th></tr></thead>
+          <thead><tr><th>Logged parameter</th><th>TCN (instructed)</th><th class="number calc">Min</th><th class="number calc">Max</th><th class="number calc">n</th><th class="number calc" title="Readings with the shaft stopped">Stopped min – max (n)</th><th>Source</th></tr></thead>
           <tbody>
             {% for range in ranges %}
               <tr>
                 <th>{{ range.measurement.full_label }}</th>
                 <td>{{ range.instructed|default:"—" }}</td>
-                <td class="number calc">{{ range.minimum|reading }}</td>
-                <td class="number calc">{{ range.maximum|reading }}</td>
+                <td class="number calc">{{ range.minimum|reading|default:"—" }}</td>
+                <td class="number calc">{{ range.maximum|reading|default:"—" }}</td>
                 <td class="number calc">{{ range.count }}</td>
+                <td class="number calc">{% if range.stopped %}{{ range.stopped.minimum|reading }} – {{ range.stopped.maximum|reading }} ({{ range.stopped.count }}){% else %}—{% endif %}</td>
+                <td class="hint" title="{{ range.source }}">{{ range.source_label|default:range.source }}{% if range.provisional %} <span class="status status-draft">provisional</span>{% endif %}{% if range.full %}<span class="row-note">complete recording {{ range.full.minimum|reading }} – {{ range.full.maximum|reading }} ({{ range.full.count }})</span>{% endif %}{% if range.unknown_count %} · {{ range.unknown_count }} at unknown state{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
+        <p class="hint card-note">Min / max: readings with the shaft running — for DCS signals the samples inside the running intervals (start-up and stop transients included; not a steady-state range). TCN values are instructions, not acceptance limits.</p>
       </div>
     {% endif %}
 
@@ -166,17 +188,110 @@
     {% endfor %}
   </section>
 
-  {# ---- Measurements: components as fitted, Pre/Post per quantity ---- #}
+  {# ---- Measurements: instrument files and dimensional readings per component; the summary is derived ---- #}
   <section id="measurements" class="result-section">
-    <div class="card-head"><h2>Measurements</h2><span class="hint">Pre and Post as measured; blank = not measured</span></div>
+    <div class="card-head">
+      <h2>Measurements</h2>
+      <span class="hint">Required: {{ completeness.counts.completed }} measured · {{ completeness.counts.in_review }} in review · {{ completeness.counts.missing }} missing{% if completeness.counts.optional_measured %} · {{ completeness.counts.optional_measured }} optional measured{% endif %} · original instrument files kept unchanged</span>
+    </div>
+
+    {# Pre/Post summary: output only, from the reported measurements #}
+    <div class="card">
+      <h3 class="card-title">Pre-test / post-test summary</h3>
+      {% if measurement_summary %}
+        <div class="table-scroll">
+          <table class="list compact measurements">
+            <thead><tr>
+              <th>Component</th><th>Measurement</th><th class="number calc">Pre</th><th class="number calc">Post</th>
+              <th class="number calc" title="Post − Pre">Δ</th><th class="number calc" title="Pre − Post (material removed)">Wear</th><th>Unit</th><th>Source</th>
+            </tr></thead>
+            {% for group in measurement_summary %}
+              <tbody>
+                {% for row in group.rows %}
+                  <tr{% if forloop.first %} class="group-first"{% endif %}>
+                    <th>{% if forloop.first %}<a href="#component-{{ group.component.pk }}">{{ group.component.label }}</a>{% endif %}</th>
+                    <td title="{{ row.quantity.description }}">{{ row.label }}</td>
+                    <td class="number calc">{% include "results/_summary_value.html" with value=row.pre code=row.quantity.code %}</td>
+                    <td class="number calc">{% include "results/_summary_value.html" with value=row.post code=row.quantity.code %}</td>
+                    <td class="number calc">{{ row.delta|quantity_delta:row.quantity.code|default:"—" }}</td>
+                    <td class="number calc">{% if row.quantity.wear %}{{ row.wear|number|default:"—" }}{% else %}—{% endif %}</td>
+                    <td class="unit-cell">{{ row.unit }}</td>
+                    <td class="unit-cell">{{ row.source }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            {% endfor %}
+          </table>
+        </div>
+        <p class="hint card-note">Values of the reviewed, reported measurement of each slot. Face flatness: ROUNDPAK instrument FLTt of one circular trace. Taper: signed, negative = ID high (Convex), positive = OD high (Concave), Flat within the flat limit; shown from the Mahr scans (the more accurate) and from the ROUNDPAK radial traces. Ra: mean of the left and right scans. Only face length has a wear meaning.</p>
+      {% else %}
+        <p class="empty">— No measurement applicable. Set the measurement plan below.</p>
+      {% endif %}
+    </div>
+
+    {# Per component: + Add measurement, Pre and Post slots #}
+    <div class="measure-cards">
+      {% for card in measurement_cards %}
+        <div class="card measure-card" id="component-{{ card.component.pk }}">
+          <div class="card-head">
+            <h3 class="card-title">{{ card.component.label }}{% if card.component.material %} <span class="hint">{{ card.component.material }}</span>{% endif %}{% if not card.component.is_face %} <span class="hint">optional component</span>{% endif %}</h3>
+            {% if card.kinds and not recording_refused %}<a class="button btn-sm btn-primary" href="{% url 'results:measurement_add' card.component.pk %}">+ Add measurement</a>{% endif %}
+          </div>
+          {% if card.kinds %}
+            <div class="pre-post">
+              {% for stage in card.stages %}
+                <div class="stage">
+                  <div class="stage-label">{{ stage.label }}</div>
+                  {% for slot in stage.rows %}
+                    <div class="slot slot-{{ slot.status }}">
+                      <div class="slot-head"><span class="slot-kind">{{ slot.label }}</span> <span class="status slot-status slot-status-{{ slot.status }}">{{ slot.status|slot_label }}</span></div>
+                      {% if slot.reported %}
+                        <a href="{% url 'results:measurement' slot.reported.pk %}" class="slot-value">{{ slot.reported|measurement_brief }}</a>
+                        <span class="hint">{{ slot.reported.reviewed_by|initials }} {{ slot.reported.reviewed_at|date:"d-M-Y" }}{% if slot.reported.files.all %} · {% for f in slot.reported.files.all %}{{ f.original_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</span>
+                      {% endif %}
+                      {% for other in slot.others %}
+                        <a href="{% url 'results:measurement' other.pk %}" class="slot-other">{% if other.is_reviewed %}not reported{% else %}draft{% endif %}: {{ other|measurement_brief }}</a>
+                      {% endfor %}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="empty">— No measurement applicable to this component (measurement plan).</p>
+          {% endif %}
+          {% if card.not_applicable %}
+            <p class="hint card-note">Kept on record, not reported (not applicable): {% for m in card.not_applicable %}<a href="{% url 'results:measurement' m.pk %}">{{ m.get_kind_display }} {{ m.get_stage_display }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+          {% endif %}
+          <form method="post" action="{% url 'results:component_observations' card.component.pk %}" class="component-observations">
+            {% csrf_token %}
+            <label for="{{ card.observations_form.observations.id_for_label }}">Inspection observations</label>
+            {{ card.observations_form.observations }}
+            {% if not recording_refused %}<button type="submit" class="btn-sm">Save observations</button>{% endif %}
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+
+    {# Measurement plan and components as fitted #}
+    <form method="post" action="{% url 'results:measurement_plan' run.pk %}" class="card inline-add measurement-plan">
+      {% csrf_token %}
+      <strong>Measurement plan of the seal faces</strong>
+      {% for field in plan_form %}<label>{{ field.label }} {{ field }}</label>{% endfor %}
+      {% if not recording_refused %}<button type="submit" class="btn-sm">Save plan</button>{% endif %}
+      <span class="hint">Required: missing until measured. Optional: reported when measured, never missing. Not applicable: nothing expected, nothing shown. Override per component below; sleeves and backing rings default to optional dimensional readings and no Mahr/ROUNDPAK.</span>
+    </form>
 
     <form method="post" action="{% url 'results:components' run.pk %}" class="card">
       {% csrf_token %}
       {{ identity_formset.management_form }}
       <h3 class="card-title">Components</h3>
       <div class="table-scroll">
-        <table class="list compact form-table">
-          <thead><tr><th>Component</th><th>Part drawing</th><th>Material</th><th>Face condition</th><th></th></tr></thead>
+        <table class="list compact form-table components-table">
+          <thead>
+            <tr><th rowspan="2">Component</th><th rowspan="2">Part drawing</th><th rowspan="2">Material</th><th rowspan="2">Face condition</th><th colspan="3">Face dimensions</th><th colspan="3">Measurements</th><th rowspan="2"></th></tr>
+            <tr><th>OD</th><th>ID</th><th>Unit</th><th>Dimensional</th><th>Mahr</th><th>ROUNDPAK</th></tr>
+          </thead>
           <tbody>
             {% for form in identity_rows %}
               <tr>
@@ -184,6 +299,12 @@
                 <td>{{ form.part_no }}{{ form.part_no.errors }}</td>
                 <td>{{ form.material }}{{ form.material.errors }}</td>
                 <td>{{ form.condition }}{{ form.condition.errors }}</td>
+                <td class="dimension">{{ form.face_od }}{{ form.face_od.errors }}</td>
+                <td class="dimension">{{ form.face_id }}{{ form.face_id.errors }}</td>
+                <td>{{ form.diameter_unit }}</td>
+                <td>{{ form.dimensional_applicability }}</td>
+                <td>{{ form.mahr_applicability }}</td>
+                <td>{{ form.roundpak_applicability }}</td>
                 <td class="row-actions">
                   {% if not recording_refused %}<button type="submit" class="btn-sm btn-ghost" form="remove-{{ form.instance.pk }}" title="Remove (only without measurements or pictures)">Remove</button>{% endif %}
                 </td>
@@ -192,7 +313,7 @@
           </tbody>
         </table>
       </div>
-      {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save components</button><span class="hint">Material is copied from the TCN when the component is added.</span></div>{% endif %}
+      {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save components</button><span class="hint">Material is copied from the TCN when the component is added. Face OD/ID are offered for each new Mahr/ROUNDPAK measurement.</span></div>{% endif %}
     </form>
     {% for form in identity_rows %}
       <form method="post" action="{% url 'results:component_remove' form.instance.pk %}" id="remove-{{ form.instance.pk }}" hidden>{% csrf_token %}</form>
@@ -203,43 +324,10 @@
         <label for="{{ add_component_form.component.id_for_label }}">{{ add_component_form.component.label }}</label>
         {{ add_component_form.component }}
         <button type="submit" class="btn-sm">Add</button>
-        <span class="hint">Offered by the run configuration (Plug Seal faces, sleeve).</span>
+        <span class="hint">Optional components, added only when inspected: Plug Seal faces, sleeves, backing rings.</span>
       </form>
     {% endif %}
-
-    <form method="post" action="{% url 'results:measurements' run.pk %}" class="card" novalidate>
-      {% csrf_token %}
-      <h3 class="card-title">Pre-test / post-test measurements</h3>
-      {% if measurements_form.non_field_errors %}<ul class="errorlist nonfield">{% for error in measurements_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
-      {% with rows=measurements_form.bound_rows %}
-        {% if rows %}
-          <div class="table-scroll">
-            <table class="list compact measurements">
-              <thead><tr>
-                <th>Component</th><th>Measurement</th><th class="number">Pre</th><th class="number">Post</th>
-                <th class="number calc" title="Post − Pre">Δ</th><th class="number calc" title="Pre − Post (material removed)">Wear</th><th>Unit</th>
-              </tr></thead>
-              <tbody>
-                {% for component, quantity, pre, post, stored in rows %}
-                  <tr{% ifchanged component.pk %} class="group-first"{% endifchanged %}>
-                    <th>{% ifchanged component.pk %}{{ component.label }}{% endifchanged %}</th>
-                    <td{% if quantity.description %} title="{{ quantity.description }}"{% endif %}>{{ quantity.label }}</td>
-                    <td class="number">{{ pre }}{{ pre.errors }}</td>
-                    <td class="number">{{ post }}{{ post.errors }}</td>
-                    <td class="number calc">{{ stored.delta|signed }}</td>
-                    <td class="number calc">{% if quantity.wear %}{{ stored.wear|number }}{% endif %}</td>
-                    <td class="unit-cell">{{ quantity.unit }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save measurements</button><span class="hint">Δ and wear are calculated after saving.</span></div>{% endif %}
-        {% else %}
-          <p class="empty">— No component with measurements. Add a seal face above.</p>
-        {% endif %}
-      {% endwith %}
-    </form>
+    {% if not_added %}<p class="hint">Optional, not added (not inspected, not reported): {{ not_added|join:", " }}.</p>{% endif %}
   </section>
 
   {# ---- Pictures ---- #}
@@ -295,7 +383,9 @@
 
   {# ---- Acceptance ---- #}
   <section id="acceptance" class="result-section">
-    <div class="card-head"><h2>Acceptance</h2><span class="hint">Pass/Fail is calculated only for a numeric limit on a calculated actual; otherwise the engineer assesses</span></div>
+    <div class="card-head"><h2>Acceptance</h2><span class="hint">Requirements from the Test Program{% if program %} (<a href="{% url 'projects:program' project.pk %}">{{ program.reference }}</a>){% endif %} and approved TCN changes · Pass/Fail is calculated only where the comparison is unambiguous; otherwise the engineer assesses</span></div>
+    {% if not program %}<p class="hint">This project has no Test Program yet: <a href="{% url 'projects:program' project.pk %}">enter its acceptance requirements</a>, or add criteria to this Result below.</p>{% endif %}
+    {% if pending_changes %}<p class="alert alert-warning">{{ pending_changes|length }} acceptance requirement change{{ pending_changes|length|pluralize }} on the draft TCN revision {% if pending_changes|length == 1 %}is{% else %}are{% endif %} pending: in force only once that revision is issued.</p>{% endif %}
     {% if evaluations %}
       <div class="table-card table-scroll">
         <table class="list acceptance">
@@ -304,12 +394,12 @@
             {% for e in evaluations %}
               <tr>
                 <th>{{ e.item.criterion }}{% if e.item.basis != "manual" %}<span class="row-note hint">{{ e.item.get_basis_display }}{% if e.item.position %} · {{ e.item.get_position_display }}{% endif %}{% if e.item.component %} · {{ e.item.component.label }}{% endif %}</span>{% endif %}</th>
-                <td>{{ e.requirement|default:"—" }}</td>
+                <td>{{ e.requirement|default:"—" }}<span class="row-note hint">{{ e.item.source|default:"entered on this Result" }}</span></td>
                 <td class="number{% if e.item.basis != 'manual' %} calc{% endif %}" title="{{ e.source }}">{% if e.actual_text %}{{ e.actual_text }}{% else %}<span class="empty" title="{{ e.source }}">—</span>{% endif %}{% if e.source and e.item.basis != "manual" %}<span class="row-note">{{ e.source }}</span>{% endif %}</td>
-                <td><span class="assessment assessment-{{ e.effective }}">{{ e.effective_label }}</span>
-                  <span class="row-note hint">{% if e.by == "engineer" %}engineer{% if e.derived and e.derived != e.effective %} (calculated: {{ e.derived }}){% endif %}{% elif e.by == "calculated" %}calculated{% else %}to be assessed{% endif %}</span></td>
+                <td><span class="assessment assessment-{{ e.effective|default:'missing' }}">{{ e.effective_label }}</span>
+                  <span class="row-note hint">{% if e.by == "engineer" %}engineer{% if e.derived and e.derived != e.effective %} (calculated: {{ e.derived }}){% endif %}{% elif e.by == "calculated" %}calculated{% else %}missing — to be assessed{% if e.note %} ({{ e.note }}){% endif %}{% endif %}</span></td>
                 <td class="text">{{ e.item.remark|linebreaksbr }}</td>
-                <td class="row-actions"><a class="button btn-sm" href="{% url 'results:acceptance_edit' e.item.pk %}">Edit</a></td>
+                <td class="row-actions">{% if not recording_refused %}<a class="button btn-sm" href="{% url 'results:acceptance_edit' e.item.pk %}">{% if e.item.from_requirement %}Assess{% else %}Edit{% endif %}</a>{% endif %}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -320,7 +410,7 @@
     {% endif %}
     {% if not recording_refused %}
       <details class="card add-criterion"{% if acceptance_form.errors %} open{% endif %}>
-        <summary>Add criterion</summary>
+        <summary>Add own criterion</summary>
         <form method="post" action="{% url 'results:acceptance_add' run.pk %}" novalidate>
           {% csrf_token %}
           {% include "results/_acceptance_fields.html" with form=acceptance_form %}
@@ -340,5 +430,96 @@
       {% endfor %}
       {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save</button></div>{% endif %}
     </form>
+  </section>
+
+  {# ---- Report: details, finalization, final download ---- #}
+  <section id="report" class="result-section">
+    <div class="card-head"><h2>Test Run Report</h2><span class="hint">Result: Draft → Final (complete and controlled, not passed) · documents: Preview → Issued</span></div>
+    <div class="card-grid">
+      <form method="post" action="{% url 'results:report_details' run.pk %}" class="card fields">
+        {% csrf_token %}
+        <h3 class="card-title">Report details</h3>
+        <dl class="facts">
+          <dt>Title</dt><dd>{% if program.title %}{{ program.title }} <span class="hint">{{ program.reference }}</span>{% else %}{{ project.description }} <span class="hint">project description (no Test Program title)</span>{% endif %}</dd>
+          <dt>Objective</dt><dd>{% if program.objective %}{{ program.objective|linebreaksbr }} <span class="hint">{{ program.reference }}</span>{% else %}<span class="empty">— none in the Test Program</span>{% endif %}</dd>
+        </dl>
+        {% for field in report_form %}
+          <div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+        {% endfor %}
+        {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Save details</button></div>{% endif %}
+      </form>
+      <div class="card">
+        {% if result.is_final %}
+          <h3 class="card-title">Final · revision {{ report_revision.number|default:"0" }}</h3>
+          <dl class="facts">
+            <dt>Finalized</dt><dd>{{ result.finalized_at|date:"d-M-Y H:i" }} by {{ result.finalized_by.get_full_name|default:result.finalized_by.username }}</dd>
+            <dt>Prepared by</dt><dd>{{ result.responsible_engineer.get_full_name|default:result.responsible_engineer.username|default:"—" }}</dd>
+            {% if report_revision %}<dt>Frozen record</dt><dd>SHA-256 <code title="{{ report_revision.record_sha256 }}">{{ report_revision.record_sha256|slice:":12" }}…</code> · {{ report_revision.assets|length }} frozen picture{{ report_revision.assets|length|pluralize }}/plot{{ report_revision.assets|length|pluralize }}</dd>{% endif %}
+          </dl>
+          <p class="hint">The Result, the manual log and the DCS data of this run cannot change any more. Documents are rendered from the frozen record, never from changed data; a stored PDF is never generated again.</p>
+          {% if can_revise %}
+            <form method="post" action="{% url 'results:revise' run.pk %}" class="fields" onsubmit="return confirm('Open revision {{ revision_no|add:1 }} of the Result of Run {{ run.display_no }}? The Result becomes a Draft again until it is finalized as revision {{ revision_no|add:1 }}. Revision {{ revision_no }} and its documents are kept unchanged.');">
+              {% csrf_token %}
+              <div class="field"><label for="revision-reason">Reason for revision {{ revision_no|add:1 }} (required)</label><input id="revision-reason" type="text" name="reason" required maxlength="500" placeholder="What is corrected and why"></div>
+              <div class="actions"><button type="submit">Open revision {{ revision_no|add:1 }}…</button></div>
+              <p class="hint">For a correction of the Result: measurements, pictures, plots, assessments, conclusion. The manual log and DCS data stay locked. To present the same record differently, change the report contents and issue the document again instead.</p>
+            </form>
+          {% endif %}
+        {% else %}
+          <h3 class="card-title">Finalize{% if revision_no %} revision {{ revision_no }}{% endif %}</h3>
+          {% if issues %}
+            <p>Finalization is blocked by:</p>
+            <ul class="blocking-issues">{% for issue in issues %}<li><a href="{% if issue.url %}{{ issue.url }}{% else %}#{{ issue.anchor }}{% endif %}">{{ issue.message }}</a></li>{% endfor %}</ul>
+          {% else %}
+            <p>Everything required is in place.</p>
+          {% endif %}
+          {% if notices %}<ul class="alert alert-warning plain">{% for notice in notices %}<li>{{ notice }}</li>{% endfor %}</ul>{% endif %}
+          {% if not recording_refused and can_finalize %}
+            <form method="post" action="{% url 'results:finalize' run.pk %}" onsubmit="return confirm('Finalize the Result of Run {{ run.display_no }}? Its record is frozen as revision {{ revision_no }}, the Engineering report is issued and stored{% if revision_no %}, the documents of the earlier revision become Superseded{% endif %}, and the Result, its manual log and DCS data can no longer be changed.');">
+              {% csrf_token %}
+              <div class="actions"><button type="submit" class="btn-primary"{% if issues %} disabled title="Resolve the blocking issues first"{% endif %}>Finalize Result</button></div>
+            </form>
+          {% endif %}
+          <p class="hint">Finalizing freezes the record as revision {{ revision_no }} (requirements and their sources, evidence, assessments, and a copy of every picture and plot shown), issues the Engineering report from it with its SHA-256, and records who finalized it and when. A failed test can be finalized.{% if revision_no %} The issued documents of the earlier revisions become Superseded; they stay stored and retrievable.{% endif %}</p>
+        {% endif %}
+        {% if revisions %}
+          <h4>Result revisions</h4>
+          <table class="list compact">
+            <thead><tr><th>Revision</th><th>Finalized</th><th>Reason</th><th>Record</th></tr></thead>
+            <tbody>
+              {% for r in revisions %}
+                <tr><th>{{ r.number }}</th><td>{{ r.finalized_at|date:"d-M-Y H:i" }} · {{ r.finalized_by|initials }}</td><td>{% if r.number %}{{ r.reason }} <span class="hint">opened {{ r.opened_at|date:"d-M-Y" }} · {{ r.opened_by|initials }}</span>{% else %}<span class="hint">First finalization{% if r.origin == "migrated" %} (M2E){% endif %}</span>{% endif %}</td><td><code title="{{ r.record_sha256 }}">{{ r.record_sha256|slice:":12" }}…</code></td></tr>
+              {% endfor %}
+              {% if result.is_revising %}<tr><th>{{ revision_no }}</th><td><span class="status status-draft">Draft</span></td><td>{{ result.revision_reason }} <span class="hint">opened {{ result.revision_opened_at|date:"d-M-Y" }} · {{ result.revision_opened_by|initials }}</span></td><td>—</td></tr>{% endif %}
+            </tbody>
+          </table>
+        {% endif %}
+      </div>
+      <div class="card">
+        <h3 class="card-title">Report profiles</h3>
+        <table class="list compact profiles">
+          <tbody>
+            {% for code, label in report_profiles.items %}
+              <tr><th>{{ label }}</th>
+                <td><a href="{% url 'results:report_contents' run.pk code %}">Contents</a></td>
+                <td><a href="{% url 'results:report_profile_preview' run.pk code %}" target="_blank" rel="noopener">Preview PDF</a></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="hint">Customer: clean presentation, explanations and provenance off. Engineering: complete technical detail. Both show the same numbers from the same record.</p>
+        <h4>Documents</h4>
+        {% if report_documents %}
+          <table class="list compact">
+            <tbody>
+              {% for d in report_documents %}
+                <tr><th><a href="{% url 'results:document' d.pk %}">{{ d.identity }}</a></th><td>{{ d.get_profile_display }}</td><td><span class="status status-{{ d.status }}">{{ d.get_status_display }}</span></td><td>{{ d.issued_at|date:"d-M-Y" }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty">None issued yet{% if not result.is_final %} — finalizing issues the Engineering report{% endif %}.</p>
+        {% endif %}
+      </div>
+    </div>
   </section>
 {% endblock %}

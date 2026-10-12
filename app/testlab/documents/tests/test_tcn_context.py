@@ -1,13 +1,9 @@
 """build_tcn_context and rendering rules (M1 spec §9.2, §9.3)."""
 
 import datetime
-import io
 
 import pytest
-from docx import Document
-from docx.oxml.ns import qn
 
-from testlab.documents.render import render_docx, template_path
 from testlab.documents.tcn_context import (
     build_tcn_context,
     format_date,
@@ -154,20 +150,3 @@ def test_context_comes_from_tcn_snapshot_not_project_defaults(project, user):
     after = build_tcn_context(type(tcn).objects.get(pk=tcn.pk))
     assert after == before
     assert after["speed"] == "2980 rpm" and after["project_description"] == "TEST UHTW 4.750"
-
-
-def grid_widths(docx_bytes, table_index):
-    table = Document(io.BytesIO(docx_bytes)).tables[table_index]
-    return [int(col.get(qn("w:w"))) for col in table._tbl.tblGrid.findall(qn("w:gridCol"))]
-
-
-def test_loop_columns_keep_the_template_widths(project, user):
-    template_seal_grid = grid_widths(template_path("tcn.docx").read_bytes(), 1)
-    for arrangement, plug, count in [
-        (Arrangement.SINGLE, True, 2),
-        (Arrangement.DUAL_PRESSURIZED, False, 2),
-        (Arrangement.DUAL_PRESSURIZED, True, 3),
-    ]:
-        tcn = tcn_with(project, user, arrangement, plug)
-        rendered = render_docx(template_path("tcn.docx"), build_tcn_context(tcn))
-        assert grid_widths(rendered, 1) == template_seal_grid[: 1 + count]

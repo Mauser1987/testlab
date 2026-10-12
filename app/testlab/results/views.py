@@ -1,38 +1,55 @@
-"""Result tab of a Test Run (M2B): one page, six sections.
+"""Result tab of a Test Run (M2B, M2E): one page, seven sections.
 
-    Summary · Plots · Measurements · Pictures · Acceptance · Conclusion
+    Summary · Plots · Measurements · Pictures · Acceptance · Conclusion · Report
 
 Each section saves on its own and returns to its place on the page, so the
 engineer never fills one enormous form. Every change goes through the same
-lifecycle/authorization check as the manual log (recording_refusal).
+lifecycle/authorization check (result_refusal), which refuses every change
+once the Result is final — until a revision is opened (M2F-B2), which makes
+the Result a Draft again while the manual log and DCS data stay locked. The
+Report section previews the Draft report, lists what blocks finalization,
+finalizes, serves the stored final PDF and opens the next revision.
 """
 
 import mimetypes
 
 from django.contrib import messages
 from django.db.models import Prefetch
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
-from testlab.documents.pdf import PdfConversionError
-from testlab.documents.render import run_report_template
-from testlab.documents.run_report_context import build_run_report_context, report_assets, run_report_file_name
 from testlab.execution import manual_log
-from testlab.execution.views import get_dataset, get_run, recording_refusal, run_context
+from testlab.execution.views import get_dataset, get_run, result_refusal, run_context
+from testlab.documents.report_profiles import PROFILES
+from testlab.tcn.permissions import can_finalize_result, can_revise_result
 
-from . import acceptance, evidence, images, plots, services
+from . import (
+    acceptance, evidence, finalization, images, measurement_summary, plots, requirements, revisions, services,
+)  # fmt: skip
 from .forms import (
     AcceptanceItemForm,
     AddComponentForm,
     ComponentFormSet,
+    ComponentObservationsForm,
     ImageEditForm,
     ImageUploadForm,
-    MeasurementsForm,
     NarrativeForm,
+    ReportDetailsForm,
 )
-from .models import AcceptanceItem, InspectionMeasurement, ResultComponent, ResultImage, ResultPlot, TestResult
+from .inspection import identity_label
+from .measurement_forms import MeasurementPlanForm
+from .models import (
+    AcceptanceItem, FaceMeasurement, FinalResultError, ReportDocument, ResultComponent, ResultImage, ResultPlot,
+    TestResult,
+)  # fmt: skip
+
+
+def measurement_queryset():
+    return FaceMeasurement.objects.select_related(
+        "mahr", "roundpak", "dimensional", "created_by", "reviewed_by"
+    ).prefetch_related("files")
 
 
 def get_result(test_run):
@@ -40,7 +57,7 @@ def get_result(test_run):
         TestResult.objects.filter(test_run=test_run)
         .prefetch_related(
             Prefetch("components", queryset=ResultComponent.objects.prefetch_related(
-                Prefetch("measurements", queryset=InspectionMeasurement.objects.all()))),
+                Prefetch("face_measurements", queryset=measurement_queryset()))),
             Prefetch("images", queryset=ResultImage.objects.select_related("uploaded_by", "component")),
             Prefetch("acceptance_items", queryset=AcceptanceItem.objects.select_related("component")),
             Prefetch("plots", queryset=ResultPlot.objects.select_related("dataset", "updated_by")),
@@ -54,11 +71,9 @@ def section_url(test_run, section):
 
 
 def refused(request, test_run, section="summary"):
-    """Redirect with the reason when the run's Result may not be changed yet, else None."""
-    if recording_refusal(test_run):
-        messages.error(
-            request, f"TCN{test_run.display_no} has not been issued yet: the Result can be recorded once it is issued."
-        )
+    """Redirect with the reason when the run's Result may not be changed (yet, or any more), else None."""
+    if refusal := result_refusal(test_run):
+        messages.error(request, refusal)
         return redirect(section_url(test_run, section))
     return None
 
@@ -71,23 +86,50 @@ def seal_positions(test_run, leakage):
     return positions
 
 
+def evidence_of(found):
+    return acceptance.Evidence(found["leakage"], found["wear"], found["period"], found["timeline"])
+
+
 def render_result(request, test_run, result, **forms):
     context = {**run_context(test_run, "result"), "result": result}
     if result is None:
         return render(request, "results/result_start.html", context)
+    if not result.is_final:
+        for notice in requirements.sync_requirements(result, request.user):
+            messages.warning(request, notice)
+        result = get_result(test_run)
     found = evidence.collect(test_run, result)
     components = found["components"]
     items = list(result.acceptance_items.all())
-    evaluations = acceptance.evaluate_all(items, acceptance.Evidence(found["leakage"], found["wear"], found["period"]))
+    evaluations = acceptance.evaluate_all(items, evidence_of(found))
     positions = seal_positions(test_run, found["leakage"])
     addable = services.addable_components(result)
+    issues = [] if result.is_final else finalization.blocking_issues(result, found, evaluations)
     context.update(found)
     context.update(
         {
+            "program": requirements.program_of(test_run.project),
+            "pending_changes": requirements.pending_changes(test_run),
+            "issues": issues,
+            "notices": [] if result.is_final else finalization.notices(result, found, items),
+            "can_finalize": can_finalize_result(request.user),
+            "can_revise": can_revise_result(request.user),
+            "revision_no": revisions.working_number(result),
+            "revisions": revisions.history(result),
+            "report_form": forms.get("report_form") or ReportDetailsForm(instance=result),
+            "not_added": [identity_label(*pair) for pair in addable],
+            "observation_forms": {c.pk: ComponentObservationsForm(instance=c, prefix=f"c{c.pk}") for c in components},
             "identity_formset": forms.get("identity_formset")
             or ComponentFormSet(queryset=result.components.order_by("pk")),
             "add_component_form": AddComponentForm(addable=addable) if addable else None,
-            "measurements_form": forms.get("measurements_form") or MeasurementsForm(components=components),
+            "plan_form": forms.get("plan_form") or MeasurementPlanForm(instance=result),
+            "measurement_summary": measurement_summary.summary(components),
+            "measurement_cards": measurement_summary.component_cards(components),
+            "report_profiles": PROFILES,
+            "report_revision": revisions.latest(result) if result.is_final else None,
+            "report_documents": list(ReportDocument.objects.filter(revision__result=result).order_by(
+                "profile", "revision__number", "issue")),
+            "completeness": measurement_summary.completeness(components),
             "upload_form": forms.get("upload_form") or ImageUploadForm(components=components),
             "pictures": images.picture_groups(result, components),
             "plots": [(plot, plots.describe(plot)) for plot in result.plots.all()],
@@ -95,10 +137,11 @@ def render_result(request, test_run, result, **forms):
             "acceptance_form": forms.get("acceptance_form")
             or AcceptanceItemForm(result=result, positions=positions),
             "narrative_form": forms.get("narrative_form") or NarrativeForm(instance=result),
-            "wear_by_measurement": {w.measurement.pk: w for w in found["wear"]},
         }
     )
     context["identity_rows"] = sorted(context["identity_formset"].forms, key=lambda form: form.instance.sort_key)
+    for card in context["measurement_cards"]:
+        card["observations_form"] = context["observation_forms"][card["component"].pk]
     return render(request, "results/result.html", context)
 
 
@@ -182,16 +225,20 @@ class ComponentRemoveView(View):
         return redirect(section_url(test_run, "measurements"))
 
 
-class MeasurementsView(ResultSectionView):
+class MeasurementPlanView(ResultSectionView):
+    """Which measurement kinds the seal faces need (required / not applicable)."""
+
     section = "measurements"
 
     def handle(self, request, test_run, result):
-        form = MeasurementsForm(request.POST, components=services.sorted_components(result))
+        form = MeasurementPlanForm(request.POST, instance=result)
         if form.is_valid():
-            services.save_measurements(result, form.values(), request.user)
-            messages.success(request, "Measurements saved.")
+            plan = form.save(commit=False)
+            plan.updated_by = request.user
+            plan.save()
+            messages.success(request, "Measurement plan saved.")
             return redirect(section_url(test_run, self.section))
-        return render_result(request, test_run, result, measurements_form=form)
+        return render_result(request, test_run, result, plan_form=form)
 
 
 class ImageUploadView(ResultSectionView):
@@ -269,7 +316,11 @@ class ImageDeleteView(View):
         if response := refused(request, test_run, "pictures"):
             return response
         name = image.original_name
-        images.delete_image(image)
+        try:
+            images.delete_image(image)
+        except FinalResultError as error:
+            messages.error(request, f"{error} Leave it out of the report instead (Report contents).")
+            return redirect(section_url(test_run, "pictures"))
         services.touch(image.result, request.user)
         messages.success(request, f"{name} deleted.")
         return redirect(section_url(test_run, "pictures"))
@@ -313,11 +364,11 @@ class CompareView(View):
         component = get_object_or_404(ResultComponent, pk=component_pk, result=result)
         groups = images.picture_groups(result, [component])
         comparison = next((c for c in groups["comparisons"] if c["component"] == component), None)
-        measurements = list(component.measurements.all())
+        found = measurement_summary.summary([component])
         context = {
             **run_context(test_run, "result"), "result": result, "component": component,
             "pre": comparison["pre"] if comparison else [], "post": comparison["post"] if comparison else [],
-            "measurements": measurements,
+            "measurement_rows": found[0].rows if found else [],
         }  # fmt: skip
         return render(request, self.template_name, context)
 
@@ -361,6 +412,10 @@ class AcceptanceEditView(View):
         if response := refused(request, test_run, "acceptance"):
             return response
         if request.POST.get("delete"):
+            if item.from_requirement:
+                messages.error(request, f"“{item.criterion}” is a requirement in force ({item.source}); it cannot be "
+                                        "deleted here. Assess it, e.g. Not applicable with a remark.")  # fmt: skip
+                return redirect("results:acceptance_edit", item.pk)
             criterion = item.criterion
             item.delete()
             services.touch(item.result, request.user)
@@ -379,6 +434,74 @@ class AcceptanceEditView(View):
     def render(self, request, item, form):
         context = {**run_context(item.result.test_run, "result"), "item": item, "form": form}
         return render(request, self.template_name, context)
+
+
+class ComponentObservationsView(View):
+    def post(self, request, pk):
+        component = get_object_or_404(ResultComponent.objects.select_related("result__test_run"), pk=pk)
+        test_run = component.result.test_run
+        anchor = f"component-{component.pk}"
+        if response := refused(request, test_run, anchor):
+            return response
+        form = ComponentObservationsForm(request.POST, instance=component, prefix=f"c{component.pk}")
+        if form.is_valid():
+            form.save()
+            services.touch(component.result, request.user)
+            messages.success(request, f"Observations of {component} saved.")
+        else:
+            messages.error(request, "Observations not saved.")
+        return redirect(section_url(test_run, anchor))
+
+
+class ReportDetailsView(ResultSectionView):
+    """Responsible engineer (Prepared by) and the run-specific addition to the objective."""
+
+    section = "report"
+
+    def handle(self, request, test_run, result):
+        form = ReportDetailsForm(request.POST, instance=result)
+        if form.is_valid():
+            result = form.save(commit=False)
+            result.updated_by = request.user
+            result.save()
+            messages.success(request, "Report details saved.")
+            return redirect(section_url(test_run, self.section))
+        return render_result(request, test_run, result, report_form=form)
+
+
+class FinalizeView(ResultSectionView):
+    section = "report"
+
+    def handle(self, request, test_run, result):
+        if not can_finalize_result(request.user):
+            messages.error(request, "You are not allowed to finalize Test Results.")
+            return redirect(section_url(test_run, self.section))
+        try:
+            finalization.finalize(result, request.user)
+        except finalization.FinalizationError as error:
+            for issue in error.issues:
+                messages.error(request, issue.message)
+            return redirect(section_url(test_run, error.issues[0].anchor if error.issues else self.section))
+        messages.success(request, f"The Result of Run {test_run.display_no} is final; the Test Run Report is stored.")
+        return redirect(section_url(test_run, self.section))
+
+
+class ReviseView(View):
+    """Open the next revision of a final Result (revisions.py): a Draft again, with the reason recorded."""
+
+    def post(self, request, run_pk):
+        test_run = get_run(run_pk)
+        result = get_object_or_404(TestResult, test_run=test_run)
+        try:
+            revisions.open_revision(result, request.user, request.POST.get("reason", ""))
+        except revisions.RevisionError as error:
+            messages.error(request, str(error))
+        else:
+            number = revisions.working_number(TestResult.objects.get(pk=result.pk))
+            messages.success(request, f"Revision {number} of the Result of Run {test_run.display_no} is open. "
+                                      f"Revision {number - 1} and its documents stay as issued until revision "
+                                      f"{number} is finalized.")  # fmt: skip
+        return redirect(section_url(test_run, "report"))
 
 
 class NarrativeView(ResultSectionView):
@@ -400,11 +523,8 @@ class NarrativeView(ResultSectionView):
 
 def plot_refusal(test_run):
     """JSON refusal for the DCS viewer, or None."""
-    if recording_refusal(test_run):
-        return JsonResponse(
-            {"error": f"TCN{test_run.display_no} has not been issued yet: the Result can be recorded once it is issued."},
-            status=403,
-        )
+    if refusal := result_refusal(test_run):
+        return JsonResponse({"error": refusal}, status=403)
     return None
 
 
@@ -508,31 +628,11 @@ class PlotDeleteView(View):
         test_run = plot.result.test_run
         if response := refused(request, test_run, "plots"):
             return response
-        plots.delete_plot(plot)
+        try:
+            plots.delete_plot(plot)
+        except FinalResultError as error:
+            messages.error(request, f"{error} Leave it out of the report instead (Report contents).")
+            return redirect(section_url(test_run, "plots"))
         services.touch(plot.result, request.user)
         messages.success(request, "Plot removed from the Result.")
         return redirect(section_url(test_run, "plots"))
-
-
-# ---- Test Run Report (M2C) ------------------------------------------------------------------
-
-
-class ReportPreviewView(View):
-    """Draft Test Run Report PDF, regenerated from the run's current data; marked DRAFT, never stored.
-
-    Finalization (freeze the report context, render once, store the PDF with
-    its SHA-256) is not part of M2C.
-    """
-
-    def get(self, request, run_pk):
-        test_run = get_run(run_pk)
-        context = build_run_report_context(test_run)
-        try:
-            content = run_report_template().render_pdf(context, report_assets(context))
-        except PdfConversionError as error:
-            messages.error(request, f"The report preview could not be generated. {error}")
-            return redirect("results:result", test_run.pk)
-        response = HttpResponse(content, content_type="application/pdf")
-        response["Content-Disposition"] = f'inline; filename="{run_report_file_name(test_run, draft=True)}"'
-        response["Cache-Control"] = "no-store"
-        return response

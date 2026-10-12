@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% load execution_tags %}
+{% block title %}{{ profile_label }} report · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card-head">
+    <h2>Test Run Report — report contents</h2>
+    <a class="button btn-sm" href="{% url 'results:result' run.pk %}#report">Back to Result</a>
+  </div>
+  <nav class="profile-tabs" aria-label="Report profile">
+    {% for code, label in profiles.items %}<a href="{% url 'results:report_contents' run.pk code %}" class="{% if code == profile %}active{% endif %}"{% if code == profile %} aria-current="page"{% endif %}>{{ label }} report</a>{% endfor %}
+  </nav>
+  <p class="profile-basis">
+    {% if revision %}
+      <strong>Result final</strong> · record <strong>revision {{ revision.number }}</strong>, frozen {{ revision.finalized_at|date:"d-M-Y H:i" }}. Previews and documents are rendered from this frozen record, never from live data.
+    {% elif revising %}
+      <strong>Result Draft · revision {{ revising }} in progress</strong> · previews use the live data and are marked DRAFT. The documents below stay as issued; new documents are issued once revision {{ revising }} is final.
+    {% else %}
+      <strong>Result Draft</strong> · previews use the live data and are marked DRAFT. Documents are issued once the Result is final.
+    {% endif %}
+    Choices here are presentation only: they change no evidence, calculation or assessment, and no document already issued.
+  </p>
+  {% if legacy_record %}<p class="alert alert-warning">Revision {{ revision.number }} was finalized before report profiles (M2E): its record has no per-item identities, so only the note switches apply to its documents; measurements, pictures and plots are shown as frozen.</p>{% endif %}
+
+  <form method="post" class="report-contents">
+    {% csrf_token %}
+    <div class="card-grid">
+      <div class="card">
+        <h3 class="card-title">Always included</h3>
+        <ul class="locked-list">{% for item in locked %}<li>{{ item }}</li>{% endfor %}</ul>
+        <p class="hint">Cannot be hidden in any profile. A mandatory qualification (e.g. leakage collections covering less than the warning threshold of the shaft-running time, shaft state unknown, provisional data) is stated whenever the detail that would show it is hidden.</p>
+      </div>
+      <div class="card">
+        <h3 class="card-title">Notes and optional parts</h3>
+        {% for flag, on, default in flags %}
+          <label class="check-row"><input type="checkbox" name="flag:{{ flag.key }}"{% if on %} checked{% endif %}> {{ flag.label }}{% if on != default %} <span class="calc-key">changed</span>{% endif %}</label>
+        {% endfor %}
+        <p class="hint">{{ profile_label }} defaults: {% if profile == "customer" %}clean presentation — explanations and provenance off, essential results and qualifications on.{% else %}complete technical detail.{% endif %}</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">Seal face measurements</h3>
+      {% if slots %}
+        <p class="hint">Per component and measurement type, Pre and Post together. Reviewed is not the same as published: an unticked measurement stays reviewed, reported and available for a later report.</p>
+        <div class="table-wrap"><table class="list compact slot-matrix">
+          <thead><tr><th>Component — measurement</th><th>Summary value</th><th>Detailed analysis</th><th>Figures</th><th>Remark</th></tr></thead>
+          <tbody>
+            {% for slot, chosen in slots %}
+              <tr id="{{ slot.anchor }}">
+                <th>{{ slot.label }}</th>
+                <td><label><input type="checkbox" name="slot:{{ slot.key }}:summary"{% if chosen.summary %} checked{% endif %}> Pre/Post table</label></td>
+                {% if slot.detailed %}
+                  <td><label><input type="checkbox" name="slot:{{ slot.key }}:detail"{% if chosen.detail %} checked{% endif %}> numbers{% if chosen.figures %} and figures{% endif %}</label></td>
+                  <td>{% for code, label in slot.figures.items %}<label class="figure-choice"><input type="checkbox" name="slot:{{ slot.key }}:figures" value="{{ code }}"{% if code in chosen.figures %} checked{% endif %}> {{ label }}</label>{% endfor %}</td>
+                  <td><label><input type="checkbox" name="slot:{{ slot.key }}:remark"{% if chosen.remark %} checked{% endif %}> show</label></td>
+                {% else %}
+                  <td class="hint">—</td><td class="hint">—</td><td class="hint">—</td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+        <p class="hint">Figures are shown with the detailed analysis. Face length: its summary row carries the face wear.</p>
+      {% else %}
+        <p class="empty">No reviewed, reported measurement yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3 class="card-title">Pictures</h3>
+        {% for picture, on, label in pictures %}
+          <label class="check-row picture-choice"><input type="checkbox" name="picture:{{ picture.pk }}"{% if on %} checked{% endif %}> <img src="{% url 'results:image_preview' picture.pk %}" alt="" loading="lazy"> {{ label }}</label>
+        {% empty %}<p class="empty">No pictures.</p>{% endfor %}
+      </div>
+      <div class="card">
+        <h3 class="card-title">DCS plots</h3>
+        {% for plot, on in plots %}
+          <label class="check-row"><input type="checkbox" name="plot:{{ plot.pk }}"{% if on %} checked{% endif %}> {{ plot.caption|default:"Plot" }} <span class="hint">{{ plot.dataset.original_name }}</span></label>
+        {% empty %}<p class="empty">No plots.</p>{% endfor %}
+        <p class="hint">Pictures and plots stay stored as evidence whatever is chosen here.</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn-primary">Save {{ profile_label }} contents</button>
+      <button type="submit" name="action" value="reset" class="btn-sm"{% if not customized %} disabled title="Already the profile defaults"{% endif %}>Reset to the profile defaults</button>
+      <a class="button" href="{% url 'results:report_profile_preview' run.pk profile %}" target="_blank" rel="noopener">Preview {{ profile_label }} PDF</a>
+    </div>
+  </form>
+
+  <div class="card" id="documents">
+    <h3 class="card-title">{{ profile_label }} documents</h3>
+    {% if documents %}
+      <div class="table-wrap"><table class="list compact">
+        <thead><tr><th>Document</th><th>Result revision</th><th>Issued</th><th>Status</th><th>SHA-256</th><th></th></tr></thead>
+        <tbody>
+          {% for d in documents %}
+            <tr>
+              <th><a href="{% url 'results:document' d.pk %}">{{ d.identity }}</a></th>
+              <td>{{ d.revision.number }}</td>
+              <td>{{ d.issued_at|date:"d-M-Y H:i" }} · {{ d.issued_by|initials }}{% if d.reason %}<br><span class="hint">{{ d.reason }}</span>{% endif %}</td>
+              <td><span class="status status-{{ d.status }}">{{ d.get_status_display }}</span>{% if d.status_reason %}<br><span class="hint">{{ d.status_changed_at|date:"d-M-Y" }} · {{ d.status_reason }}</span>{% endif %}</td>
+              <td><code title="{{ d.sha256 }}">{{ d.sha256|slice:":12" }}…</code></td>
+              <td>{% if d.status == "issued" and can_issue %}<form method="post" action="{% url 'results:document_withdraw' d.pk %}" class="inline-form" onsubmit="return this.reason.value.trim() !== '' || (alert('Give the reason for withdrawing it.'), false);">{% csrf_token %}<input type="text" name="reason" placeholder="Reason for withdrawal" maxlength="500"> <button type="submit" class="btn-sm btn-danger">Withdraw</button></form>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}
+      <p class="empty">No {{ profile_label }} document issued yet.</p>
+    {% endif %}
+    {% if revision and can_issue %}
+      <form method="post" action="{% url 'results:report_issue' run.pk profile %}" class="fields issue-form" onsubmit="return confirm('Issue the {{ profile_label }} report of revision {{ revision.number }} with the contents saved above? The PDF is stored and can never be changed.');">
+        {% csrf_token %}
+        {% if issued_before %}<div class="field"><label for="issue-reason">Reason for issuing again (required)</label><input id="issue-reason" type="text" name="reason" required maxlength="500"></div>{% endif %}
+        <div class="actions"><button type="submit" class="btn-primary">Issue {{ profile_label }} report</button></div>
+        <p class="hint">Rendered from the frozen record of revision {{ revision.number }} with the saved contents{% if issued_before %}; the document issued now replaces the current one, which becomes Superseded{% endif %}. Save changed contents first.</p>
+      </form>
+    {% elif revising %}
+      <p class="hint">Revision {{ revising }} is in progress: finalizing it issues its Engineering report and supersedes the documents of the earlier revision; the Customer report of revision {{ revising }} is issued afterwards.</p>
+    {% elif not revision %}
+      <p class="hint">Finalizing the Result issues its Engineering report; the Customer report is issued afterwards from the same frozen record.</p>
+    {% endif %}
+  </div>
+{% endblock %}

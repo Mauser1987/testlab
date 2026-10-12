@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Undo import · {{ batch.original_name }} · Run {{ run.display_no }} · TestLab{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  {% include "execution/_log_import_head.html" %}
+  {% if recording_refused %}
+    <p class="alert alert-warning">{{ recording_refused }}</p>
+  {% elif batch.status != "imported" %}
+    <p class="alert">Only an imported batch can be undone.</p>
+  {% elif not allowed %}
+    <p class="alert alert-warning">You are not allowed to undo an import.</p>
+  {% else %}
+  <form method="post" class="card fields discard required">
+    {% csrf_token %}
+    <h3>Undo this import</h3>
+    <p>Removes the {{ entry_count }} entr{{ entry_count|pluralize:"y,ies" }} this import created in the manual log of Run {{ run.display_no }}. Readings entered in TestLab and other imports are not touched. The import record — workbook, mapping, rows and this undo with its reason — is kept.</p>
+    {% if problems %}<ul class="issue-errors">{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>{% endif %}
+    {% if edited %}
+      <p class="alert alert-warning">{{ edited|length }} imported entr{{ edited|length|pluralize:"y was,ies were" }} edited after the import:
+        {% for entry in edited %}{{ entry.observed_at|date:"d-M-Y H:i" }} ({{ entry.updated_by.get_full_name|default:entry.updated_by.username }}, {{ entry.updated_at|date:"d-M-Y H:i" }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>
+      <label><input type="checkbox" name="include_edited" value="1"> Remove the edited entries too</label>
+    {% endif %}
+    <div class="field">
+      <label for="reason">Reason</label>
+      <textarea name="reason" id="reason" rows="3" required>{{ reason }}</textarea>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn-danger-solid">Undo import</button>
+      <a class="button btn-ghost" href="{% url 'execution:log_import_detail' batch.pk %}">Cancel</a>
+    </div>
+  </form>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Import record · {{ batch.original_name }} · Run {{ run.display_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <p><a href="{% url 'execution:log_import' run.pk %}">‹ Imports of this run</a> · <a href="{% url 'execution:log' run.pk %}">Manual log</a></p>
+  {% include "execution/_log_import_head.html" %}
+  {% if batch.is_open %}
+    <p class="alert">Not imported yet. <a href="{% if batch.status == 'mapping' %}{% url 'execution:log_import_mapping' batch.pk %}{% else %}{% url 'execution:log_import_preview' batch.pk %}{% endif %}">Continue the import</a>.</p>
+  {% endif %}
+  {% if can_undo %}<p><a class="button btn-danger" href="{% url 'execution:log_import_undo' batch.pk %}">Undo import…</a> <span class="hint">Removes every entry of this import; this record stays.</span></p>{% endif %}
+
+  {% if batch.mapping_confirmed_at %}
+  <section class="card">
+    <div class="card-head"><h3>Mapping used</h3><span class="hint">confirmed {{ batch.mapping_confirmed_at|date:"d-M-Y H:i" }} by {{ batch.mapping_confirmed_by.get_full_name|default:batch.mapping_confirmed_by.username }}</span></div>
+    <ul class="plain">{% for m in mapping_rows %}<li><span class="id">{{ m.letter }}</span> {{ m.column.group }} {{ m.column.label }}{% if m.column.unit %} [{{ m.column.unit }}]{% endif %} → {{ m.label }}{% if m.reviewed %} <span class="hint">(review confirmed)</span>{% elif m.changed %} <span class="hint">(changed from the proposal {{ m.proposed }})</span>{% endif %}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% include "execution/_log_import_header.html" %}
+
+  {% if batch.undo_details.removed %}
+    <p class="hint">Undo removed {{ batch.undo_details.removed|length }} entr{{ batch.undo_details.removed|length|pluralize:"y,ies" }}{% if batch.undo_details.edited %}, {{ batch.undo_details.edited|length }} of them edited after the import{% endif %}.</p>
+  {% endif %}
+  {% if rows and batch.status != "mapping" %}{% include "execution/_log_import_rows.html" with editable=False %}{% endif %}
+{% endblock %}

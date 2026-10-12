@@ -1,9 +1,9 @@
-"""HTML document template → PDF with Playwright/Chromium (TESTLAB_TCN_RENDERER=chromium, M1 spec §19).
+"""HTML document template → PDF with Playwright/Chromium, the only PDF renderer (M1 spec §19).
 
 The automated proof of the Chromium renderer on the comparison samples:
 AT-2 (2026RSD03TL TCN001), a multi-page TCN, AT-3 (Single + Plug Seal) and
 AT-16 (Plug / Inboard / Outboard). Text regressions of the template itself
-are in test_tcn_document.py (also run for chromium).
+are in test_tcn_document.py.
 
 Marked `chromium`: skipped when Playwright's Chromium is not installed.
 With TESTLAB_PROOF_DIR set, the sample PDFs and render timings are written
@@ -28,8 +28,7 @@ from testlab.documents.tcn_context import build_tcn_context
 from testlab.tcn.models import TcnRevision
 from testlab.tcn.services import create_tcn, issue_tcn
 
-from .test_html_render import tcn001  # noqa: F401  (fixture)
-from .test_tcn_document import single_plug_project
+from .test_tcn_document import single_plug_project, tcn001  # noqa: F401  (fixture)
 
 pytestmark = [pytest.mark.chromium, pytest.mark.django_db]
 
@@ -42,7 +41,7 @@ RENDER_SECONDS_LIMIT = 10  # generous: one render is well under a second on a de
 
 def render(tcn, is_draft=False, **overrides):
     context = dict(build_tcn_context(tcn), is_draft=is_draft, **overrides)
-    return ChromiumTemplate.load("tcn_chromium").render_pdf(context)
+    return ChromiumTemplate.load("tcn").render_pdf(context)
 
 
 def reader(data):
@@ -109,9 +108,9 @@ def three_column_tcn(user):
 @pytest.fixture
 def bundle(settings, tmp_path):
     """A copy of the Chromium template bundle that a test may change."""
-    shutil.copytree(settings.TESTLAB_TEMPLATE_DIR / "tcn_chromium", tmp_path / "tcn_chromium")
+    shutil.copytree(settings.TESTLAB_TEMPLATE_DIR / "tcn", tmp_path / "tcn")
     settings.TESTLAB_TEMPLATE_DIR = tmp_path
-    return tmp_path / "tcn_chromium"
+    return tmp_path / "tcn"
 
 
 # --- Page size, margins, header and footer --------------------------------------------------
@@ -236,29 +235,27 @@ def test_content_and_layout_are_deterministic(request, user, sample):
 # --- Issue through the services ----------------------------------------------------------------
 
 
-def test_issue_stores_the_chromium_pdf_with_its_hashes(settings, tcn001, user):
-    settings.TESTLAB_TCN_RENDERER = "chromium"
+def test_issue_stores_the_chromium_pdf_with_its_hashes(tcn001, user):
     tcn = TcnRevision.objects.get(pk=tcn001.pk)
     issued = issue_tcn(tcn, tcn.row_version, user)
     with issued.issued_document.storage.open(issued.issued_document.name, "rb") as f:
         stored = f.read()
     assert issued.issued_document_sha256 == hashlib.sha256(stored).hexdigest()
-    assert issued.template_sha256 == ChromiumTemplate.load("tcn_chromium").sha256
+    assert issued.template_sha256 == ChromiumTemplate.load("tcn").sha256
     text = page_texts(stored)[0]
     assert "Run/TCN No.: 001" in text and "DRAFT" not in text
 
 
-def test_chromium_renderer_uses_the_chromium_bundle(settings):
-    settings.TESTLAB_TCN_RENDERER = "chromium"
+def test_tcn_template_is_the_chromium_bundle():
     template = tcn_template()
-    assert isinstance(template, ChromiumTemplate) and template.name == "tcn_chromium"
+    assert isinstance(template, ChromiumTemplate) and template.name == "tcn"
 
 
 # --- The template bundle -----------------------------------------------------------------------
 
 
 def test_bundle_hash_covers_every_file(bundle):
-    original = ChromiumTemplate.load("tcn_chromium")
+    original = ChromiumTemplate.load("tcn")
     manifest = "".join(f"{path}\0{hashlib.sha256(data).hexdigest()}\n" for path, data in sorted(original.files.items()))
     assert original.sha256 == hashlib.sha256(manifest.encode()).hexdigest()
     assert {"tcn.html", "header.html", "footer.html", "tcn.css", "logo.jpg", "fonts/Carlito-Bold.ttf"} <= set(
@@ -268,13 +265,13 @@ def test_bundle_hash_covers_every_file(bundle):
         path = bundle / name
         saved = path.read_bytes()
         path.write_bytes(saved + b"\n")
-        assert ChromiumTemplate.load("tcn_chromium").sha256 != original.sha256, name
+        assert ChromiumTemplate.load("tcn").sha256 != original.sha256, name
         path.write_bytes(saved)
 
 
 def test_pdf_is_rendered_from_the_loaded_bytes(bundle, tcn001):
     """The hash stored at issue describes what was rendered, even if the files change meanwhile."""
-    template = ChromiumTemplate.load("tcn_chromium")
+    template = ChromiumTemplate.load("tcn")
     context = dict(build_tcn_context(tcn001), is_draft=False)
     expected = layout(template.render_pdf(context))
     (bundle / "tcn.css").write_text("html { font-size: 30pt; }")
@@ -286,7 +283,7 @@ def test_pdf_is_rendered_from_the_loaded_bytes(bundle, tcn001):
 def test_missing_part_fails_clearly(bundle, part):
     (bundle / part).unlink()
     with pytest.raises(pdf.PdfConversionError, match=f"{part} was not found"):
-        ChromiumTemplate.load("tcn_chromium")
+        ChromiumTemplate.load("tcn")
 
 
 @pytest.mark.parametrize("name", ["logo.jpg", "fonts/Carlito-Bold.ttf"])
@@ -365,14 +362,11 @@ def test_worker_failure_is_reported(tmp_path, monkeypatch, tcn001):
         render(tcn001)
 
 
-def test_system_check_warns_when_chromium_is_missing(settings, monkeypatch):
-    settings.TESTLAB_TCN_RENDERER = "chromium"
+def test_system_check_warns_when_chromium_is_missing(monkeypatch):
     assert checks.chromium_check(None) == []
     monkeypatch.setattr(checks, "chromium_available", lambda: "Chromium for Playwright is not installed (x).")
     (warning,) = checks.chromium_check(None)
     assert warning.id == "testlab.W003" and "playwright install chromium" in warning.hint
-    settings.TESTLAB_TCN_RENDERER = "html"
-    assert checks.chromium_check(None) == []
 
 
 # --- Proof samples and timings -----------------------------------------------------------------

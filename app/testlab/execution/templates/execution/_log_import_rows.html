@@ -1,0 +1,90 @@
+{% load execution_tags %}{% comment %}Rows of an import. Expects rows, columns, categories; editable: the preview form.{% endcomment %}
+<div class="table-card table-scroll">
+  <table class="list log import-rows">
+    <thead>
+      <tr>
+        <th>Row</th><th>Status</th><th>{% if editable %}Decision{% else %}Outcome{% endif %}</th>
+        <th class="sticky">Date / time</th><th title="As written in the workbook (source operator)">By</th>
+        {% for column in columns %}<th class="number" title="{{ column.full_label }}">{{ column.group }}<br>{{ column.label }} [{{ column.unit }}]</th>{% endfor %}
+        <th class="number" title="Collection period entered for the leakage; empty: since the previous reading">Over [h]</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rows %}{% with row=item.row data=item.data %}
+        <tr class="cls-row-{{ row.classification }}" id="row-{{ row.sheet_row }}">
+          <td class="id">{{ row.sheet_row }}</td>
+          <td><span class="status cls-{{ row.classification }}">{{ row.get_classification_display }}</span></td>
+          <td class="decision">
+            {% if editable %}
+              {% if row.classification == "error" or row.classification == "empty" %}
+                <input type="hidden" name="r{{ row.pk }}_decision" value="skip">Skip
+              {% else %}
+                <label><input type="radio" name="r{{ row.pk }}_decision" value="import"{% if row.decision == "import" %} checked{% endif %}> Import</label>
+                <label><input type="radio" name="r{{ row.pk }}_decision" value="skip"{% if row.decision == "skip" %} checked{% endif %}> Skip</label>
+                {% if row.classification == "conflict" and not row.decision %}<div class="text-warning">decide</div>{% endif %}
+              {% endif %}
+            {% else %}
+              {{ item.outcome|default:"—" }}
+            {% endif %}
+          </td>
+          <td class="sticky">{% if item.at %}{{ item.at|date:"d-M-Y H:i" }}{% else %}<span class="empty">—</span>{% endif %}</td>
+          <td>{{ row.source_operator }}</td>
+          {% for cell in item.cells %}
+            <td class="number">{% if cell.value is not None %}{{ cell.value }}{% else %}<span class="empty" title="not measured">·</span>{% endif %}</td>
+          {% endfor %}
+          <td class="number">
+            {% if data.period_options %}
+              {% if editable %}
+                <select name="r{{ row.pk }}_period" title="The leakages of this row have different periods">
+                  <option value=""{% if item.period is None %} selected{% endif %} disabled>choose…</option>
+                  {% for option in data.period_options %}<option value="{{ option }}"{% if item.period == option %} selected{% endif %}>{% if option %}{{ option }} h{% else %}since previous reading{% endif %}</option>{% endfor %}
+                </select>
+              {% else %}{{ item.period|default:"—" }}{% endif %}
+            {% elif data.leakage_hours %}{{ data.leakage_hours }}<span class="entered-mark" title="entered in the workbook">*</span>{% endif %}
+          </td>
+        </tr>
+        <tr class="row-details cls-row-{{ row.classification }}">
+          <td></td>
+          <td colspan="{{ columns|length|add:5 }}">
+            {% if data.note %}<div class="import-note"><span class="hint">Note:</span> {{ data.note|linebreaksbr }}</div>{% endif %}
+            <div class="events">
+            {% if editable %}
+              <label class="hint" for="r{{ row.pk }}_category">Event of this reading</label>
+              <select name="r{{ row.pk }}_category" id="r{{ row.pk }}_category">
+                <option value="">—</option>
+                {% for value, label in categories %}<option value="{{ value }}"{% if value == item.category %} selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+              {% if row.suggestions.category %}<div class="hint suggestion">Suggested: {{ category_labels|get:row.suggestions.category.value }} — {{ row.suggestions.category.reason }}</div>{% endif %}
+              {% for event in item.events %}
+                <div class="event-proposal">
+                  <label><input type="checkbox" name="r{{ row.pk }}_e{{ event.index }}_accept" value="1"{% if event.accepted %} checked{% endif %}>
+                    {% if event.needs_time %}Create separate event after this reading?{% else %}Detected event time {{ event.time }} — create separate event?{% endif %}</label>
+                  <input type="text" name="r{{ row.pk }}_e{{ event.index }}_time" value="{{ event.chosen_time }}" placeholder="HH:MM" size="5" aria-label="Event time">
+                  <select name="r{{ row.pk }}_e{{ event.index }}_category" aria-label="Event category">
+                    {% for value, label in categories %}<option value="{{ value }}"{% if value == event.chosen_category %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                  </select>
+                  <div class="hint">{{ event.reason }}{% if event.flag %} <span class="text-warning">{{ event.flag }}</span>{% endif %}</div>
+                </div>
+              {% endfor %}
+            {% else %}
+              {% if item.category %}<span class="event-tag">{{ category_labels|get:item.category }}</span>{% endif %}
+              {% for event in item.events %}{% if event.accepted %}<div><span class="event-tag">{{ category_labels|get:event.chosen_category }}</span> {{ event.chosen_time }} (separate event)</div>{% endif %}{% endfor %}
+            {% endif %}
+            </div>
+            {% for error in data.errors %}<div class="text-danger">{{ error.cell }}: {{ error.message }}</div>{% endfor %}
+            {% if row.match_details %}{% with match=row.match_details %}
+              <div>{% if row.classification == "duplicate" %}Same values as{% else %}Same minute as{% endif %} the reading {{ match.source }}{% if item.match_at %} at {{ item.match_at|date:"d-M-Y H:i" }}{% endif %}{% if match.same_file %} — already imported from this same file{% endif %}.
+                {% for diff in match.differences %}{% if forloop.first %} Differs: {% endif %}{{ diff.label }} {{ diff.existing }} → {{ diff.imported }}{% if not forloop.last %}; {% endif %}{% endfor %}
+                {% if match.note_differs %} Note in the log: “{{ match.existing_note|default:"(none)" }}”.{% endif %}
+                {% if row.classification == "conflict" %} The existing reading is never changed: Import adds this row as another entry.{% endif %}</div>
+            {% endwith %}{% endif %}
+            {% for flag in data.flags %}<div class="hint">{{ flag.cell }}: {{ flag.message }}</div>{% endfor %}
+            <details class="raw-cells"><summary>Cells as read</summary>
+              <table class="compact">{% for letter, cell in row.cells.items %}<tr><td class="id">{{ letter }}{{ row.sheet_row }}</td><td>{{ cell.k }}</td><td><code>{{ cell.raw|default:cell.v }}</code></td><td>{% if cell.f %}<code>{{ cell.f }}</code>{% endif %}</td></tr>{% endfor %}</table>
+            </details>
+          </td>
+        </tr>
+      {% endwith %}{% endfor %}
+    </tbody>
+  </table>
+</div>

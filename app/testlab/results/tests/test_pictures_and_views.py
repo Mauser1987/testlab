@@ -10,7 +10,7 @@ from django.urls import reverse
 from PIL import Image
 
 from testlab.results import images, services
-from testlab.results.models import AcceptanceItem, InspectionMeasurement, ResultImage, TestResult
+from testlab.results.models import AcceptanceItem, FaceMeasurement, ResultImage, TestResult
 
 from .helpers import log, make_run
 
@@ -127,29 +127,29 @@ def test_run_without_result_offers_to_start_one(logged_in, run):
 
 def test_result_page_shows_all_sections_and_derived_summary(logged_in, run, result, user):
     log(run, user, 0, outboard_leakage=0, speed=2950)
-    log(run, user, 22.5, outboard_leakage=2703, category="adjustment", note="Cooling water flow reduced")
+    log(run, user, 22.5, speed=2950, outboard_leakage=2703, category="adjustment", note="Cooling water flow reduced")
     page = logged_in.get(reverse("results:result", args=[run.pk])).content.decode()
-    for section in ("summary", "measurements", "pictures", "acceptance", "conclusion"):
+    for section in ("summary", "measurements", "pictures", "acceptance", "conclusion", "report"):
         assert f'id="{section}"' in page
-    assert "120.1" in page  # 2703 ml / 22.5 h, derived
+    assert "120.1" in page  # 2703 ml / 22.5 running h, derived
+    assert "Shaft-running hours" in page and "Elapsed clock time" in page
     assert "Cooling water flow reduced" in page and "Adjustment" in page
     assert "IB Stator" in page and "OB Rotor" in page
 
 
-def test_measurements_are_saved_from_the_grid(logged_in, run, result):
+def test_face_length_is_added_per_component_and_summarised(logged_in, run, result):
     stator = component(result, "OB Stator")
-    form = logged_in.get(reverse("results:result", args=[run.pk])).context["measurements_form"]
-    data = {name: "" for name in form.fields}
-    data[f"m{stator.pk}_face_length_pre"] = "1,25037"
-    data[f"m{stator.pk}_face_length_post"] = "1.25025"
-    response = logged_in.post(reverse("results:measurements", args=[run.pk]), data)
-    assert response.status_code == 302 and response["Location"].endswith("#measurements")
-    stored = InspectionMeasurement.objects.get(component=stator, quantity="face_length")
-    assert str(stored.pre_value.normalize()) == "1.25037" and stored.unit == "in"
+    url = reverse("results:measurement_add", args=[stator.pk])
+    step1 = logged_in.get(url, {"kind": "dimensional", "stage": "pre"})
+    assert step1.status_code == 200 and "Face length [in]" in step1.content.decode()
+    for stage, value in (("pre", "1,25037"), ("post", "1.25025")):
+        response = logged_in.post(url, {"kind": "dimensional", "stage": stage, "value": value})
+        assert response.status_code == 302 and response["Location"].endswith(f"#component-{stator.pk}")
+    stored = FaceMeasurement.objects.get(component=stator, stage="pre", kind="dimensional")
+    assert stored.reported and str(stored.dimensional.value.normalize()) == "1.25037" and stored.dimensional.unit == "in"
     page = logged_in.get(reverse("results:result", args=[run.pk])).content.decode()
-    assert "−0.00012" in page  # Δ
-    data[f"m{stator.pk}_face_length_pre"] = "abc"
-    response = logged_in.post(reverse("results:measurements", args=[run.pk]), data)
+    assert "−0.00012" in page and "0.00012" in page  # Δ and wear, derived
+    response = logged_in.post(url, {"kind": "dimensional", "stage": "pre", "value": "abc"})
     assert response.status_code == 200 and "Enter a number." in response.content.decode()
 
 
@@ -190,8 +190,8 @@ def test_picture_can_be_moved_to_another_component_and_deleted(
 
 
 def test_acceptance_criterion_is_added_and_assessed(logged_in, run, result, user):
-    log(run, user, 0, outboard_leakage=0)
-    log(run, user, 10, outboard_leakage=100)
+    log(run, user, 0, speed=2950, outboard_leakage=0)
+    log(run, user, 10, speed=2950, outboard_leakage=100)
     data = {"criterion": "OB leakage", "basis": "leakage_rate", "position": "outboard", "comparison": "<=",
             "limit": "15", "unit": "", "requirement_text": "", "actual_text": "", "assessment": "", "remark": ""}
     response = logged_in.post(reverse("results:acceptance_add", args=[run.pk]), data)
@@ -224,7 +224,7 @@ def test_production_policy_refuses_result_changes_until_the_tcn_is_issued(logged
     result.refresh_from_db()
     assert result.conclusion == ""
     page = logged_in.get(reverse("results:result", args=[run.pk])).content.decode()
-    assert "Save measurements" not in page and not re.search(r'action="[^"]*/pictures/"', page)
+    assert "+ Add measurement" not in page and not re.search(r'action="[^"]*/pictures/"', page)
 
 
 def test_component_is_added_and_empty_one_removed_from_the_page(logged_in, run, result):
@@ -246,6 +246,7 @@ def test_components_identity_is_saved(logged_in, run, result):
         data[f"form-{i}-part_no"] = f"C06187{i}SL"
         data[f"form-{i}-material"] = "Silicon Carbide (SL)"
         data[f"form-{i}-condition"] = "New"
+        data[f"form-{i}-diameter_unit"] = "in"
     response = logged_in.post(reverse("results:components", args=[run.pk]), data)
     assert response.status_code == 302
     assert set(result.components.values_list("condition", flat=True)) == {"New"}

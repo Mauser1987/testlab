@@ -5,15 +5,45 @@ from testlab.projects.arrangements import SealRole
 
 from . import inspection
 from .acceptance import BASIS_UNITS
+from .inspection import Applicability, MeasurementKind
 from .models import AcceptanceItem, Assessment, ResultComponent, ResultImage, TestResult
 
 
 class ComponentForm(forms.ModelForm):
-    """Identity of a component as fitted (legacy "Seal Configuration")."""
+    """Identity of a component as fitted (legacy "Seal Configuration"), its face dimensions and
+    its measurement plan: blank follows the Result (seal faces), or for a sleeve or backing ring
+    dimensional optional and Mahr/ROUNDPAK not applicable."""
+
+    PLAN_FIELDS = ["dimensional_applicability", "mahr_applicability", "roundpak_applicability"]
+
+    face_od = ReadingField(label="Face OD", required=False, max_digits=10, decimal_places=4)
+    face_id = ReadingField(label="Face ID", required=False, max_digits=10, decimal_places=4)
 
     class Meta:
         model = ResultComponent
-        fields = ["part_no", "material", "condition"]
+        fields = ["part_no", "material", "condition", "face_od", "face_id", "diameter_unit",
+                  "dimensional_applicability", "mahr_applicability", "roundpak_applicability"]  # fmt: skip
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        component = self.instance
+        for name in self.PLAN_FIELDS:
+            kind = name.removesuffix("_applicability")
+            default = inspection.effective_applicability(component.component, "", getattr(component.result, name), kind)
+            self.fields[name].choices = [("", f"Default ({Applicability(default).label.lower()})")] + list(
+                Applicability.choices
+            )
+        for name in ("face_od", "face_id"):
+            value = getattr(component, name)
+            if value is not None:
+                self.initial[name] = plain_number(value)
+
+    def clean(self):
+        cleaned = super().clean()
+        od, id_ = cleaned.get("face_od"), cleaned.get("face_id")
+        if od is not None and id_ is not None and od <= id_:
+            self.add_error("face_od", "The face OD must be larger than the ID.")
+        return cleaned
 
 
 ComponentFormSet = forms.modelformset_factory(ResultComponent, form=ComponentForm, extra=0)
@@ -35,39 +65,6 @@ class AddComponentForm(forms.Form):
     def pair(self):
         position, component = self.cleaned_data["component"].split(":")
         return position, component
-
-
-class MeasurementsForm(forms.Form):
-    """Pre and Post of every applicable quantity of every component. Blank = not measured."""
-
-    def __init__(self, *args, components, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.rows = []
-        for component in components:
-            stored = {m.quantity: m for m in component.measurements.all()}
-            for quantity in component.quantities():
-                measurement = stored.get(quantity.code)
-                names = []
-                for stage in ("pre", "post"):
-                    name = f"m{component.pk}_{quantity.code}_{stage}"
-                    field = ReadingField(label=f"{component.label} {quantity.label} {stage}", required=False,
-                                         max_digits=16, decimal_places=6)
-                    self.fields[name] = field
-                    value = getattr(measurement, f"{stage}_value", None) if measurement else None
-                    if value is not None:
-                        self.initial[name] = plain_number(value)
-                    names.append(name)
-                self.rows.append((component, quantity, names[0], names[1], measurement))
-
-    def bound_rows(self):
-        """[(component, quantity, pre field, post field, stored measurement)] in display order."""
-        return [(c, q, self[pre], self[post], m) for c, q, pre, post, m in self.rows]
-
-    def values(self):
-        return {
-            (component.pk, quantity.code): (self.cleaned_data[pre], self.cleaned_data[post])
-            for component, quantity, pre, post, _ in self.rows
-        }
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -133,17 +130,29 @@ class AcceptanceItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.result = result
         self.fields["position"].choices = [("", "—")] + [(p, SealRole(p).label) for p in positions]
-        wear_components = [c for c in result.components.all() if any(q.wear for q in c.quantities())]
+        wear_components = [c for c in result.components.all() if c.is_face
+                           and c.applicability(MeasurementKind.DIMENSIONAL) != Applicability.NOT_APPLICABLE]  # fmt: skip
         self.fields["component"].queryset = ResultComponent.objects.filter(pk__in=[c.pk for c in wear_components])
         self.fields["component"].label_from_instance = lambda c: c.label
         self.fields["comparison"].choices = [("", "— none —")] + AcceptanceItem.Comparison.choices
-        self.fields["assessment"].choices = [("", "— calculated, else not evaluated —")] + Assessment.choices
-        self.fields["unit"].help_text = "Fixed for a calculated actual."
+        self.fields["assessment"].choices = [("", "— calculated, else not assessed —")] + Assessment.choices
+        self.fields["unit"].help_text = "The calculated actual is in ml/h, in/h or h; a limit in another unit of the same quantity is converted."
         if self.instance.pk and self.instance.limit is not None:
             self.initial["limit"] = plain_number(self.instance.limit)
+        self.linked = self.instance.from_requirement
+        if self.linked:  # the requirement is kept in step with its source; the engineer assesses
+            for name in self.REQUIREMENT_FIELDS:
+                self.fields[name].disabled = True
+
+    REQUIREMENT_FIELDS = ["criterion", "basis", "position", "component", "comparison", "limit", "unit",
+                          "requirement_text"]  # fmt: skip
 
     def clean(self):
         cleaned = super().clean()
+        if self.linked:
+            if cleaned.get("actual_text") and self.instance.basis != AcceptanceItem.Basis.MANUAL:
+                self.add_error("actual_text", "The actual is calculated for this basis; leave it empty.")
+            return cleaned
         basis = cleaned.get("basis")
         Basis = AcceptanceItem.Basis
         if basis == Basis.LEAKAGE_RATE and not cleaned.get("position"):
@@ -155,7 +164,7 @@ class AcceptanceItemForm(forms.ModelForm):
         if basis != Basis.WEAR_RATE:
             cleaned["component"] = None
         if basis in BASIS_UNITS:
-            cleaned["unit"] = BASIS_UNITS[basis]
+            cleaned["unit"] = cleaned.get("unit") or BASIS_UNITS[basis]
             if cleaned.get("actual_text"):
                 self.add_error("actual_text", "The actual is calculated for this basis; leave it empty.")
         comparison, limit = cleaned.get("comparison"), cleaned.get("limit")
@@ -169,12 +178,34 @@ class AcceptanceItemForm(forms.ModelForm):
 
     def save(self, commit=True):
         item = super().save(commit=False)
-        item.position = self.cleaned_data["position"]
-        item.component = self.cleaned_data["component"]
-        item.unit = self.cleaned_data.get("unit", "")
+        if not self.linked:
+            item.position = self.cleaned_data["position"]
+            item.component = self.cleaned_data["component"]
+            item.unit = self.cleaned_data.get("unit", "")
         if commit:
             item.save()
         return item
+
+
+class ComponentObservationsForm(forms.ModelForm):
+    class Meta:
+        model = ResultComponent
+        fields = ["observations"]
+        widgets = {"observations": forms.Textarea(attrs={"rows": 2})}
+
+
+class ReportDetailsForm(forms.ModelForm):
+    class Meta:
+        model = TestResult
+        fields = ["responsible_engineer", "objective_addition"]
+        widgets = {"objective_addition": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["responsible_engineer"]
+        field.queryset = field.queryset.filter(is_active=True).order_by("last_name", "first_name", "username")
+        field.label_from_instance = lambda user: user.get_full_name() or user.username
+        field.required = True
 
 
 class NarrativeForm(forms.ModelForm):

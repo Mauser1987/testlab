@@ -44,3 +44,14 @@ def log(run, user, hours, **values):
     }
     cleaned.update({code: Decimal(str(value)) for code, value in values.items()})
     return manual_log.save_entry(run, cleaned, columns, user)
+
+
+def face_length(result, user, label, pre=None, post=None):
+    """Reported Pre/Post face-length readings of a component (dimensional measurements, M2D)."""
+    from testlab.results import seal_faces
+
+    component = next(c for c in result.components.all() if c.label == label)
+    for stage, value in (("pre", pre), ("post", post)):
+        if value is not None:
+            seal_faces.create_dimensional(component, stage, Decimal(value), user)
+    return component

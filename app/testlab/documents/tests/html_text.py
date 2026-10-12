@@ -1,7 +1,7 @@
 """Text of a rendered HTML document template in reading order, for regression comparisons (AT-2).
 
-The counterpart of docx_text.py: page header, body, page footer; a table
-row is one line (cells joined by spaces), like the Word document.
+Page header, body, page footer; a table row is one line (cells joined by
+spaces).
 """
 
 import tinyhtml5
@@ -36,3 +36,8 @@ def _text(element):
         parts.append(" " if child.tag == "br" else _text(child))
         parts.append(child.tail or "")
     return " ".join("".join(parts).split())
+
+
+def normalized(lines):
+    """Whitespace-normalised text (line breaks and repeated spaces are layout, not content)."""
+    return " ".join(" ".join(lines).split())

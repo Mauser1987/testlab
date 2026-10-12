@@ -39,6 +39,22 @@
         <p class="hint card-note">New TCNs start from these values; changing them never alters an existing TCN.</p>
       </section>
     {% endwith %}
+    {% with program=project.test_program %}
+      <section class="card">
+        <div class="card-head">
+          <h2>Test Program</h2>
+          <a class="button btn-sm" href="{% url 'projects:program' project.pk %}">Open</a>
+        </div>
+        {% if program %}
+          <dl class="facts">
+            <dt>Program</dt><dd>{{ program.reference }}{% if program.title %} · {{ program.title }}{% endif %}</dd>
+            <dt>Acceptance requirements</dt><dd>{{ program.requirements.count }}</dd>
+          </dl>
+        {% else %}
+          <p class="empty">— Not entered yet: title, objective and the baseline acceptance requirements.</p>
+        {% endif %}
+      </section>
+    {% endwith %}
   </div>
 
   <h2>TCN register</h2>

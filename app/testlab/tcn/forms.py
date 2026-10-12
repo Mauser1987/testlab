@@ -2,7 +2,10 @@ import re
 
 from django import forms
 
-from .models import TcnRevision
+from testlab.projects.forms import RequirementFieldsForm
+from testlab.projects.models import ProgramRequirement
+
+from .models import TcnRequirementChange, TcnRevision
 
 
 def revision_label(tcn):
@@ -81,3 +84,47 @@ class CancelTcnForm(forms.Form):
     """S10: reason for cancelling an issued TCN (V14)."""
 
     reason = forms.CharField(label="Reason for cancelling", widget=forms.Textarea(attrs={"rows": 3, "cols": 80}))
+
+
+class TcnRequirementChangeForm(RequirementFieldsForm):
+    """An acceptance requirement changed for this run; in force once the TCN revision is issued."""
+
+    class Meta:
+        model = TcnRequirementChange
+        fields = ["action", "program_requirement", *RequirementFieldsForm.REQUIREMENT_FIELDS, "reason"]
+        labels = {"comparison": "Limit", "program_requirement": "Test Program requirement"}
+        widgets = {"reason": forms.Textarea(attrs={"rows": 2})}
+
+    def __init__(self, *args, tcn, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tcn = tcn
+        field = self.fields["program_requirement"]
+        field.queryset = ProgramRequirement.objects.filter(program__project=tcn.test_run.project)
+        field.label_from_instance = lambda r: f"{r.ref} {r.criterion}"
+        field.required = False
+        for name in self.REQUIREMENT_FIELDS:
+            self.fields[name].required = False
+
+    def clean(self):
+        action = self.cleaned_data.get("action")
+        target = self.cleaned_data.get("program_requirement")
+        if action == TcnRequirementChange.Action.NOT_APPLICABLE:
+            # Only the target and the reason count: the requirement itself stays the Program's.
+            cleaned = forms.ModelForm.clean(self)
+            cleaned.update(criterion="", basis="manual", position="", face="", comparison="", limit=None, unit="",
+                           requirement_text="")  # fmt: skip
+            if target is None:
+                self.add_error("program_requirement", "Choose the Test Program requirement.")
+        else:
+            cleaned = super().clean()
+            if not cleaned.get("basis"):
+                self.add_error("basis", "Choose what the requirement is compared with.")
+        if action == TcnRequirementChange.Action.REPLACE and target is None:
+            self.add_error("program_requirement", "Choose the Test Program requirement it replaces.")
+        if action == TcnRequirementChange.Action.ADD:
+            cleaned["program_requirement"] = None
+        if target is not None and TcnRequirementChange.objects.filter(tcn=self.tcn, program_requirement=target).exclude(
+            pk=self.instance.pk
+        ).exists():
+            self.add_error("program_requirement", f"{target.ref} is already changed by this TCN.")
+        return cleaned

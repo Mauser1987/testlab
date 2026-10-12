@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Add measurement · {{ component.label }} · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card narrow-card">
+    <div class="card-head">
+      <h2>{{ component.label }} — add measurement</h2>
+      <a class="button btn-sm" href="{% url 'results:result' run.pk %}#component-{{ component.pk }}">Back to Result</a>
+    </div>
+
+    <form method="get" class="add-choice">
+      <fieldset class="choice-group"><legend>{{ choice.kind.label }}</legend>{% for radio in choice.kind %}<label>{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}{{ choice.kind.errors }}</fieldset>
+      <fieldset class="choice-group"><legend>{{ choice.stage.label }}</legend>{% for radio in choice.stage %}<label>{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}{{ choice.stage.errors }}</fieldset>
+      <div class="actions"><button type="submit" class="{% if kind %}btn-sm{% else %}btn-primary{% endif %}">{% if kind %}Change{% else %}Continue{% endif %}</button></div>
+    </form>
+
+    {% if upload %}
+      <form method="post" enctype="multipart/form-data" class="fields measurement-upload" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="stage" value="{{ stage }}">
+        <h3>{{ kind_label }} · {{ stage_label }}</h3>
+        {% if upload.non_field_errors %}<ul class="errorlist nonfield">{% for error in upload.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+        {% if kind == "mahr" %}
+          <div class="file-drop" data-drop-inputs="left_file right_file" data-drop-accept=".txt" tabindex="0" role="group" aria-label="Drop the left and right TXT files" hidden>
+            <p><strong>Drop both TXT files here</strong> — names ending in L or R are placed automatically (e.g. JRO-003<strong>L</strong>.TXT → left, JRO-004<strong>R</strong>.TXT → right). <button type="button" class="btn-sm file-drop-choose">Choose both files…</button></p>
+            <input type="file" class="file-drop-picker" accept=".txt,.TXT,text/plain" multiple hidden>
+            <p class="file-drop-status hint" aria-live="polite">Or drop each file on its own field below.</p>
+          </div>
+        {% elif kind == "roundpak" %}
+          <div class="file-drop" data-drop-inputs="file" data-drop-accept=".csv" tabindex="0" role="group" aria-label="Drop the ROUNDPAK CSV file" hidden>
+            <p><strong>Drop the ROUNDPAK CSV here</strong> <button type="button" class="btn-sm file-drop-choose">Choose file…</button></p>
+            <input type="file" class="file-drop-picker" accept=".csv,text/csv" hidden>
+            <p class="file-drop-status hint" aria-live="polite">Or use the file field below.</p>
+          </div>
+        {% endif %}
+        {% for field in upload %}
+          <div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+        {% endfor %}
+        {% if kind == "mahr" %}
+          <p class="hint">The two TXT exports of the opposing scans. They are stored unchanged; TestLab calculates profile P–V and the radial taper (Flat / Convex / Concave) and reads Ra/Rz as exported. The result stays a Draft until you review it.</p>
+        {% elif kind == "roundpak" %}
+          <p class="hint">The CSV export. It is stored unchanged; the instrument's flatness result is kept as exported, the circular LFD P–V, the waviness harmonics and the radial taper are calculated beside it. Face OD/ID are optional (needed only for the radial taper).</p>
+        {% else %}
+          {% if component.is_face %}<p class="hint">The face length as measured. Wear = Pre − Post is calculated in the summary.</p>{% else %}<p class="hint">A dimension of the {{ component.get_component_display|lower }} as measured. Δ = Post − Pre is shown; it is not interpreted as wear.</p>{% endif %}
+        {% endif %}
+        <div class="actions"><button type="submit" class="btn-primary">{% if kind == "dimensional" %}Save{% else %}Upload and calculate{% endif %}</button></div>
+      </form>
+      {% if kind == "mahr" or kind == "roundpak" %}<script src="{% static 'testlab/file_drop.js' %}"></script>{% endif %}
+    {% endif %}
+  </div>
+{% endblock %}

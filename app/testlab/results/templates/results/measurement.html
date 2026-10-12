@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% load execution_tags results_tags %}
+{% block title %}{{ measurement }} · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <div class="card-head measurement-head">
+    <h2>{{ component.label }} — {{ measurement.get_kind_display }} · {{ measurement.get_stage_display }}
+      <span class="status {% if measurement.is_reviewed %}status-issued{% else %}status-draft{% endif %}">{{ measurement.get_status_display }}</span>
+      {% if measurement.reported %}<span class="status">reported</span>{% elif measurement.is_reviewed %}<span class="status status-superseded">not reported</span>{% endif %}
+    </h2>
+    <a class="button btn-sm" href="{% url 'results:result' run.pk %}#component-{{ component.pk }}">Back to Result</a>
+  </div>
+
+  {% if editable %}
+    <div class="actions measurement-actions">
+      {% if not measurement.is_reviewed %}
+        <form method="post" action="{% url 'results:measurement_action' measurement.pk 'review' %}">{% csrf_token %}<button type="submit" class="btn-primary" title="Accept the calculated result; figures are kept and it becomes the reported measurement">Review and report</button></form>
+      {% else %}
+        {% if not measurement.reported %}<form method="post" action="{% url 'results:measurement_action' measurement.pk 'report' %}">{% csrf_token %}<button type="submit" class="btn-primary">Use for the report</button></form>{% endif %}
+        {% if measurement.kind != "dimensional" %}<form method="post" action="{% url 'results:measurement_action' measurement.pk 'reopen' %}">{% csrf_token %}<button type="submit" title="Back to Draft to change the settings; not reported until reviewed again">Reopen</button></form>{% endif %}
+      {% endif %}
+      <a class="button btn-ghost" href="{% url 'results:measurement_delete' measurement.pk %}">Delete</a>
+    </div>
+  {% endif %}
+  {% if not measurement.is_reviewed %}<p class="alert alert-warning">Draft: calculated from the files with the settings below. It is not in the summary or report until it is reviewed.</p>{% endif %}
+
+  <div class="measurement-grid">
+    {# ---- Source: original files and instrument metadata ---- #}
+    <div class="card">
+      <h3 class="card-title">Source</h3>
+      {% if files %}
+        <div class="table-scroll"><table class="list compact">
+          <thead><tr><th>File</th><th>Original name</th><th class="number">Size</th><th>SHA-256</th><th></th></tr></thead>
+          <tbody>
+            {% for f in files %}
+              <tr><td>{{ f.get_role_display }}</td><td>{{ f.original_name }}</td><td class="number">{{ f.size|filesizeformat }}</td>
+                <td><code title="{{ f.sha256 }}">{{ f.sha256|slice:":12" }}…</code></td>
+                <td class="row-actions"><a class="button btn-sm btn-ghost" href="{% url 'results:measurement_file' measurement.pk f.role %}">Download</a></td></tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+      {% endif %}
+      <dl class="facts measurement-facts">
+        {% if measurement.kind == "mahr" %}
+          {% for f in files %}<dt>{{ f.get_role_display }}</dt><dd>{{ f.metadata.count }} points · LT {{ f.metadata.headers.LT }} mm · {{ f.metadata.headers.DATE|default:"date not exported" }} {{ f.metadata.headers.TIME }} · probe {{ f.metadata.headers.PICKUP|default:"not exported" }} · LC {{ f.metadata.headers.LC|default:"—" }}</dd>{% endfor %}
+        {% elif measurement.kind == "roundpak" %}
+          <dt>Part code</dt><dd>{{ analysis.part_code|default:"—" }}</dd>
+          <dt>Description</dt><dd>{{ analysis.description|default:"—" }}</dd>
+          <dt>Created by</dt><dd>{{ analysis.operator|default:"—" }}</dd>
+        {% else %}
+          <dt>Gauge / instrument</dt><dd>{{ analysis.instrument|default:"—" }}</dd>
+        {% endif %}
+        {% if measurement.measured_on_text %}<dt>Measured</dt><dd>{{ measurement.measured_on_text }} <span class="hint">as exported</span></dd>{% endif %}
+        <dt>Added</dt><dd>{{ measurement.created_by|initials }} {{ measurement.created_at|date:"d-M-Y H:i" }}</dd>
+        <dt>Reviewed</dt><dd>{% if measurement.is_reviewed %}{{ measurement.reviewed_by|initials }} {{ measurement.reviewed_at|date:"d-M-Y H:i" }}{% else %}—{% endif %}</dd>
+        {% if measurement.engine %}<dt>Calculation</dt><dd>{{ measurement.engine }}</dd>{% endif %}
+        {% if measurement.remark %}<dt>Remark</dt><dd>{{ measurement.remark }}</dd>{% endif %}
+      </dl>
+    </div>
+
+    {# ---- Results ---- #}
+    <div class="card">
+      <h3 class="card-title">Result</h3>
+      {% if measurement.kind == "dimensional" %}
+        <p class="measure-value">{{ analysis.value|number }} {{ analysis.unit }}</p>
+        <p class="hint">Face length as measured. Wear = Pre − Post in the summary.</p>
+      {% elif measurement.kind == "mahr" %}
+        <div class="measure-results">
+          <div><span class="result-label">Radial taper · signed</span><span class="measure-value">{{ analysis.taper_um|signed_fixed:4 }} µm</span><span class="hint">{{ analysis.taper_hlb|signed_fixed:3 }} HLB</span></div>
+          <div><span class="result-label">Taper classification</span><span class="measure-value small taper-class taper-{{ analysis.classification|lower }}">{{ analysis.classification }}</span><span class="hint">flat band ±{{ analysis.flat_limit_hlb|floatformat:"-2" }} HLB · negative = ID high, positive = OD high</span></div>
+          <div><span class="result-label">Common setup slope</span><span class="measure-value small">{{ analysis.common_slope|fixed:5 }}</span><span class="hint">µm per mm of scan travel (removed)</span></div>
+        </div>
+        {% if analysis.detail.warnings %}<div class="alert alert-warning"><p>The files were read with warnings (as the v5 tool reads them):</p><ul>{% for w in analysis.detail.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+        <table class="list compact">
+          <thead><tr><th>Scan</th><th>Direction</th><th class="number">Evaluated points</th><th class="number">Interval [mm]</th><th class="number">Slope [µm/mm]</th><th class="number">Profile P–V [µm]</th><th class="number">Ra [µm]*</th><th class="number">Rz [µm]*</th></tr></thead>
+          <tbody>
+            <tr><th>Left</th><td>{{ analysis.left_direction|mahr_direction }}</td><td class="number">{{ analysis.detail.points.left.evaluated }} / {{ analysis.detail.points.left.total }}</td><td class="number">{{ analysis.left_start_mm|floatformat:2 }}–{{ analysis.left_end_mm|floatformat:2 }}</td><td class="number">{{ analysis.left_slope|fixed:5 }}</td><td class="number">{{ analysis.left_pv_um|fixed:4 }}</td><td class="number">{{ analysis.left_ra_um|fixed:3|default:"—" }}</td><td class="number">{{ analysis.left_rz_um|fixed:3|default:"—" }}</td></tr>
+            <tr><th>Right</th><td>{{ analysis.right_direction|mahr_direction }}</td><td class="number">{{ analysis.detail.points.right.evaluated }} / {{ analysis.detail.points.right.total }}</td><td class="number">{{ analysis.right_start_mm|floatformat:2 }}–{{ analysis.right_end_mm|floatformat:2 }}</td><td class="number">{{ analysis.right_slope|fixed:5 }}</td><td class="number">{{ analysis.right_pv_um|fixed:4 }}</td><td class="number">{{ analysis.right_ra_um|fixed:3|default:"—" }}</td><td class="number">{{ analysis.right_rz_um|fixed:3|default:"—" }}</td></tr>
+          </tbody>
+        </table>
+        <p class="hint card-note">Taper = −(m<sub>L</sub> − m<sub>R</sub>) × W / 2 with the radial face width W = (OD − ID) / 2 = {{ analysis.face_width_mm|floatformat:3 }} mm; HLB = taper / {{ analysis.light_band_um|floatformat:"-3" }} µm. {% if analysis.skip_points %}The first {{ analysis.skip_points }} points of each scan are left out of the fit and the P–V (template: from point 6 onward). {% endif %}Ra (summary, mean of the scans): {{ analysis.mean_ra_um|fixed:3|default:"not exported" }} µm. P–V in the view “{{ analysis.pv_view|mahr_view }}”: max − min over the evaluated interval. It is a profile range, not whole-face flatness. *Ra and Rz are read from the export and refer to the instrument's evaluation, not the selected interval.</p>
+      {% else %}
+        <div class="measure-results">
+          <div><span class="result-label">Instrument flatness FLTt</span><span class="measure-value">{% if analysis.flatness_um is not None %}{{ analysis.flatness_um|fixed:3 }} µm{% else %}not exported{% endif %}</span><span class="hint">{% if analysis.flatness_hlb is not None %}{{ analysis.flatness_hlb|fixed:3 }} HLB · {% endif %}check: <strong>{{ analysis.check_result|default:"not exported" }}</strong> · tolerance {{ analysis.tolerance_upper|default:"—" }} / {{ analysis.tolerance_lower|default:"—" }}</span></div>
+          <div><span class="result-label">Circular LFD peak to valley · calculated</span><span class="measure-value small">{% if analysis.lfd_pv_um is not None %}{{ analysis.lfd_pv_um|fixed:4 }} µm{% else %}no circular scan{% endif %}</span><span class="hint">{% if analysis.lfd_pv_um is not None %}{{ analysis.lfd_pv_hlb|fixed:3 }} HLB · {{ analysis.detail.lfd_points.used }} of {{ analysis.detail.lfd_points.total }} points · {{ analysis.circular_radius|default:"radius not exported" }}{% if not analysis.full_revolution %} · partial revolution{% endif %}{% endif %}</span></div>
+          <div><span class="result-label">Radial taper · calculated</span><span class="measure-value small">{% if analysis.taper_um is not None %}{{ analysis.taper_um|signed_fixed:4 }} µm{% elif analysis.mean_slope is not None %}enter face OD and ID{% else %}two radial scans needed{% endif %}</span><span class="hint">{% if analysis.taper_um is not None %}{{ analysis.taper_hlb|signed_fixed:3 }} HLB · {% if analysis.classification %}<strong class="taper-class taper-{{ analysis.classification|lower }}">{{ analysis.classification }}</strong> (flat band ±{{ analysis.flat_limit_hlb|floatformat:"-2" }} HLB){% else %}not classified ({{ measurement.engine }}){% endif %}{% endif %}</span></div>
+          {% if analysis.mean_slope is not None %}<div><span class="result-label">Mean outward slope · setup tilt</span><span class="measure-value small">{{ analysis.mean_slope|signed_fixed:5 }} µm/mm</span><span class="hint">{% if analysis.tilt_slope is not None %}setup tilt {{ analysis.tilt_slope|signed_fixed:5 }} µm/mm, cancels between the traces{% endif %}{% if analysis.separation_deg is not None %} · traces {{ analysis.separation_deg|floatformat:2 }}° apart{% endif %}</span></div>{% endif %}
+        </div>
+        {% with strongest=analysis.strongest_harmonics %}{% if strongest %}<p class="hint">Strongest waviness components: {% for h in strongest %}<strong>{{ h.k }} UPR</strong> ({{ h.amplitude_um|fixed:3 }} µm){% if not forloop.last %}, {% endif %}{% endfor %}. Amplitude is half the peak-to-valley of each sine component. 2 UPR often points to clamping or mounting distortion, 3 UPR to three-point support or lapping (general guidance of the v5 tool, not an assessment).</p>{% endif %}{% endwith %}
+        {% if analysis.flatness_um is not None and analysis.lfd_pv_um is not None %}<p class="hint">Difference LFD P–V − reported flatness: {{ analysis.lfd_pv_um|subtract:analysis.flatness_um|signed_fixed:4 }} µm. CSV heights are rounded; the reported flatness is at the instrument's precision. The instrument result is reported; the calculated values never replace it.</p>{% endif %}
+        <details class="instrument-params"><summary>Instrument result parameters, as exported</summary>
+          <dl class="facts">{% for name, value in analysis.instrument.items %}<dt>{{ name }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+        </details>
+        <table class="list compact">
+          <thead><tr><th>Scan</th><th>Settings (as exported)</th><th class="number">Points</th><th class="number">Deleted</th><th class="number">Range</th></tr></thead>
+          <tbody>
+            {% for scan in analysis.detail.scans %}
+              <tr><th>{{ scan.kind|capfirst }} · {{ scan.name }}{% if scan.id == analysis.circle_scan %} <span class="calc-key">circular</span>{% elif scan.id == analysis.left_scan %} <span class="calc-key">L</span>{% elif scan.id == analysis.right_scan %} <span class="calc-key">R</span>{% endif %}</th>
+                <td>{% for k, v in scan.line.items %}{% if k != "Extracted line" %}{{ k }}: {{ v }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</td>
+                <td class="number">{{ scan.points }}</td><td class="number">{{ scan.deleted }}</td>
+                <td class="number">{{ scan.min|floatformat:2 }}–{{ scan.max|floatformat:2 }} {% if scan.kind == "circular" %}°{% else %}mm{% endif %}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="hint card-note">Circular LFD P–V = max − min of the exported LFD over the complete selected circular scan, deleted points excluded: one circular trace, not a map of the whole face. Radial taper = mean outward slope of the two radial traces × (OD − ID) / 2: negative = ID high (Convex), positive = OD high (Concave), Flat within the flat band. Half the slope difference is a tilt of the ring on the table and cancels. Filenames and descriptions are metadata, never recomputed results.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Figures ---- #}
+  {% if measurement.kind != "dimensional" %}
+    <div class="card">
+      <h3 class="card-title">Figures <span class="hint">{% if measurement.is_reviewed %}kept at review{% else %}drawn from the files with the current settings{% endif %}</span></h3>
+      {% if figure_error %}<p class="alert alert-danger">{{ figure_error }}</p>{% endif %}
+      <div class="measure-figures">
+        {% for code, svg in figures.items %}<div class="measure-figure-box figure-{{ code }}">{{ svg|safe }}</div>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="measurement-grid">
+    {# ---- Settings ---- #}
+    {% if settings_form %}
+      <div class="card">
+        <h3 class="card-title">Settings</h3>
+        {% if not measurement.is_reviewed and editable %}
+          <form method="post" class="settings-form" novalidate>
+            {% csrf_token %}
+            {% if settings_form.non_field_errors %}<ul class="errorlist nonfield">{% for error in settings_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+            <div class="entry-grid">
+              {% for field in settings_form %}
+                <div class="entry-field{% if field.field.widget.input_type == 'checkbox' %} wide{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+              {% endfor %}
+            </div>
+            <div class="actions"><button type="submit" class="btn-primary">Recalculate</button><span class="hint">Light band 0.29 µm/HLB is the template convention. Intervals change the fits; the files are never changed.</span></div>
+          </form>
+        {% else %}
+          <dl class="facts">{% for label, value in settings_form.display_rows %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+          {% if measurement.is_reviewed and editable and measurement.kind != "dimensional" %}<p class="hint card-note">Reopen the measurement to change its settings.</p>{% endif %}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {# ---- Remark, report selection and the slot ---- #}
+    <div class="card">
+      <h3 class="card-title">Report</h3>
+      <form method="post" action="{% url 'results:measurement_options' measurement.pk %}" class="fields">
+        {% csrf_token %}
+        {% for field in remark_form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
+        {% if editable %}<div class="actions"><button type="submit" class="btn-sm">Save remark</button></div>{% endif %}
+      </form>
+      <p class="hint">Reviewed is not the same as published: what each report shows of this {{ component.label }} · {{ measurement.get_kind_display }} (summary, detail, figures, remark — Pre and Post together) is chosen per report profile:
+        <a href="{% url 'results:report_contents' component.result.test_run.pk 'customer' %}#slot-{{ component.pk }}-{{ measurement.kind }}">Customer</a> ·
+        <a href="{% url 'results:report_contents' component.result.test_run.pk 'engineering' %}#slot-{{ component.pk }}-{{ measurement.kind }}">Engineering</a>.</p>
+      <p class="hint">Slot {{ component.label }} · {{ measurement.get_kind_display }} · {{ measurement.get_stage_display }}: {{ status|slot_label }}.</p>
+      {% if siblings %}
+        <p class="hint">Other measurements of this slot:</p>
+        <ul class="slot-siblings">{% for other in siblings %}<li><a href="{% url 'results:measurement' other.pk %}">{{ other.get_status_display }}{% if other.reported %} · reported{% endif %} · {{ other.created_at|date:"d-M-Y H:i" }}</a> — {{ other|measurement_brief }}</li>{% endfor %}</ul>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

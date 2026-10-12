@@ -312,3 +312,113 @@ class SealPosition(models.Model):
         for field in self.DESCRIPTIVE_FIELDS:
             setattr(self, field, (getattr(self, field) or "").strip())
         super().save(*args, **kwargs)
+
+
+# ---- Test Program: baseline acceptance requirements (planned) --------------------------------
+
+
+class RequirementBasis(models.TextChoices):
+    """What an acceptance requirement is compared with.
+
+    Calculated bases are compared automatically only when requirement, unit
+    and evidence allow an unambiguous comparison (results/acceptance.py);
+    "assessed by the engineer" never is.
+    """
+
+    MANUAL = "manual", "Assessed by the engineer"
+    LEAKAGE_RATE = "leakage_rate", "Average dynamic leakage rate"
+    WEAR_RATE = "wear_rate", "Face wear rate (face length)"
+    RUNNING_HOURS = "running_hours", "Shaft-running hours"
+    LOGGED_HOURS = "logged_hours", "Elapsed clock time"
+
+
+class RequirementComparison(models.TextChoices):
+    AT_MOST = "<=", "≤"
+    AT_LEAST = ">=", "≥"
+
+
+REQUIREMENT_FACES = [("stator", "Stator"), ("rotor", "Rotor")]
+
+
+class AcceptanceRequirementFields(models.Model):
+    """What an acceptance requirement says; shared by the Test Program and approved TCN changes.
+
+    `position` and `face` narrow a leakage or wear requirement; blank means
+    every seal of the arrangement under test (and both faces). An operating
+    set point (speed, pressure, duration as instructed) is not a requirement:
+    only what is entered here is assessed.
+    """
+
+    criterion = models.CharField("Criterion", max_length=120, blank=True)
+    basis = models.CharField("Compared with", max_length=20, choices=RequirementBasis.choices,
+                             default=RequirementBasis.MANUAL)  # fmt: skip
+    position = models.CharField("Seal", max_length=10, choices=SealRole.choices, blank=True)
+    face = models.CharField("Face", max_length=10, choices=REQUIREMENT_FACES, blank=True)
+    comparison = models.CharField(max_length=2, choices=RequirementComparison.choices, blank=True)
+    limit = models.DecimalField("Limit", max_digits=24, decimal_places=12, null=True, blank=True)
+    unit = models.CharField("Unit", max_length=20, blank=True)
+    requirement_text = models.CharField(
+        "Requirement", max_length=200, blank=True, help_text="Wording of the requirement, or the whole of it."
+    )
+
+    REQUIREMENT_FIELDS = ["criterion", "basis", "position", "face", "comparison", "limit", "unit", "requirement_text"]
+
+    class Meta:
+        abstract = True
+
+    def requirement_values(self):
+        return {name: getattr(self, name) for name in self.REQUIREMENT_FIELDS}
+
+
+class TestProgram(models.Model):
+    """The planned Test Program of a project, as far as TestLab needs it now (PROGRAM = planned).
+
+    Title and objective are quoted in the Test Run Report; the requirements
+    are the baseline acceptance requirements of every run of the project. An
+    approved (issued) TCN change can replace or waive one for its run
+    (tcn.TcnRequirementChange). Program sections, planned tests and program
+    revisions are milestone M3.
+    """
+
+    __test__ = False  # not a pytest test class
+
+    project = models.OneToOneField(Project, on_delete=models.PROTECT, related_name="test_program")
+    document_no = models.CharField("Document no.", max_length=60, blank=True)
+    revision = models.CharField("Revision", max_length=10, blank=True)
+    title = models.CharField("Title", max_length=200, blank=True)
+    objective = models.TextField("Objective", blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    def __str__(self):
+        return f"Test Program of {self.project}"
+
+    @property
+    def reference(self):
+        """e.g. "Test Program TP-1234 rev B"."""
+        parts = ["Test Program"]
+        if self.document_no:
+            parts.append(self.document_no)
+        if self.revision:
+            parts.append(f"rev {self.revision}")
+        return " ".join(parts)
+
+
+class ProgramRequirement(AcceptanceRequirementFields):
+    """A baseline acceptance requirement of the Test Program; `number` never changes (traceability)."""
+
+    program = models.ForeignKey(TestProgram, on_delete=models.CASCADE, related_name="requirements")
+    number = models.PositiveIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["program", "number"]
+        constraints = [models.UniqueConstraint(fields=["program", "number"], name="one_requirement_number")]
+
+    def __str__(self):
+        return f"{self.ref} {self.criterion}"
+
+    @property
+    def ref(self):
+        return f"P{self.number}"

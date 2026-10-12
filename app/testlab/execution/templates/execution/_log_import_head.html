@@ -1,0 +1,31 @@
+{% comment %}Header of the import pages: steps and the workbook. Expects batch, step.{% endcomment %}
+<div class="page-sub">
+  <h2>Import Excel manual log</h2>
+  {% if batch.is_open %}
+  <ol class="import-steps" aria-label="Import steps">
+    <li class="done">Upload</li>
+    <li{% if step == "mapping" %} class="current" aria-current="step"{% elif batch.status == "preview" %} class="done"{% endif %}>
+      {% if batch.status == "preview" and step != "mapping" %}<a href="{% url 'execution:log_import_mapping' batch.pk %}">Mapping</a>{% else %}Mapping{% endif %}</li>
+    <li{% if step == "preview" %} class="current" aria-current="step"{% endif %}>Preview</li>
+    <li>Confirm</li>
+  </ol>
+  {% endif %}
+</div>
+<section class="card import-file">
+  <div class="card-head">
+    <h3>{{ batch.original_name }}</h3>
+    <span class="hint">
+      <span class="status import-status-{{ batch.status }}">{{ batch.get_status_display }}</span>
+      <a class="button btn-sm" href="{% url 'execution:log_import_file' batch.pk %}" title="The uploaded workbook, unchanged">Original file</a>
+      {% if not batch.is_open %}{% elif step != "record" %}<a class="button btn-sm btn-ghost" href="{% url 'execution:log_import_detail' batch.pk %}">Import record</a>{% endif %}
+    </span>
+  </div>
+  <dl class="facts">
+    <dt>Sheet</dt><dd>{{ batch.sheet_name }} · headings in row {{ batch.header_row }}{% if batch.group_row %}, groups in row {{ batch.group_row }}{% endif %} · {{ batch.rows.count }} data row{{ batch.rows.count|pluralize }}{% if batch.ignored_rows %} · {{ batch.ignored_rows|length }} row{{ batch.ignored_rows|length|pluralize }} without typed values ignored{% endif %}</dd>
+    <dt>File</dt><dd>{{ batch.size|filesizeformat }} · SHA-256 <code title="{{ batch.sha256 }}">{{ batch.sha256|slice:":12" }}…</code> · uploaded {{ batch.uploaded_at|date:"d-M-Y H:i" }} by {{ batch.uploaded_by.get_full_name|default:batch.uploaded_by.username }}</dd>
+    <dt>Layout</dt><dd><code title="{{ batch.layout_fingerprint }}">{{ batch.layout_fingerprint|slice:":12" }}…</code>{% if batch.layout_map %} · a reviewed mapping of this layout exists{% endif %}</dd>
+    {% if batch.imported_at %}<dt>Imported</dt><dd>{{ batch.imported_at|date:"d-M-Y H:i" }} by {{ batch.imported_by.get_full_name|default:batch.imported_by.username }}</dd>{% endif %}
+    {% if batch.undone_at %}<dt>Undone</dt><dd>{{ batch.undone_at|date:"d-M-Y H:i" }} by {{ batch.undone_by.get_full_name|default:batch.undone_by.username }}: {{ batch.undo_reason }}</dd>{% endif %}
+  </dl>
+  {% if batch.warnings %}<ul class="alert alert-warning plain">{% for warning in batch.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+</section>

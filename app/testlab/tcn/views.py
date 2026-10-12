@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 
 from testlab.documents.pdf import PDF_CONTENT_TYPE, PdfConversionError
@@ -11,8 +12,8 @@ from testlab.projects.models import Project
 from testlab.projects.setup_forms import RunSetupEditor
 
 from .diff import source_changes
-from .forms import CancelTcnForm, NewTcnForm, TcnHeaderForm
-from .models import ImmutableTcnError, TcnRevision, TcnRuleError, TestRun
+from .forms import CancelTcnForm, NewTcnForm, TcnHeaderForm, TcnRequirementChangeForm
+from .models import ImmutableTcnError, TcnRequirementChange, TcnRevision, TcnRuleError, TestRun
 from .permissions import can_cancel_tcn, can_issue_tcn
 from .services import (
     IssueError,
@@ -121,7 +122,7 @@ class TcnEditView(DraftTcnMixin, View):
                         return redirect("tcn:edit", pk=tcn.pk)
         return self.render(request, tcn, header, editor, conflict=conflict)
 
-    def render(self, request, tcn, header, editor, conflict=None):
+    def render(self, request, tcn, header, editor, conflict=None, requirement_form=None):
         # Markers compare the saved draft with its source; None without a source TCN.
         changes = source_changes(TcnRevision.objects.select_related("setup", "source_tcn__setup").get(pk=tcn.pk))
         context = {
@@ -133,6 +134,8 @@ class TcnEditView(DraftTcnMixin, View):
             "change_list": changes,
             "changes": {change.key: change for change in changes or []},
             "can_issue": can_issue_tcn(request.user),
+            "requirement_changes": list(tcn.requirement_changes.select_related("program_requirement")),
+            "requirement_form": requirement_form or TcnRequirementChangeForm(tcn=tcn),
         }
         return render(request, self.template_name, context)
 
@@ -345,4 +348,54 @@ class TcnDeleteView(DraftTcnMixin, View):
 
     def render(self, request, tcn, error=None):
         context = {"tcn": tcn, "project": tcn.test_run.project, "error": error}
+        return render(request, self.template_name, context)
+
+
+# --- Acceptance requirement changes of a draft TCN (M2E) -------------------------------------------
+
+
+class TcnRequirementChangeAddView(DraftTcnMixin, View):
+    def post(self, request, pk):
+        tcn = self.get_tcn(pk)
+        if tcn.is_locked:
+            return self.refuse_locked(request, tcn)
+        change = TcnRequirementChange(tcn=tcn, order=tcn.requirement_changes.count())
+        form = TcnRequirementChangeForm(request.POST, instance=change, tcn=tcn)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Acceptance requirement change added; it is in force for the run once this TCN is issued.")
+            return redirect(reverse("tcn:edit", args=[tcn.pk]) + "#requirement-changes")
+        return TcnEditView().render(request, tcn, TcnHeaderForm(instance=tcn), RunSetupEditor(tcn.setup),
+                                    requirement_form=form)  # fmt: skip
+
+
+class TcnRequirementChangeEditView(View):
+    template_name = "tcn/tcn_requirement_change.html"
+
+    def get_change(self, pk):
+        return get_object_or_404(TcnRequirementChange.objects.select_related("tcn__test_run__project"), pk=pk)
+
+    def get(self, request, pk):
+        change = self.get_change(pk)
+        return self.render(request, change, TcnRequirementChangeForm(instance=change, tcn=change.tcn))
+
+    def post(self, request, pk):
+        change = self.get_change(pk)
+        tcn = change.tcn
+        if tcn.is_locked:
+            messages.error(request, f"{tcn} is {tcn.get_status_display().lower()} and cannot be edited.")
+            return redirect("tcn:edit", pk=tcn.pk)
+        if request.POST.get("delete"):
+            change.delete()
+            messages.success(request, "Acceptance requirement change deleted.")
+            return redirect(reverse("tcn:edit", args=[tcn.pk]) + "#requirement-changes")
+        form = TcnRequirementChangeForm(request.POST, instance=change, tcn=tcn)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Acceptance requirement change saved.")
+            return redirect(reverse("tcn:edit", args=[tcn.pk]) + "#requirement-changes")
+        return self.render(request, change, form)
+
+    def render(self, request, change, form):
+        context = {"tcn": change.tcn, "project": change.tcn.test_run.project, "change": change, "form": form}
         return render(request, self.template_name, context)

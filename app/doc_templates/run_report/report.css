@@ -5,9 +5,10 @@
    are declared in report.html, inlined from the bundle, as for the TCN. */
 
 /* Exact A4: Chromium's format="A4" is rounded. Text width 174 mm. */
-@page { size: 210mm 297mm; margin: 24mm 18mm 18mm 18mm; }
+/* Top margin: the header template (logo, rule) is about 25 mm high. */
+@page { size: 210mm 297mm; margin: 29mm 18mm 18mm 18mm; }
 /* Previews: room for the draft marking under the header rule. */
-@page draft { margin-top: 32mm; }
+@page draft { margin-top: 36mm; }
 body.draft { page: draft; }
 
 /* Ligatures off: "ti", "fi" … stay separate characters, so the PDF text is extracted reliably. */
@@ -26,6 +27,7 @@ img { display: block; }
 /* ---- Headings: never alone at the bottom of a page ---- */
 h1 { font-size: 15pt; margin: 0 0 6pt; }
 h1 .dates { font-weight: normal; font-size: 12pt; }
+p.report-title { font-size: 11.5pt; font-weight: bold; margin: -3pt 0 6pt; }
 h2 { font-size: 12pt; margin: 14pt 0 5pt; padding-bottom: 2pt; border-bottom: 0.75pt solid #808080;
      break-after: avoid; break-inside: avoid; }
 h3 { font-size: 10.5pt; margin: 9pt 0 4pt; break-after: avoid; }
@@ -68,19 +70,27 @@ table.seals { width: auto; min-width: 110mm; }
 table.components th .note { font-weight: normal; }
 
 table.conditions { table-layout: fixed; }
-table.conditions col.parameter { width: 38mm; }
-table.conditions col.unit { width: 13mm; }
-table.conditions col.instructed { width: 27mm; }
-table.conditions col.actual { width: 36mm; }
-table.conditions col.requirement { width: 33mm; }
-table.conditions col.assessment { width: 27mm; }
+table.conditions col.parameter { width: 40mm; }
+table.conditions col.unit { width: 14mm; }
+table.conditions col.instructed { width: 30mm; }
+table.conditions col.actual { width: 42mm; }
+table.conditions col.source { width: 48mm; }
+table.conditions td.source { font-size: 8pt; color: #3a4150; }
+.provisional-mark { color: #8a5200; font-weight: bold; font-size: 7pt; margin-left: 0.5mm; }
+.provisional { display: inline-block; padding: 0 1.2mm; border: 0.25mm solid #b26a00; border-radius: 0.8mm;
+  color: #8a5200; font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.3; }
 table.conditions tbody { break-inside: avoid; }
 
 table.measurements { table-layout: fixed; }
-table.measurements col.component { width: 28mm; }
-table.measurements col.quantity { width: 40mm; }
-table.measurements col.value { width: 28mm; }
-table.measurements col.unit { width: 22mm; }
+table.measurements col.component { width: 21mm; }
+table.measurements col.quantity { width: 45mm; }
+table.measurements col.value { width: 26mm; }
+table.measurements col.delta { width: 20mm; }
+table.measurements col.wear { width: 15mm; }
+table.measurements col.unit { width: 10mm; }
+table.measurements col.source { width: 18mm; }
+table.measurements .extra, table.measure-numbers .extra { display: block; font-size: 7.5pt; color: #505050; }
+table.measurements .extra.missing { font-style: italic; }
 table.measurements tbody.component { break-inside: avoid; }
 table.measurements tbody.component tr:first-child > * { border-top: 0.75pt solid #808080; }
 
@@ -102,6 +112,11 @@ td.text { white-space: normal; }
 .assess { font-weight: bold; }
 .assess-fail { color: #a00000; }
 .assess-not_evaluated, .assess-not_applicable { font-weight: normal; font-style: italic; }
+.assess-missing { color: #a00000; font-weight: normal; }
+
+/* ---- Cumulative leakage chart (inline SVG, markers only) ---- */
+figure.leakage-chart { margin: 8pt 0 0; break-inside: avoid; }
+figure.leakage-chart svg { display: block; width: 100%; height: auto; }
 
 /* ---- Figures: image and caption never separated; aspect ratio always kept, never cropped ---- */
 figure { margin: 6pt 0 10pt; break-inside: avoid; }
@@ -142,3 +157,25 @@ table.log th.rate, table.log tbody td:nth-child(n) .rate { font-style: italic; }
 table.log tbody tr:nth-child(5n) td { border-bottom: 0.5pt solid #b0b0b0; }
 
 p.end { margin-top: 12pt; }
+
+/* Seal face measurement details: Pre → Post figures side by side, then the numbers */
+.measure-block { margin: 0 0 12pt; }
+.measure-block h3 { break-after: avoid; }
+table.measure-figures { width: 100%; table-layout: fixed; margin: 2pt 0 2pt; break-inside: avoid; border-collapse: collapse; }
+table.measure-figures th { font-size: 9pt; font-weight: bold; padding: 2pt 3pt; border-bottom: 0.75pt solid #000; background: #f2f2f2; }
+table.measure-figures td { padding: 3pt 2pt 0; vertical-align: top; }
+table.measure-figures svg { display: block; width: 100%; height: auto; font-family: "Carlito", "Calibri", sans-serif; }
+table.measure-figures.polar svg { width: 62mm; margin: 0 auto; }
+table.measure-figures .none { text-align: center; padding: 20pt 0; font-size: 9pt; }
+table.measure-numbers { table-layout: fixed; break-inside: avoid; margin-top: 4pt; }
+table.measure-numbers col.label { width: 62mm; }
+table.measure-numbers col.value { width: 38mm; }
+table.measure-numbers col.delta { width: 22mm; }
+table.measure-numbers col.unit { width: 16mm; }
+p.note.source { overflow-wrap: anywhere; }
+
+/* Report profiles (M2F-B): mandatory qualifications and document identity */
+p.qualification { margin: 4pt 0 0; padding: 2pt 0 2pt 6pt; border-left: 1.5pt solid #808080; font-size: 9pt; }
+.doc-id { font-weight: bold; font-size: 9pt; }
+section.document-history { margin-top: 10pt; }
+table.history td, table.history th { font-size: 8.5pt; }

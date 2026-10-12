@@ -77,3 +77,11 @@ class DcsUploadForm(forms.Form):
         help_text="The file as exported (no extension needed). It is stored unchanged.",
     )
 
+
+
+class LogImportUploadForm(forms.Form):
+    file = forms.FileField(
+        label="Excel manual log (.xlsx)",
+        help_text="Stored unchanged as the import record. Legacy .xls workbooks: save them as .xlsx in Excel first.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".xlsx,.xlsm"}),
+    )

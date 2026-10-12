@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Max, Prefetch, ProtectedError, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -9,8 +9,8 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView
 from testlab.tcn.models import TcnRevision
 
 from .arrangements import seal_support_label
-from .forms import ProjectForm
-from .models import Project, project_no_format_warning
+from .forms import ProgramRequirementForm, ProjectForm, TestProgramForm
+from .models import ProgramRequirement, Project, TestProgram, project_no_format_warning
 from .setup_forms import RunSetupEditor
 
 
@@ -150,3 +150,89 @@ class ProjectDefaultsView(View):
 
     def render(self, request, project, editor):
         return render(request, self.template_name, {"project": project, "editor": editor})
+
+
+# ---- Test Program: title, objective, baseline acceptance requirements --------------------------
+
+
+def program_url(project, anchor=""):
+    return reverse("projects:program", args=[project.pk]) + (f"#{anchor}" if anchor else "")
+
+
+class ProgramView(View):
+    """The project's Test Program as TestLab uses it now: title, objective and acceptance requirements."""
+
+    template_name = "projects/program.html"
+
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        program = TestProgram.objects.filter(project=project).first()
+        return self.render(request, project, program, TestProgramForm(instance=program), ProgramRequirementForm())
+
+    def post(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        program = TestProgram.objects.filter(project=project).first()
+        form = TestProgramForm(request.POST, instance=program)
+        if form.is_valid():
+            program = form.save(commit=False)
+            program.project = project
+            program.updated_by = request.user
+            program.save()
+            messages.success(request, "Test Program saved.")
+            return redirect(program_url(project))
+        return self.render(request, project, program, form, ProgramRequirementForm())
+
+    def render(self, request, project, program, form, requirement_form):
+        requirements = list(program.requirements.all()) if program else []
+        context = {"project": project, "program": program, "form": form, "requirements": requirements,
+                   "requirement_form": requirement_form}  # fmt: skip
+        return render(request, self.template_name, context)
+
+
+class ProgramRequirementAddView(View):
+    def post(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        with transaction.atomic():
+            program, _ = TestProgram.objects.get_or_create(project=project, defaults={"updated_by": request.user})
+            requirement = ProgramRequirement(program=program, updated_by=request.user)
+            form = ProgramRequirementForm(request.POST, instance=requirement)
+            if form.is_valid():
+                requirement = form.save(commit=False)
+                requirement.number = (program.requirements.aggregate(m=Max("number"))["m"] or 0) + 1
+                requirement.save()
+                messages.success(request, f"Requirement {requirement.ref} added.")
+                return redirect(program_url(project, "requirements"))
+        return ProgramView().render(request, project, program, TestProgramForm(instance=program), form)
+
+
+class ProgramRequirementEditView(View):
+    template_name = "projects/program_requirement.html"
+
+    def get(self, request, pk):
+        requirement = get_object_or_404(ProgramRequirement.objects.select_related("program__project"), pk=pk)
+        return self.render(request, requirement, ProgramRequirementForm(instance=requirement))
+
+    def post(self, request, pk):
+        requirement = get_object_or_404(ProgramRequirement.objects.select_related("program__project"), pk=pk)
+        project = requirement.program.project
+        if request.POST.get("delete"):
+            try:
+                requirement.delete()
+            except ProtectedError:
+                messages.error(request, f"{requirement.ref} is changed by a TCN and cannot be deleted.")
+                return redirect("projects:program_requirement", requirement.pk)
+            messages.success(request, f"Requirement {requirement.ref} deleted.")
+            return redirect(program_url(project, "requirements"))
+        form = ProgramRequirementForm(request.POST, instance=requirement)
+        if form.is_valid():
+            requirement = form.save(commit=False)
+            requirement.updated_by = request.user
+            requirement.save()
+            messages.success(request, f"Requirement {requirement.ref} saved.")
+            return redirect(program_url(project, "requirements"))
+        return self.render(request, requirement, form)
+
+    def render(self, request, requirement, form):
+        context = {"project": requirement.program.project, "program": requirement.program,
+                   "requirement": requirement, "form": form}  # fmt: skip
+        return render(request, self.template_name, context)

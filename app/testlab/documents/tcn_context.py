@@ -36,7 +36,35 @@ def build_tcn_context(tcn):
         "condition_columns": condition_columns(setup),
         "prepared_by": tcn.prepared_by,
         "created_date": format_date(tcn.created_date),
+        "requirement_changes": requirement_changes(tcn),
     }
+
+
+def requirement_text(requirement):
+    """e.g. "≤ 10 ml/h — at the barrier pressure", from AcceptanceRequirementFields."""
+    parts = []
+    if requirement.comparison:
+        limit = format(requirement.limit.normalize(), "f") if requirement.limit is not None else ""
+        parts.append(f"{requirement.get_comparison_display()} {limit} {requirement.unit}".strip())
+    if requirement.requirement_text:
+        parts.append(requirement.requirement_text)
+    return " — ".join(parts)
+
+
+def requirement_changes(tcn):
+    """Acceptance requirement changes of the TCN (approved when it is issued), in order."""
+    found = []
+    for change in tcn.requirement_changes.select_related("program_requirement"):
+        target = change.program_requirement
+        found.append({
+            "action": change.get_action_display(),
+            "ref": target.ref if target else "",
+            "criterion": change.criterion or (target.criterion if target else ""),
+            "requirement": "" if change.action == change.Action.NOT_APPLICABLE else requirement_text(change),
+            "was": requirement_text(target) if target else "",
+            "reason": change.reason,
+        })  # fmt: skip
+    return found
 
 
 def tcn_file_name(tcn, draft=False):

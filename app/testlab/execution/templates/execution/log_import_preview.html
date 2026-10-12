@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Preview · {{ batch.original_name }} · Run {{ run.display_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  {% include "execution/_log_import_head.html" %}
+  {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
+
+  <form method="post" novalidate class="import-preview">
+    {% csrf_token %}
+    {% include "execution/_log_import_header.html" with ack_field=True %}
+
+    <section class="card">
+      <div class="card-head">
+        <h3>Rows</h3>
+        <span class="hint">{% for key, count in counts %}<span class="status cls-{{ key }}">{{ count }} {% if key == "new" %}new{% elif key == "duplicate" %}possible duplicate{{ count|pluralize }}{% elif key == "conflict" %}conflict{{ count|pluralize }}{% elif key == "error" %}error{{ count|pluralize }}{% else %}without values{% endif %}</span> {% endfor %}</span>
+      </div>
+      <p class="hint">New rows are imported, possible duplicates skipped by default; a conflict (another reading in the same minute) needs your decision. An error row can only be skipped: correct the workbook and import it again to include it. Existing readings are never changed. Values are shown as they will be stored: blank is not measured, 0 is a reading. Event categories and separate events are only created when you choose them; the note is imported as written.</p>
+      <details class="mapping-summary"><summary>Confirmed mapping</summary>
+        <ul class="plain">{% for m in mapping_rows %}<li><span class="id">{{ m.letter }}</span> {{ m.column.group }} {{ m.column.label }}{% if m.column.unit %} [{{ m.column.unit }}]{% endif %} → {{ m.label }}{% if m.reviewed %} <span class="hint">(review confirmed)</span>{% elif m.changed %} <span class="hint">(changed from the proposal)</span>{% endif %}</li>{% endfor %}</ul>
+      </details>
+    </section>
+
+    {% if problems %}<ul class="issue-errors" id="problems">{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>{% endif %}
+
+    {% include "execution/_log_import_rows.html" with editable=True %}
+
+    {% if not recording_refused %}
+    <div class="actions sticky-actions">
+      <button type="submit" name="action" value="import" class="btn-primary">Import selected rows</button>
+      <button type="submit" name="action" value="save">Save choices</button>
+      <span class="hint">{{ to_import }} row{{ to_import|pluralize }} selected (as saved). All entries are created together, or none.</span>
+    </div>
+    {% endif %}
+  </form>
+  {% if not recording_refused %}
+  <form method="post" action="{% url 'execution:log_import_discard' batch.pk %}" class="discard-form">
+    {% csrf_token %}<button type="submit" class="btn-ghost btn-sm">Discard this import</button>
+  </form>
+  {% endif %}
+{% endblock %}

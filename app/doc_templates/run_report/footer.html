@@ -12,9 +12,9 @@
 <footer class="report-footer">
   <table>
     <tr>
-      <td class="status">{{ identification.project_no }} · Run {{ identification.run_no }}{% if is_draft %} · DRAFT{% endif %}</td>
+      <td class="status">{% if document.identity %}{{ document.identity }} · {{ document.status }}{% else %}{{ identification.project_no }} · Run {{ identification.run_no }} · {{ profile.label }} · {% if is_draft %}DRAFT{% else %}Preview{% endif %}{% endif %}</td>
       <td class="page-number">Page <span class="pageNumber"></span> of <span class="totalPages"></span></td>
-      <td class="generated">{% if is_draft %}Preview generated{% else %}Generated{% endif %} {{ generated }}</td>
+      <td class="generated">{% if document.identity %}Issued{% else %}Preview generated{% endif %} {{ generated }}</td>
     </tr>
   </table>
 </footer>

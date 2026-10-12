@@ -38,14 +38,8 @@ TESTED_PYTHON = {(3, 12), (3, 13)}
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 
-# Chromium is the intended TCN renderer (M1 spec §19). The settings default is
-# still the transitional `html` renderer, whose Pango library setup does not
-# install; the development server therefore uses Chromium unless
-# TESTLAB_TCN_RENDERER is set explicitly.
-DEV_RENDERER = "chromium"
-
 # Imported by `run` to tell an incomplete virtualenv from a working one.
-REQUIRED_MODULES = ("django", "dj_database_url", "docxtpl", "playwright", "PIL")  # PIL: Pillow
+REQUIRED_MODULES = ("django", "dj_database_url", "playwright", "PIL", "openpyxl")  # PIL: Pillow
 
 SETUP_COMMAND = r"scripts\setup.bat" if IS_WINDOWS else "./scripts/setup.sh"
 RUN_COMMAND = r"scripts\run_app.bat" if IS_WINDOWS else "./scripts/run_app.sh"
@@ -96,10 +90,8 @@ def run(command: list[str], *, env: dict[str, str] | None = None, what: str) -> 
 
 
 def django_env(base: dict[str, str] | None = None) -> dict[str, str]:
-    """Environment for manage.py: the caller's TESTLAB_* settings, plus the development renderer default."""
-    env = dict(os.environ if base is None else base)
-    env.setdefault("TESTLAB_TCN_RENDERER", DEV_RENDERER)
-    return env
+    """Environment for manage.py: the caller's, with its TESTLAB_* settings."""
+    return dict(os.environ if base is None else base)
 
 
 def manage(python: Path, *args: str, env: dict[str, str], what: str) -> None:
@@ -184,10 +176,10 @@ def chromium_starts(python: Path) -> tuple[bool, str]:
 
 
 def install_chromium(python: Path) -> str | None:
-    """Install Playwright's Chromium (the TCN PDF renderer). Returns a warning instead of failing:
-    everything except the TCN PDF works without it, and the download is the step most likely to be
+    """Install Playwright's Chromium (the PDF renderer). Returns a warning instead of failing:
+    everything except the PDFs works without it, and the download is the step most likely to be
     blocked on a corporate network."""
-    step("Chromium for the TCN PDF (Playwright; about 150 MB, downloaded once)")
+    step("Chromium for the TCN and report PDFs (Playwright; about 150 MB, downloaded once)")
     ok, _ = chromium_starts(python)
     if ok:
         info("Already installed and starts.")
@@ -195,7 +187,7 @@ def install_chromium(python: Path) -> str | None:
     result = subprocess.run([str(python), "-m", "playwright", "install", "chromium"], cwd=ROOT)
     if result.returncode != 0:
         return (
-            "Chromium could not be downloaded: TCN Preview PDF and Issue will fail; everything else works.\n"
+            "Chromium could not be downloaded: TCN and Test Run Report PDFs will fail; everything else works.\n"
             "  Behind HTTPS inspection the download usually needs the company root certificate (ask IT;\n"
             "  it can be passed with NODE_EXTRA_CA_CERTS=<file.pem>). Then run setup again, or:\n"
             f'    "{python}" -m playwright install chromium'
@@ -370,7 +362,7 @@ def run_app(args: argparse.Namespace) -> int:
         print(f"                                    {url}")
     if host == "0.0.0.0":
         print("  Listening on all network interfaces (--lan): anyone on the network can reach the login page.")
-    print(f"  TCN renderer: {env['TESTLAB_TCN_RENDERER']}    Stop with Ctrl+C.")
+    print("  Stop with Ctrl+C.")
     print(flush=True)
     command = [str(python), str(APP_DIR / "manage.py"), "runserver", f"{host}:{port}"]
     try:

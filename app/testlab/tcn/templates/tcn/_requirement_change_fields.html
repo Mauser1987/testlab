@@ -1,0 +1,24 @@
+{% comment %}Fields of a TCN acceptance requirement change. Expects form.{% endcomment %}
+<div class="entry-grid acceptance-fields">
+  <div class="entry-field">{{ form.action.label_tag }}{{ form.action }}{{ form.action.errors }}</div>
+  <div class="entry-field" data-action="replace not_applicable">{{ form.program_requirement.label_tag }}{{ form.program_requirement }}{{ form.program_requirement.errors }}</div>
+</div>
+<div data-action="replace add">
+  {% include "projects/_requirement_fields.html" %}
+</div>
+<div class="entry-grid acceptance-fields">
+  <div class="entry-field wide">{{ form.reason.label_tag }}{{ form.reason }}{{ form.reason.errors }}</div>
+</div>
+<script>
+  (function () {
+    var root = document.currentScript.parentElement;
+    var action = root.querySelector("select[name$=action]");
+    function update() {
+      root.querySelectorAll("[data-action]").forEach(function (field) {
+        field.hidden = field.dataset.action.split(" ").indexOf(action.value) < 0;
+      });
+    }
+    action.addEventListener("change", update);
+    update();
+  })();
+</script>

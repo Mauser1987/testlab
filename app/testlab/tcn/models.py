@@ -25,7 +25,7 @@ from django.db.models.signals import post_delete, pre_delete, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
-from testlab.projects.models import Project, RunSetup, SealPosition
+from testlab.projects.models import AcceptanceRequirementFields, Project, ProgramRequirement, RunSetup, SealPosition
 
 
 class TcnRuleError(Exception):
@@ -295,6 +295,77 @@ class TcnRevision(models.Model):
         )
 
 
+class TcnRequirementChange(AcceptanceRequirementFields):
+    """An acceptance requirement changed for this run by the TCN (TCN = instructed).
+
+    Replace: a Test Program requirement is replaced for this run by the
+    requirement given here. Not applicable: a Test Program requirement does
+    not apply to this run. Add: a requirement the Program does not have.
+
+    A change is in force for the run only when its TCN revision is issued
+    (an issued TCN is the approved instruction); a draft's changes are
+    pending. It is part of the TCN: printed on it, frozen with it at issue
+    (guarded below like the run setup) and carried into a new revision.
+    """
+
+    class Action(models.TextChoices):
+        REPLACE = "replace", "Replaces Program requirement"
+        NOT_APPLICABLE = "not_applicable", "Program requirement not applicable to this run"
+        ADD = "add", "Additional requirement"
+
+    tcn = models.ForeignKey(TcnRevision, on_delete=models.CASCADE, related_name="requirement_changes")
+    action = models.CharField(max_length=20, choices=Action.choices)
+    program_requirement = models.ForeignKey(
+        ProgramRequirement, on_delete=models.PROTECT, null=True, blank=True, related_name="tcn_changes"
+    )
+    reason = models.TextField("Reason for the change")
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["tcn", "order", "pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(action__in=["replace", "not_applicable", "add"]), name="requirement_change_action_valid"
+            ),
+            models.CheckConstraint(
+                condition=Q(action="add", program_requirement__isnull=True)
+                | Q(action__in=["replace", "not_applicable"], program_requirement__isnull=False),
+                name="requirement_change_target_matches_action",
+            ),
+            models.UniqueConstraint(
+                fields=["tcn", "program_requirement"], condition=Q(program_requirement__isnull=False),
+                name="one_change_per_program_requirement",
+            ),
+        ]  # fmt: skip
+
+    def __str__(self):
+        return f"{self.tcn}: {self.get_action_display()} {self.program_requirement or self.criterion}"
+
+    def _check_editable(self):
+        # Checked before Django's save/delete transaction starts, so a refusal leaves the caller's
+        # transaction usable; the signal guard below is the backstop.
+        tcn_ids = {self.tcn_id}
+        if self.pk is not None:
+            tcn_ids.update(TcnRequirementChange.objects.filter(pk=self.pk).values_list("tcn_id", flat=True))
+        if TcnRevision.objects.filter(pk__in=tcn_ids).exclude(status=TcnRevision.Status.DRAFT).exists():
+            raise ImmutableTcnError("This acceptance requirement change belongs to an issued TCN and cannot be changed.")
+
+    def save(self, *args, **kwargs):
+        self._check_editable()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._check_editable()
+        return super().delete(*args, **kwargs)
+
+    def clone_to(self, tcn):
+        values = self.requirement_values()
+        return TcnRequirementChange.objects.create(
+            tcn=tcn, action=self.action, program_requirement=self.program_requirement, reason=self.reason,
+            order=self.order, **values,
+        )  # fmt: skip
+
+
 def _check_deletable(revisions):
     # Checked against the database: an instance may be stale.
     issued = revisions.exclude(status=TcnRevision.Status.DRAFT)
@@ -337,3 +408,8 @@ def _guard_issued_seal_position(sender, instance, **kwargs):
         setup_ids.update(SealPosition.objects.filter(pk=instance.pk).values_list("setup_id", flat=True))
     if _locked_setup_exists(setup_ids):
         raise ImmutableTcnError("This seal position belongs to an issued TCN and cannot be changed.")
+
+
+@receiver(pre_delete, sender=TcnRequirementChange)
+def _guard_issued_requirement_change(sender, instance, **kwargs):
+    instance._check_editable()  # deletes that bypass TcnRequirementChange.delete() (e.g. a cascade)

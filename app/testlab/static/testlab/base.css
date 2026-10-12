@@ -422,6 +422,20 @@ ul.plain { list-style: none; padding-left: 14px; }
 .axis-toggle button + button { border-left: 1px solid var(--border-strong); }
 .axis-toggle button.active { background: var(--accent); color: #fff; }
 .plot { width: 100%; height: 640px; }
+.view-toggle { display: inline-flex; margin-left: auto; }
+.view-toggle button { border-radius: 0; }
+.view-toggle button:first-child { border-radius: 4px 0 0 4px; }
+.view-toggle button + button { border-left: 0; border-radius: 0 4px 4px 0; }
+.view-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dcs-running .running-facts { margin-bottom: 10px; }
+.dcs-running details { margin-top: 10px; }
+.dcs-running details > summary { cursor: pointer; font-weight: 600; }
+.dcs-running details form { margin-top: 8px; }
+.dcs-running details input[type=text] { width: 15em; }
+.dcs-running .inline-fields input[type=text] { width: 9em; }
+.dcs-running .running-actions form { display: inline; }
+.dcs-running textarea { width: 100%; max-width: 48em; }
+.text-warning { color: var(--warning); }
 form.upload { margin-top: 16px; max-width: 760px; }
 p.origin { margin: 0 0 10px; font-size: 13px; color: var(--text-muted); }
 p.origin .status { margin-right: 6px; }
@@ -481,6 +495,62 @@ td.unit-cell { color: var(--text-muted); }
 form.inline-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; }
 form.inline-add label { font-weight: 600; }
 
+/* Seal-face measurements (M2D): per-component Pre/Post slots, measurement page */
+.measure-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; margin: 0 0 16px; align-items: start; }
+.result-section .measure-cards .card { margin: 0; scroll-margin-top: 12px; }
+.measure-card .card-head { margin-bottom: 8px; }
+.measure-card .card-title .hint { font-weight: 400; margin-left: 6px; }
+.slot { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius-sm); font-size: 13px; min-width: 0; }
+.slot-completed { border-left-color: var(--success-border); }
+.slot-in_review { border-left-color: var(--warning-border); }
+.slot-missing { border-left-color: var(--danger-border); }
+.slot-head { display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.slot-kind { font-weight: 600; }
+.slot-value { overflow-wrap: anywhere; }
+.slot-other { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.slot .hint { font-size: 12px; overflow-wrap: anywhere; }
+.slot-status { font-size: 11px; line-height: 16px; }
+.slot-status-completed { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.slot-status-in_review { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); }
+.slot-status-missing { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+.slot-status-text { font-style: normal; font-size: 12.5px; }
+.slot-status-text.slot-status-missing { color: var(--danger); background: none; }
+.slot-status-text.slot-status-in_review { color: var(--warning); background: none; }
+table.list td .row-note, table.list th .row-note { display: block; font-size: 11.5px; color: var(--text-faint); }
+.measurement-plan label { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; }
+.measurement-plan .hint { flex-basis: 100%; }
+table.components-table td.dimension input { width: 6em; min-width: 0; text-align: right; }
+table.components-table td input[type="text"] { min-width: 6.5em; }
+table.components-table select { max-width: 12em; }
+.measurement-head h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; }
+.measurement-actions { margin: 0 0 12px; }
+.measurement-actions form { display: inline-flex; margin: 0; }
+.measurement-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 16px; align-items: start; margin: 0 0 16px; }
+.measurement-grid .card { margin: 0; min-width: 0; }
+.measure-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; margin: 0 0 12px; }
+.taper-class.taper-flat { color: var(--success); }
+.taper-class.taper-convex, .taper-class.taper-concave { color: var(--danger); }
+.measure-results > div { display: flex; flex-direction: column; min-width: 0; }
+.result-label { font-size: 12px; color: var(--text-muted); }
+.measure-value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.measure-value.small { font-size: 17px; }
+.measure-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; align-items: start; }
+.measure-figure-box { min-width: 0; max-width: 680px; }
+.measure-figure-box.figure-roundpak_polar svg { max-width: 300px; margin: 0 auto; }
+.measure-figure-box.figure-mahr_gauge, .measure-figure-box.figure-roundpak_gauge { grid-column: 1 / -1; }
+.measure-figure-box svg { display: block; width: 100%; height: auto; font-family: var(--font-sans); }
+details.instrument-params { margin: 8px 0; }
+details.instrument-params summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.choice-group { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.choice-group legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.choice-group label { display: inline-flex; gap: 6px; align-items: center; }
+.settings-form .entry-field.wide { flex-basis: 100%; }
+ul.slot-siblings { margin: 0; padding-left: 18px; font-size: 13px; }
+@media (max-width: 900px) {
+  .measurement-grid, .measure-results { grid-template-columns: minmax(0, 1fr); }
+  .measure-cards, .measure-figures { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Pictures */
 .entry-field.files input[type="file"] { max-width: 24em; }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin: 0 0 12px; }
@@ -523,3 +593,82 @@ details.add-criterion form { margin-top: 12px; }
   .pre-post { gap: 6px; }  /* stays side by side: the comparison is the point */
   figure.picture img { height: 180px; }
 }
+
+/* M2E: optional-component observations, finalization, DCS signal mapping */
+button:disabled, .button[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+form.component-observations { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+form.component-observations label { font-weight: 600; font-size: 13px; }
+form.component-observations textarea { width: 100%; box-sizing: border-box; }
+form.component-observations button { align-self: flex-start; }
+ul.blocking-issues { margin: 6px 0 10px; padding-left: 20px; }
+ul.blocking-issues li { margin: 2px 0; }
+.mapping-table select { min-width: 280px; }
+[hidden] { display: none !important; }
+
+/* Manual-log import (M2F) */
+.page-sub { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin: 12px 0 8px; }
+.page-sub h2 { margin: 0; }
+.import-steps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--text-faint); }
+.import-steps li { padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.import-steps li.done { color: var(--text-muted); }
+.import-steps li.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+.import-status-mapping, .import-status-preview { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); }
+.import-status-imported { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.import-status-undone { background: var(--neutral-bg); border-color: var(--neutral-border); color: var(--text-muted); }
+.map-proposed, .map-not_imported { background: var(--neutral-bg); border-color: var(--neutral-border); color: var(--neutral); }
+.map-confirmed { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.map-review { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); font-weight: 600; }
+tr.map-row-review > td, tr.map-row-review > th { background: var(--warning-bg); }
+tr.map-row-not_imported > td, tr.map-row-not_imported > th { color: var(--text-muted); }
+.mapping-table td.samples code { font-size: 12px; background: var(--surface-muted); padding: 0 3px; border-radius: 3px; }
+.review-tick { display: inline-flex; gap: 4px; margin-left: 6px; font-size: 13px; }
+.cls-new { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.cls-duplicate, .cls-empty { background: var(--neutral-bg); border-color: var(--neutral-border); color: var(--neutral); }
+.cls-conflict { background: var(--warning-bg); border-color: var(--warning-border); color: var(--warning); font-weight: 600; }
+.cls-error { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); font-weight: 600; }
+tr.cls-row-conflict > td { background: var(--warning-bg); }
+tr.cls-row-error > td { background: var(--danger-bg); }
+tr.cls-row-duplicate > td, tr.cls-row-empty > td { color: var(--text-muted); }
+.import-rows tr.row-details > td { border-top: none; padding-top: 0; font-size: 12.5px; }
+.import-rows td.decision label { display: block; white-space: nowrap; }
+.import-rows td.events { min-width: 220px; }
+.event-proposal { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+.event-proposal input[type="text"] { width: 4.5em; }
+.raw-cells summary { cursor: pointer; color: var(--text-muted); }
+.raw-cells table td { padding: 1px 8px 1px 0; }
+.text-danger { color: var(--danger); }
+.header-check tr.hc-mismatch > td { background: var(--danger-bg); }
+label.ack { display: block; margin-top: 10px; font-weight: 600; }
+td.imported .import-mark { margin-left: 4px; text-decoration: none; color: var(--text-faint); }
+.sticky-actions { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; z-index: 2; }
+.discard-form { margin-top: 12px; }
+.inline-check { display: inline-flex; gap: 6px; align-items: center; margin-right: 12px; }
+.import-rows .row-details .events { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin: 2px 0 4px; }
+.import-rows .row-details .event-proposal { margin: 0; padding: 0 0 0 14px; border-top: none; border-left: 1px dashed var(--border); }
+.import-rows .row-details .import-note { margin-bottom: 2px; font-size: 13.5px; }
+
+/* Drag and drop of instrument files (Add measurement, M2F-a) */
+.file-drop { border: 2px dashed var(--border, #c9d3da); border-radius: var(--radius-sm, 6px); padding: 12px 14px; margin: 0 0 14px; background: var(--surface, #fff); }
+.file-drop p { margin: 0 0 6px; }
+.file-drop p:last-of-type { margin: 0; }
+.file-drop .file-drop-status.error { color: var(--danger); }
+.file-drop.drag-over, .file-drop-field.drag-over { border-color: var(--success); background: var(--success-bg); }
+.file-drop-field { border: 2px dashed transparent; border-radius: var(--radius-sm, 6px); padding: 2px 4px; }
+.file-drop:focus-visible { outline: 2px solid var(--success); outline-offset: 2px; }
+
+/* Report profiles and documents (M2F-B) */
+.profile-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 0 0 12px; }
+.profile-tabs a { padding: 8px 14px; border: 1px solid transparent; border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; text-decoration: none; color: var(--text-muted, #536b79); font-weight: 600; }
+.profile-tabs a.active { border-color: var(--border); background: var(--surface); color: var(--text); margin-bottom: -1px; }
+.profile-basis { margin: 0 0 14px; }
+.locked-list { margin: 0 0 8px; padding-left: 18px; }
+.locked-list li { margin: 2px 0; }
+.check-row { display: flex; gap: 8px; align-items: center; margin: 4px 0; font-weight: normal; }
+.picture-choice img { width: 56px; height: 42px; object-fit: cover; border-radius: 3px; border: 1px solid var(--border); }
+.slot-matrix .figure-choice { display: block; font-weight: normal; white-space: nowrap; }
+.slot-matrix label { font-weight: normal; }
+.inline-form { display: flex; gap: 6px; align-items: center; }
+.inline-form input[type="text"] { min-width: 180px; }
+.status-issued { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
+.status-superseded { background: var(--surface); border-color: var(--border); color: var(--text-muted, #536b79); }
+.status-withdrawn { background: var(--surface); border-color: var(--danger-border); color: var(--danger); }

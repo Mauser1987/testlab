@@ -13,4 +13,6 @@ urlpatterns = [
     path("tcn/<int:pk>/new-revision/", views.TcnNewRevisionView.as_view(), name="new_revision"),
     path("tcn/<int:pk>/cancel/", views.TcnCancelView.as_view(), name="cancel"),
     path("tcn/<int:pk>/delete/", views.TcnDeleteView.as_view(), name="delete"),
+    path("tcn/<int:pk>/requirement-changes/", views.TcnRequirementChangeAddView.as_view(), name="requirement_change_add"),
+    path("tcn/requirement-changes/<int:pk>/", views.TcnRequirementChangeEditView.as_view(), name="requirement_change"),
 ]

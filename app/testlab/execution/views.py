@@ -1,15 +1,18 @@
 """Test execution pages of a Test Run (M2A): Manual log and DCS data."""
 
+from datetime import datetime
+
 from django.conf import settings
 from django.contrib import messages
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 
 from testlab.tcn.models import TestRun
 
-from . import datasets, manual_log
+from . import datasets, manual_log, running_intervals, signal_mapping
 from .forms import DcsUploadForm, ManualLogEntryForm, plain_number
 from .models import DcsDataset, ManualLogEntry
 
@@ -19,27 +22,57 @@ def get_run(pk):
 
 
 def run_context(test_run, tab):
+    """Context of a run page. `recording_refused` is the refusal of what the tab edits: the Result on the
+    Result tab, the execution evidence elsewhere; `result_refused` is always that of the Result."""
+    result_refused = result_refusal(test_run)
     return {
         "run": test_run,
         "project": test_run.project,
         "tcn": test_run.current_revision(),
         "tab": tab,
-        "recording_refused": recording_refusal(test_run),
+        "recording_refused": result_refused if tab == "result" else recording_refusal(test_run),
+        "result_refused": result_refused,
     }
 
 
-def recording_refusal(test_run):
-    """Why new evidence cannot be recorded for the run yet, or "".
-
-    The single lifecycle/authorization check for recording execution evidence.
-    Intentional temporary policy: during development and validation evidence
-    may be recorded for a Draft TCN (TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN off,
-    the default). TODO(production): switch the setting on so that only an
-    issued TCN permits execution. The models stay as they are.
-    """
+def _tcn_refusal(test_run):
+    """Intentional temporary policy: during development and validation evidence may be recorded for a
+    Draft TCN (TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN off, the default). TODO(production): switch the
+    setting on so that only an issued TCN permits execution. The models stay as they are."""
     if settings.TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN and not test_run.has_issued_revision():
         return f"TCN{test_run.display_no} has not been issued yet: readings and DCS data are recorded once it is issued."
     return ""
+
+
+def recording_refusal(test_run):
+    """Why execution evidence (manual log, DCS data) cannot be recorded or changed for the run, or "".
+
+    The single lifecycle/authorization check for recording execution evidence. A final Result closes
+    the run's evidence for good: it stays closed while a later revision of the Result is in progress
+    (M2F-B2), because a revision corrects the Result, not what was recorded during the run.
+    """
+    from testlab.results.models import ResultRevision, TestResult  # the Result app builds on this one
+
+    result = TestResult.objects.filter(test_run=test_run).first()
+    if result is not None and result.is_final:
+        return (f"The Result of Run {test_run.display_no} is final: its manual log, DCS data, measurements and "
+                "assessments are part of the controlled record and cannot change.")  # fmt: skip
+    if result is not None and ResultRevision.objects.filter(result=result).exists():
+        return (f"The Result of Run {test_run.display_no} has a final revision: the manual log and DCS data are "
+                "part of the controlled record and cannot change, also while the Result is being revised.")  # fmt: skip
+    return _tcn_refusal(test_run)
+
+
+def result_refusal(test_run):
+    """Why the Result of the run (measurements, pictures, plots, assessments, conclusion) cannot be
+    changed, or "". Final: not until a revision is opened; a revision in progress is a Draft again."""
+    from testlab.results.models import TestResult
+
+    if TestResult.objects.filter(test_run=test_run, status=TestResult.Status.FINAL).exists():
+        return (f"The Result of Run {test_run.display_no} is final: its manual log, DCS data, measurements and "
+                "assessments are part of the controlled record and cannot change. A correction is made by "
+                "opening a revision (Report section).")  # fmt: skip
+    return _tcn_refusal(test_run)
 
 
 class ManualLogView(View):
@@ -123,6 +156,9 @@ class EntryEditView(EntryMixin, View):
 
     def post(self, request, pk):
         entry = self.get_entry(pk)
+        if refusal := recording_refusal(entry.test_run):
+            messages.error(request, refusal)
+            return redirect("execution:log", entry.test_run.pk)
         columns = manual_log.log_columns(entry.test_run, [entry])
         form = self.form(entry, columns, request.POST)
         if form.is_valid():
@@ -154,6 +190,9 @@ class EntryDeleteView(EntryMixin, View):
     def post(self, request, pk):
         entry = self.get_entry(pk)
         run_pk = entry.test_run.pk
+        if refusal := recording_refusal(entry.test_run):
+            messages.error(request, refusal)
+            return redirect("execution:log", run_pk)
         when = f"{entry.observed_at:%d-%b-%Y %H:%M}"
         entry.delete()
         messages.success(request, f"Reading of {when} deleted.")
@@ -200,11 +239,49 @@ class DcsDetailView(View):
     template_name = "execution/dcs_detail.html"
 
     def get(self, request, pk):
+        return self.render(request, get_dataset(pk))
+
+    def post(self, request, pk):
+        """Review the signal mapping: mapping_<column> = parameter code, unit_<column> = confirmed."""
         dataset = get_dataset(pk)
+        if refusal := recording_refusal(dataset.test_run):
+            messages.error(request, refusal)
+            return redirect("execution:dcs_detail", dataset.pk)
+        chosen, confirmed = {}, set()
+        for signal in dataset.value_signals():
+            column = signal["column"]
+            chosen[column] = request.POST.get(f"mapping_{column}", "")
+            if request.POST.get(f"unit_{column}"):
+                confirmed.add(column)
+        try:
+            signal_mapping.review_mapping(dataset, chosen, confirmed, request.user)
+        except signal_mapping.MappingError as error:
+            messages.error(request, str(error))
+            return self.render(request, dataset, chosen=chosen, confirmed=confirmed)
+        messages.success(request, "Signal mapping reviewed; it is reused for later imports of the same format.")
+        if running_intervals.ensure_current(dataset, request.user) is not None:
+            messages.info(request, "Running intervals of the speed signal: review them below.")
+        return redirect(reverse("execution:dcs_detail", args=[dataset.pk]) + "#mapping")
+
+    def render(self, request, dataset, chosen=None, confirmed=()):
         signals = [
             {**signal, "label": f"{signal['name']} [{signal['unit']}]" if signal["unit"] else signal["name"]}
             for signal in dataset.value_signals()
         ]
+        offered = signal_mapping.parameters(dataset.test_run)
+        suggested = chosen if chosen is not None else signal_mapping.suggestions(dataset)
+        stored = dataset.mapping
+        mapping_rows = []
+        for signal in signals:
+            column = signal["column"]
+            code = suggested.get(column, "")
+            entry = stored.get(str(column), {})
+            parameter = offered.get(code)
+            mapping_rows.append({
+                "signal": signal, "code": code, "parameter": parameter,
+                "unit_differs": bool(parameter) and not signal_mapping.units_match(signal["unit"], parameter.unit),
+                "unit_confirmed": column in confirmed or entry.get("unit_confirmed", False),
+            })  # fmt: skip
         return render(
             request,
             self.template_name,
@@ -214,8 +291,149 @@ class DcsDetailView(View):
                 "signals": signals,
                 "time_signal": dataset.signals[dataset.time_column],
                 "origin": manual_log.timeline_origin(dataset.test_run),
+                "mapping_rows": mapping_rows,
+                "parameters": list(offered.values()),
+                "known_map": signal_mapping.known_map(dataset),
+                **running_context(dataset),
             },
         )
+
+
+# ---- running intervals -----------------------------------------------------------------------
+
+DATETIME_INPUT = "%Y-%m-%dT%H:%M:%S"
+
+
+def _when(dataset, hours):
+    moment = running_intervals.moment(dataset, hours)
+    return timezone.localtime(moment) if moment else None
+
+
+def _interval_rows(dataset, intervals):
+    return [
+        {
+            "start_h": i["start_h"], "end_h": i["end_h"], "hours": i["end_h"] - i["start_h"],
+            "start": _when(dataset, i["start_h"]), "end": _when(dataset, i["end_h"]),
+            "notes": running_intervals.edge_notes(i),
+        }
+        for i in intervals
+    ]  # fmt: skip
+
+
+def _input_value(dataset, hours):
+    """What the edit form shows for a time: local date and time to the second, else elapsed hours."""
+    moment = _when(dataset, hours)
+    return moment.strftime(DATETIME_INPUT) if moment else f"{hours:.6f}"
+
+
+def _spans(dataset, items):
+    return [{"start": _when(dataset, a), "end": _when(dataset, b), "start_h": a, "end_h": b,
+             "seconds": (b - a) * 3600} for a, b in items]  # fmt: skip
+
+
+def running_context(dataset):
+    found = running_intervals.state(dataset)
+    d = found.determination
+    context = {"running": found, "running_history": [h for h in running_intervals.history(dataset)
+                                                      if not h.is_current]}  # fmt: skip
+    if d is None:
+        return context
+    detected = d.detected.get("intervals", [])
+    context.update({
+        "running_intervals": _interval_rows(dataset, d.effective_intervals),
+        "detected_intervals": _interval_rows(dataset, detected) if d.effective_intervals != detected else [],
+        "running_dropouts": _spans(dataset, d.detected.get("dropouts", [])),
+        "running_spikes": _spans(dataset, d.detected.get("spikes", [])),
+        "running_gaps": _spans(dataset, d.detected.get("gaps", [])),
+        "running_edit_rows": [
+            {"start": _input_value(dataset, i["start_h"]), "end": _input_value(dataset, i["end_h"]),
+             "start_h": i["start_h"], "end_h": i["end_h"]}
+            for i in d.effective_intervals
+        ] + [{"start": "", "end": "", "start_h": "", "end_h": ""}] * 2,
+        "running_recording_end": _when(dataset, dataset.time_end_h),
+        "running_recording_start": _when(dataset, dataset.time_start_h),
+        "running_plot": {"intervals": [[a, b] for a, b in running_intervals.clipped(d.effective_intervals,
+                                                                                   found.coverage)],
+                         "provisional": found.provisional},
+    })  # fmt: skip
+    return context
+
+
+def _parse_time(dataset, text, shown, shown_hours):
+    """Hours on the recording's axis from the edit form: a local date/time, or elapsed hours."""
+    text = (text or "").strip()
+    if shown_hours not in (None, "") and text == shown:
+        return float(shown_hours)  # unchanged: the stored value, not its display rounded to the second
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        pass
+    if dataset.recording_started_at is None:
+        raise running_intervals.DeterminationError(f"“{text}” is not a number of hours.")
+    for pattern in (DATETIME_INPUT, "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            moment = timezone.make_aware(datetime.strptime(text, pattern))
+        except ValueError:
+            continue
+        return (moment - dataset.recording_started_at).total_seconds() / 3600
+    raise running_intervals.DeterminationError(f"“{text}” is not a date and time (or a number of hours).")
+
+
+def _entered_intervals(dataset, post):
+    found = []
+    index = 0
+    while f"start_{index}" in post:
+        start, end = post.get(f"start_{index}", "").strip(), post.get(f"end_{index}", "").strip()
+        if start or end:
+            if not (start and end):
+                raise running_intervals.DeterminationError("Every interval needs a start and an end; "
+                                                           "clear both to remove one.")  # fmt: skip
+            found.append((
+                _parse_time(dataset, start, post.get(f"shown_start_{index}"), post.get(f"start_h_{index}")),
+                _parse_time(dataset, end, post.get(f"shown_end_{index}"), post.get(f"end_h_{index}")),
+            ))  # fmt: skip
+        index += 1
+    return found
+
+
+def _setting(post, name):
+    try:
+        return float(post.get(name, "").replace(",", "."))
+    except ValueError as error:
+        raise running_intervals.DeterminationError("Enter the threshold, dropout and spike limits as numbers.") \
+            from error
+
+
+class DcsRunningView(View):
+    """Confirm, edit (override) or redetect the running intervals of a dataset."""
+
+    def post(self, request, pk):
+        dataset = get_dataset(pk)
+        target = reverse("execution:dcs_detail", args=[dataset.pk]) + "#running"
+        if refusal := recording_refusal(dataset.test_run):
+            messages.error(request, refusal)
+            return redirect(target)
+        action, shown = request.POST.get("action"), request.POST.get("determination", "")
+        try:
+            if action == "confirm":
+                running_intervals.confirm(dataset, request.user, shown)
+                messages.success(request, "Running intervals confirmed.")
+            elif action == "override":
+                running_intervals.override(dataset, _entered_intervals(dataset, request.POST),
+                                           request.POST.get("reason", ""), request.user, shown)  # fmt: skip
+                messages.success(request, "Running intervals changed; the detected ones are kept beside them.")
+            elif action == "redetect":
+                settings_ = running_intervals.Settings(
+                    _setting(request.POST, "threshold_rpm"), _setting(request.POST, "max_dropout_s"),
+                    _setting(request.POST, "min_run_s"),
+                )  # fmt: skip
+                running_intervals.redetect(dataset, settings_, request.user, request.POST.get("reason", ""), shown)
+                messages.success(request, "Running intervals detected again: review and confirm them.")
+            else:
+                raise Http404("Unknown action")
+        except running_intervals.DeterminationError as error:
+            messages.error(request, str(error))
+        return redirect(target)
 
 
 def _float(value):

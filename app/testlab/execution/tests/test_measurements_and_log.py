@@ -122,7 +122,20 @@ def test_provisional_elapsed_hours_and_leakage_across_midnight(run, user):
     assert rows[0].leakage["outboard_leakage"].rate is None  # first reading
     assert rows[1].leakage["outboard_leakage"].rate == pytest.approx(420 / 16.3)
     assert rows[2].leakage["outboard_leakage"].rate == 62  # entered period
-    assert "inboard_leakage" not in rows[1].leakage  # nothing entered, nothing calculated
+    assert "inboard_leakage" not in rows[0].leakage  # first reading: nothing collected before it
+    not_measured = rows[1].leakage["inboard_leakage"]  # a reading without an inboard volume: blank, not 0
+    assert not_measured.volume is None and not_measured.rate is None and not_measured.note == "not measured"
+
+
+@pytest.mark.django_db
+def test_an_event_or_note_alone_does_not_end_a_collection(run, user):
+    start = datetime(2026, 6, 29, 9, 0, tzinfo=AMS)
+    add(run, user, start, speed=2983, outboard_leakage=0)
+    add(run, user, start + timedelta(hours=1), note="flow adjusted")  # no reading
+    add(run, user, start + timedelta(hours=4), speed=2984, outboard_leakage=8)
+    rows = manual_log.log_rows(run)
+    assert rows[1].leakage == {}
+    assert rows[2].leakage["outboard_leakage"].hours == 4 and rows[2].leakage["outboard_leakage"].rate == 2
 
 
 @pytest.mark.django_db

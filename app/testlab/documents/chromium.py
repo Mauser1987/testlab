@@ -1,4 +1,4 @@
-"""HTML → PDF with headless Chromium through Playwright (TESTLAB_TCN_RENDERER=chromium, M1 spec §19).
+"""HTML → PDF with headless Chromium through Playwright (M1 spec §19), the only PDF renderer.
 
 Each PDF is printed by a separate worker process (chromium_print.py) that
 starts its own Chromium and ends with it. The process is ended when it does

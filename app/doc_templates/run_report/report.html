@@ -11,14 +11,17 @@
 </style>
 <link rel="stylesheet" href="report.css">
 </head>
-<body{% if is_draft %} class="draft"{% endif %}>
+<body{% if is_draft or is_preview %} class="draft"{% endif %}>
 {# Page header and footer (logo, numbers, draft marking, Page x of y): header.html and footer.html. #}
-{% if is_draft %}<div class="watermark" aria-hidden="true">DRAFT</div>{% endif %}
+{# The context is a profile's presentation of the record (documents/report_profiles.present): `show` holds #}
+{# the switches of the optional notes; locked content and the qualifications are always rendered. #}
+{% if is_draft %}<div class="watermark" aria-hidden="true">DRAFT</div>{% elif is_preview %}<div class="watermark" aria-hidden="true">PREVIEW</div>{% endif %}
 <main>
 {% with id=identification %}
   {# ---- Identification ---------------------------------------------------------------- #}
   <section class="identification">
     <h1>Run {{ id.run_no }}{% if id.dates %} <span class="dates">({{ id.dates }})</span>{% endif %}</h1>
+    {% if report.title %}<p class="report-title">{{ report.title }}</p>{% endif %}
     <table class="facts">
       <colgroup><col class="label"><col class="value"><col class="label"><col class="value"></colgroup>
       <tr><th>Project No.</th><td>{{ id.project_no }}</td><th>Customer</th><td>{{ id.customer|default:"—" }}</td></tr>
@@ -26,15 +29,31 @@
           <th>Test unit</th><td>{{ id.test_unit|default:"—" }}</td></tr>
       <tr><th>Seal arrangement</th><td>{{ id.arrangement }}</td>
           <th>Seal type and size</th><td>{% for seal in id.seals %}{% if id.seals|length > 1 %}{{ seal.heading }}: {% endif %}{{ seal.seal_type_size }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
-      <tr><th>Test start (t = 0)</th><td>{{ id.start|default:"—" }}{% if id.start_source %} <span class="note">{{ id.start_source }}</span>{% endif %}</td>
-          <th>Test end</th><td>{{ id.end|default:"—" }}{% if id.end_source %} <span class="note">{{ id.end_source }}</span>{% endif %}</td></tr>
-      <tr><th>Logged period</th><td>{% if id.logged_hours %}{{ id.logged_hours }} h <span class="note">clock time, stops included</span>{% else %}—{% endif %}</td>
-          <th>Report status</th><td><strong>{% if is_draft %}DRAFT{% else %}Final{% endif %}</strong></td></tr>
-      {% if id.datasets %}<tr><th>DCS data</th><td colspan="3">{{ id.datasets|join:"; " }}</td></tr>{% endif %}
+      {% for rec in id.recordings %}<tr><th>{% if forloop.first %}Recording{% endif %}</th><td colspan="3">{% if rec.start %}{{ rec.start }} → {{ rec.end }} · {% endif %}{{ rec.hours }} h{% if show.recording_notes %} <span class="note">{{ rec.name }}</span>{% endif %}</td></tr>{% endfor %}
+      <tr><th>Logged period</th><td colspan="3">{% if id.start %}{{ id.start }} → {{ id.end|default:"—" }}{% if id.logged_hours %} · {{ id.logged_hours }} h{% endif %} <span class="note">elapsed clock time, stops included{% if show.recording_notes %}; t = 0: {{ id.start_source }}; end: {{ id.end_source }}{% endif %}</span>{% else %}—{% endif %}</td></tr>
+      <tr><th>Shaft running</th><td colspan="3">{% if id.running_hours %}{{ id.running_hours }} h · {{ id.running_count }} interval{{ id.running_count|pluralize }}{% if id.running_provisional %} <span class="provisional">provisional</span>{% endif %}
+            <span class="note">{% for span in id.running_spans %}{{ span.start }} → {{ span.end }} ({{ span.hours }} h){% if not forloop.last %}; {% endif %}{% endfor %}{% if id.stopped_hours %}{% if id.running_spans %} · {% endif %}{{ id.stopped_hours }} h stopped{% endif %}{% if id.unknown_hours %} · {{ id.unknown_hours }} h unknown{% endif %}</span>{% else %}—{% endif %}</td></tr>
+      <tr><th>Prepared by</th><td>{{ report.prepared_by|default:"—" }}</td>
+          <th>Report status</th><td>{% if document.identity %}<strong>{{ document.status }}</strong> <span class="note">{{ document.issued_on }}</span><br><span class="doc-id">{{ document.identity }}</span>{% elif is_draft %}<strong>DRAFT</strong> <span class="note">{{ profile.label }} report, Result not final</span>{% else %}<strong>Preview</strong> <span class="note">{{ profile.label }} report, not an issued document</span>{% endif %}
+            <br><span class="note">{{ profile.label }} report{% if not is_draft %} · Result revision {{ document.revision|default:"0" }}{% elif document.revision %} · Result revision {{ document.revision }} in progress{% endif %}{% if report.finalized and profile.code == "engineering" %} · finalized by {{ report.finalized.by }}, {{ report.finalized.at }}{% endif %}</span></td></tr>
     </table>
-    {% if id.provisional and id.start %}<p class="note">No LabVIEW recording start is known: t = 0 is the first manual log reading (provisional).</p>{% endif %}
+    {% for text in qualifications.identification %}<p class="qualification">{{ text }}</p>{% endfor %}
+    {% if id.running_hours and show.running_basis_note %}<p class="note">Shaft running from {{ id.running_sources|join:"; "|default:"no running evidence" }}; manual log readings: speed ≥ {{ id.manual_threshold_rpm }} rpm. Periods without evidence of the shaft state, and missing DCS data, are unknown, never counted as running.{% for note in id.running_notes %} {{ note }}.{% endfor %}{% if id.running_provisional %} Provisional: running intervals not confirmed yet.{% endif %}</p>{% endif %}
   </section>
 {% endwith %}
+
+  {# ---- Objective: Test Program, + the run's addition ----------------------------------- #}
+  {% if sections.objective %}
+  <section>
+    <h2>{{ sections.objective }}. Objective</h2>
+    {% for paragraph in report.objective %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endfor %}
+    {% if report.objective_addition %}
+      {% if report.objective %}<p class="text"><em>For this run:</em></p>{% endif %}
+      {% for paragraph in report.objective_addition %}<p class="text">{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endfor %}
+    {% endif %}
+    {% if report.objective_source and show.objective_source %}<p class="note">Source: {{ report.objective_source }}{% if report.objective_addition %}; run-specific addition from the Test Result{% endif %}.</p>{% endif %}
+  </section>
+  {% endif %}
 
   {# ---- Test description: as on the TCN ------------------------------------------------ #}
   {% if sections.description %}
@@ -78,27 +97,28 @@
   <section>
     <h2>{{ sections.conditions }}. Test Conditions &amp; Results</h2>
     <table class="grid conditions">
-      <colgroup><col class="parameter"><col class="unit"><col class="instructed"><col class="actual"><col class="requirement"><col class="assessment"></colgroup>
+      <colgroup><col class="parameter"><col class="unit"><col class="instructed"><col class="actual">{% if show.conditions_source %}<col class="source">{% endif %}</colgroup>
       <thead>
-        <tr><th>Parameter</th><th>Unit</th><th class="num">TCN (instructed)</th><th class="num">Actual</th><th>Requirement</th><th>Assessment</th></tr>
+        <tr><th>Parameter</th><th>Unit</th><th class="num">TCN (Instructed)</th><th class="num">Actual</th>{% if show.conditions_source %}<th>Source</th>{% endif %}</tr>
       </thead>
-      {% for group in conditions %}
+      {% for group in conditions.groups %}
         <tbody>
-          <tr class="group"><th colspan="6">{{ group.heading }}</th></tr>
+          <tr class="group"><th colspan="{% if show.conditions_source %}5{% else %}4{% endif %}">{{ group.heading }}</th></tr>
           {% for row in group.rows %}
             <tr>
               <td>{{ row.parameter }}</td>
               <td class="unit">{{ row.unit }}</td>
               <td class="num">{{ row.instructed }}</td>
-              <td class="num">{{ row.actual }}{% if row.count %} <span class="note">n = {{ row.count }}</span>{% endif %}{% if row.note %}<br><span class="note">{{ row.note }}</span>{% endif %}</td>
-              <td>{% for c in row.criteria %}{{ c.requirement }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
-              <td>{% for c in row.criteria %}<span class="assess assess-{{ c.assessment }}">{{ c.label }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
+              <td class="num">{{ row.actual }}{% if row.count %} <span class="note">(n={{ row.count }})</span>{% endif %}{% if row.provisional %}<sup class="provisional-mark" title="provisional">†</sup>{% endif %}</td>
+              {% if show.conditions_source %}<td class="source">{{ row.source|default:"" }}</td>{% endif %}
             </tr>
           {% endfor %}
         </tbody>
       {% endfor %}
     </table>
-    <p class="note">Actual: lowest – highest manual log reading (n readings); spot readings, so no average is given. Requirement and assessment are shown where an acceptance criterion refers to the row{% if sections.acceptance %}; all criteria are in section {{ sections.acceptance }}{% endif %}.</p>
+    {% if not show.conditions_note %}<p class="note">{% if conditions.static %}Static test: actual = lowest – highest reading with the shaft stopped.{% else %}Actual: lowest – highest with the shaft running, start-up and stop transients included; not a steady-state range.{% endif %} TCN values are instructions, not acceptance limits.</p>
+    {% elif conditions.static %}<p class="note">Static test: actual = lowest – highest reading with the shaft stopped (static summary; n readings). Source per row: a reviewed DCS signal of the parameter, else the manual log. TCN values are instructions, not acceptance limits.</p>{% else %}<p class="note">Actual: lowest – highest reading with the shaft running (n readings or samples), start-up and stop transients included; not a steady-state range. Readings with the shaft stopped are in the complete logs and plots. Source per row: a reviewed DCS signal of the parameter, else the manual log. TCN values are instructions, not acceptance limits.</p>{% endif %}
+    {% if conditions.provisional %}<p class="note"><sup class="provisional-mark">†</sup> Provisional: based on DCS running intervals that are not confirmed yet.</p>{% endif %}
   </section>
   {% endif %}
 
@@ -107,25 +127,35 @@
   <section>
     <h2>{{ sections.leakage }}. Leakage Summary</h2>
     <table class="grid leakage">
-      <thead><tr><th>Seal</th><th class="num">Total collected [ml]</th><th class="num">In average [ml]</th><th class="num">Collection period [h]</th><th class="num">Average leakage [ml/h]</th><th>Requirement</th><th>Assessment</th></tr></thead>
+      <thead><tr><th>Seal</th><th class="num">Measured total [ml]</th><th class="num">Dynamic collections [ml]</th><th class="num">Their running time [h]</th><th class="num">Average dynamic leakage [ml/h]</th><th>Requirement</th><th>Assessment</th></tr></thead>
       <tbody>
         {% for seal in leakage %}
           <tr>
             <th>{{ seal.seal }}</th>
             <td class="num">{{ seal.total }}</td>
-            <td class="num">{{ seal.rated }}</td>
-            <td class="num">{{ seal.hours }}</td>
+            <td class="num">{{ seal.dynamic_volume }}{% if seal.dynamic_count %} <span class="note">n = {{ seal.dynamic_count }}</span>{% endif %}</td>
+            <td class="num">{{ seal.dynamic_hours }}</td>
             <td class="num"><strong>{{ seal.average }}</strong>{% if seal.reason %}<br><span class="note">{{ seal.reason }}</span>{% endif %}</td>
             <td>{% for c in seal.criteria %}{{ c.requirement }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
             <td>{% for c in seal.criteria %}<span class="assess assess-{{ c.assessment }}">{{ c.label }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
           </tr>
-          {% if seal.unrated %}
-            <tr class="sub"><td colspan="7">{{ seal.seal }}: {{ seal.unrated }} ml collected over an unknown period is not in the average ({{ seal.unrated_notes|join:"; " }}).</td></tr>
+          {% if show.leakage_details %}
+          {% if seal.uncovered %}<tr class="sub"><td colspan="7">{{ seal.seal }}: {{ seal.uncovered }} h of the shaft-running time are not covered by a dynamic collection (see below).</td></tr>{% endif %}
+          {% if seal.static_average %}<tr class="sub"><td colspan="7">{{ seal.seal }}, static (shaft stopped throughout): {{ seal.static_volume }} ml / {{ seal.static_hours }} h = <strong>{{ seal.static_average }} ml/h</strong> static collection rate — not dynamic leakage.</td></tr>{% endif %}
+          {% for c in seal.mixed %}<tr class="sub"><td colspan="7">{{ seal.seal }}, mixed-period collection {{ c.period }} ({{ c.split }}): {{ c.volume }} ml / {{ c.hours }} h = <strong>{{ c.rate }} ml/h</strong> mixed-period collection rate — running and stopped, static leakage not separable; not dynamic leakage.</td></tr>{% endfor %}
+          {% if seal.excluded %}<tr class="sub"><td colspan="7">{{ seal.seal }}, not in the average: {% for c in seal.excluded %}{{ c.period }}{% if c.volume != "—" %} {{ c.volume }} ml{% endif %} — {{ c.reason }}{% if c.split %} ({{ c.split }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.</td></tr>{% endif %}
           {% endif %}
         {% endfor %}
       </tbody>
     </table>
-    <p class="note">Average leakage = total volume collected over a known period / total collection period (clock time, static periods included). It is not the mean of the interval rates.</p>
+    {% for text in qualifications.leakage %}<p class="qualification">{{ text }}</p>{% endfor %}
+    {% if show.leakage_method_note %}<p class="note">Average dynamic leakage = Σ volumes of the collections made with the shaft running throughout / Σ their running hours: numerator and denominator cover the same collection intervals. It is not the mean of the interval rates. A blank reading is not measured; 0 is a measured zero. Static and mixed-period collections are reported separately and never called dynamic leakage.</p>{% endif %}
+    {% if leakage_chart %}
+      <figure class="leakage-chart">
+        {{ leakage_chart|safe }}
+        <figcaption><p class="note">Cumulative collected volume: running total of the measured volumes at each collection time (markers). Nothing is measured between collections; collections not measured add nothing.</p></figcaption>
+      </figure>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -138,7 +168,7 @@
         <img src="{{ plot.src }}" alt="Figure {{ plot.number }}">
         <figcaption>
           <p class="caption"><strong>Figure {{ plot.number }}.</strong> {{ plot.caption|default:plot.signals }}</p>
-          <p class="note">Source: {{ plot.dataset }} (SHA-256 {{ plot.dataset_sha256|slice:":12" }}…) · {{ plot.window }} · axes: {{ plot.ranges }}{% if plot.caption %} · {{ plot.signals }}{% endif %}{% if plot.data %} · {{ plot.data }}{% endif %}</p>
+          {% if show.plot_provenance %}<p class="note">Source: {{ plot.dataset }} (SHA-256 {{ plot.dataset_sha256|slice:":12" }}…) · {{ plot.window }} · axes: {{ plot.ranges }}{% if plot.caption %} · {{ plot.signals }}{% endif %}{% if plot.data %} · {{ plot.data }}{% endif %}</p>{% endif %}
         </figcaption>
       </figure>
     {% endfor %}
@@ -171,35 +201,84 @@
     <h2>{{ sections.measurements }}. Pre-Test / Post-Test Measurements</h2>
     {% if measurements %}
       <table class="grid measurements">
-        <colgroup><col class="component"><col class="quantity"><col class="value"><col class="value"><col class="value"><col class="unit"></colgroup>
-        <thead><tr><th>Component</th><th>Measurement</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Δ (Post − Pre)</th><th>Unit</th></tr></thead>
+        <colgroup><col class="component"><col class="quantity"><col class="value"><col class="value"><col class="delta"><col class="wear"><col class="unit"><col class="source"></colgroup>
+        <thead><tr><th>Component</th><th>Measurement</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Δ (Post − Pre)</th><th class="num">Wear</th><th>Unit</th><th>Source</th></tr></thead>
         {% for component in measurements %}
           <tbody class="component">
             {% for row in component.rows %}
-              <tr><th>{% if forloop.first %}{{ component.component }}{% endif %}</th><td>{{ row.quantity }}</td><td class="num">{{ row.pre }}</td><td class="num">{{ row.post }}</td><td class="num">{{ row.delta }}</td><td class="unit">{{ row.unit }}</td></tr>
+              <tr>
+                <th>{% if forloop.first %}{{ component.component }}{% if component.optional %} <span class="note">optional component</span>{% endif %}{% endif %}</th><td>{{ row.quantity }}</td>
+                <td class="num">{{ row.pre.value }}{% if row.pre.extra %}<span class="extra{% if row.pre.status != 'completed' %} missing{% endif %}">{{ row.pre.extra }}</span>{% endif %}</td>
+                <td class="num">{{ row.post.value }}{% if row.post.extra %}<span class="extra{% if row.post.status != 'completed' %} missing{% endif %}">{{ row.post.extra }}</span>{% endif %}</td>
+                <td class="num">{{ row.delta }}</td><td class="num">{% if row.wear_quantity %}{{ row.wear }}{% else %}<span class="none">—</span>{% endif %}</td>
+                <td class="unit">{{ row.unit }}</td><td class="unit">{{ row.source }}</td>
+              </tr>
             {% endfor %}
           </tbody>
         {% endfor %}
       </table>
-      <p class="note">Δ is reported for every measurement without interpretation; only face length has a wear meaning (below).</p>
+      {% if show.measurement_notes %}<p class="note">Values of the reviewed measurement of each component and stage. Face flatness: ROUNDPAK instrument flatness FLTt of one circular trace, as exported. Face taper: signed, negative = ID high (Convex), positive = OD high (Concave), Flat within the flat limit (± 0.25 HLB); from the Mahr opposing scans (the more accurate) and from the two ROUNDPAK radial traces. Roughness Ra: mean of the instrument's Ra of the left and right scans. Δ is reported without interpretation; only the face length of a seal face has a wear meaning. Measurements not applicable to a component, and optional ones not measured, are not listed.</p>{% endif %}
     {% endif %}
     {% if wear %}
       <h3>Face wear</h3>
       <table class="grid wear">
-        <thead><tr><th>Component</th><th class="num">Pre [in]</th><th class="num">Post [in]</th><th class="num">Wear [in]</th><th class="num">Period [h]</th><th class="num">Wear rate [in/h]</th><th>Requirement</th><th>Assessment</th></tr></thead>
+        <thead><tr><th>Component</th><th class="num">Pre</th><th class="num">Post</th><th class="num">Δ Post − Pre</th><th class="num">Wear Pre − Post</th><th class="num">Running [h]</th><th class="num">Wear rate [/h]</th><th>Requirement</th><th>Assessment</th></tr></thead>
         <tbody>
           {% for w in wear %}
             <tr>
-              <th>{{ w.component }}</th><td class="num">{{ w.pre }}</td><td class="num">{{ w.post }}</td><td class="num">{{ w.wear }}</td>
-              <td class="num">{{ w.hours }}</td><td class="num"><strong>{{ w.rate }}</strong></td>
+              <th>{{ w.component }} <span class="note">[{{ w.unit }}]</span></th><td class="num">{{ w.pre }}</td><td class="num">{{ w.post }}</td><td class="num">{{ w.delta }}</td><td class="num">{{ w.wear }}</td>
+              <td class="num">{{ w.hours }}</td><td class="num"><strong>{{ w.rate }}</strong>{% if w.reason %}<br><span class="note">{{ w.reason }}</span>{% endif %}</td>
               <td>{% for c in w.criteria %}{{ c.requirement }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
               <td>{% for c in w.criteria %}<span class="assess assess-{{ c.assessment }}">{{ c.label }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="none">—</span>{% endfor %}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
-      <p class="note">Wear = Pre − Post face length (material removed). Wear rate = wear / the seal's leakage collection period{% with first=wear.0 %}{% if first.hours_source %} ({{ first.hours_source }}){% endif %}{% endwith %}.</p>
+      {% if show.wear_note %}<p class="note">{% with first=wear.0 %}{{ first.direction }}; Δ = Post − Pre as measured (signed). Wear rate = wear / {{ first.hours_source }}{% if first.split %} ({{ first.split }}){% endif %}.{% endwith %} Changes of taper, roughness or flatness are not wear.</p>{% endif %}
     {% endif %}
+    {% if measurement_remarks %}
+      <h3>Measurement remarks</h3>
+      {% for r in measurement_remarks %}<p class="text"><strong>{{ r.label }}:</strong> {{ r.text }}</p>{% endfor %}
+    {% endif %}
+    {% if component_observations %}
+      <h3>Inspection observations</h3>
+      {% for c in component_observations %}
+        <p class="text"><strong>{{ c.label }}:</strong> {% for paragraph in c.observations %}{% for line in paragraph %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+      {% endfor %}
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ---- Seal face measurement details: Mahr / ROUNDPAK, Pre → Post ---------------------- #}
+  {% if sections.measurement_details %}
+  <section class="measurement-details">
+    <h2>{{ sections.measurement_details }}. Seal Face Measurements</h2>
+    {% for block in measurement_details %}
+      <div class="measure-block">
+        <h3>{{ block.title }}</h3>
+        {% for figure in block.figures %}
+          <table class="measure-figures{% if figure.polar %} polar{% endif %}">
+            <colgroup><col><col></colgroup>
+            <thead><tr><th>Pre-test</th><th>Post-test</th></tr></thead>
+            <tbody>
+              {% for row in figure.grid %}
+                <tr><td>{% if row.pre %}{{ row.pre|safe }}{% else %}<p class="none">Not measured</p>{% endif %}</td><td>{% if row.post %}{{ row.post|safe }}{% else %}<p class="none">Not measured</p>{% endif %}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <p class="note">{{ figure.title }}. {{ figure.note }}</p>
+        {% endfor %}
+        <table class="grid measure-numbers">
+          <colgroup><col class="label"><col class="value"><col class="value"><col class="delta"><col class="unit"></colgroup>
+          <thead><tr><th></th><th class="num">Pre</th><th class="num">Post</th><th class="num">Δ</th><th>Unit</th></tr></thead>
+          <tbody>
+            {% for row in block.rows %}<tr><th>{{ row.label }}</th><td class="num">{{ row.pre }}</td><td class="num">{{ row.post }}</td><td class="num">{{ row.delta }}</td><td class="unit">{{ row.unit }}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+        {% if block.notes %}<p class="note">{% for note in block.notes %}{{ note }} {% endfor %}</p>{% endif %}
+        {% if show.measurement_sources %}<p class="note source">Source:{% for stage, source in block.sources.items %}{% if source %} {% if stage == "pre" %}Pre{% else %}Post{% endif %} — {% for f in source.files %}{{ f.name }} (SHA-256 {{ f.sha256|slice:":12" }}…){% if not forloop.last %}, {% endif %}{% endfor %}{% if source.measured %}, measured {{ source.measured }}{% endif %}, calculation {{ source.engine }}{% if source.remark %}; {{ source.remark }}{% endif %}.{% endif %}{% endfor %}</p>{% endif %}
+      </div>
+    {% endfor %}
   </section>
   {% endif %}
 
@@ -253,15 +332,15 @@
         {% for a in acceptance %}
           <tr>
             <td>{{ a.criterion }}{% if a.basis %}<br><span class="note">{{ a.basis }}</span>{% endif %}</td>
-            <td>{{ a.requirement }}</td>
-            <td class="num">{{ a.actual }}{% if a.source %}<br><span class="note">{{ a.source }}</span>{% endif %}</td>
-            <td><span class="assess assess-{{ a.assessment }}">{{ a.label }}</span><br><span class="note">{{ a.by }}</span></td>
+            <td>{{ a.requirement }}{% if show.acceptance_sources %}<br><span class="note">Source: {{ a.requirement_source }}</span>{% endif %}</td>
+            <td class="num">{{ a.actual }}{% if a.source and show.acceptance_sources %}<br><span class="note">{{ a.source }}</span>{% endif %}</td>
+            <td><span class="assess assess-{{ a.assessment }}">{{ a.label }}</span>{% if show.acceptance_sources %}<br><span class="note">{{ a.by }}{% if a.note %} — {{ a.note }}{% endif %}</span>{% elif a.note %}<br><span class="note">{{ a.note }}</span>{% endif %}</td>
             <td class="text">{{ a.remark|linebreaksbr }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
-    <p class="note">The engineer's assessment is shown when set. Otherwise Pass/Fail is calculated only for a numeric limit on a calculated leakage or wear rate; anything else is Not evaluated until the engineer assesses it.</p>
+    {% if show.acceptance_note %}<p class="note">Requirements come from the Test Program; an approved (issued) TCN change replaces or waives one for this run, or adds one; the source is given per row. The engineer's assessment is shown when set. Otherwise Pass/Fail is calculated only where a numeric limit, its unit and the calculated actual allow an unambiguous comparison; anything else is assessed by the engineer. Not evaluated and Not applicable are explicit assessments.</p>{% endif %}
   </section>
   {% endif %}
 
@@ -281,7 +360,7 @@
   {% if log.tables %}
   <section class="annex">
     <h2>Annex A. Manually Logged Data</h2>
-    <p class="note">{{ log.count }} log entries in time order. Elapsed hours: clock time since t = 0{% if log.provisional %} (provisional: first reading){% endif %}. Leakage period: since the previous entry or as entered; rates are calculated.{% if events %} Ref.: event or note in section {{ sections.events }}.{% endif %}</p>
+    <p class="note">{{ log.count }} log entries in time order. Elapsed hours: clock time since t = 0{% if log.provisional %} (provisional: first reading){% endif %}. Leakage period: since the previous collection or as entered; rates are calculated; a blank volume is not measured.{% if events %} Ref.: event or note in section {{ sections.events }}.{% endif %}</p>
     {% for table in log.tables %}
       <table class="grid log">
         <thead>
@@ -296,6 +375,19 @@
         </tbody>
       </table>
     {% endfor %}
+  </section>
+  {% endif %}
+
+  {# ---- Document history: the issued documents of this profile ----------------------------- #}
+  {% if document.history %}
+  <section class="document-history">
+    <h3>Document history</h3>
+    <table class="grid history">
+      <thead><tr><th>Document</th><th>Result revision</th><th>Issued</th><th>Status</th>{% if profile.code == "engineering" %}<th>Issued by</th><th>Reason</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for h in document.history %}<tr><td>{{ h.identity }}</td><td>{{ h.revision }}</td><td>{{ h.issued_on }}</td><td>{{ h.status }}</td>{% if profile.code == "engineering" %}<td>{{ h.issued_by }}</td><td class="text">{{ h.reason }}</td>{% endif %}</tr>{% endfor %}
+      </tbody>
+    </table>
   </section>
   {% endif %}
 

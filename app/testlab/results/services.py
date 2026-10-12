@@ -7,7 +7,7 @@ from testlab.execution import manual_log
 
 from . import inspection
 from .inspection import Component
-from .models import AcceptanceItem, InspectionMeasurement, ResultComponent, TestResult
+from .models import AcceptanceItem, ResultComponent, TestResult
 
 
 class ResultRuleError(Exception):
@@ -21,7 +21,7 @@ def run_configuration(test_run):
 
 def instructed_material(setup, position, component):
     """The face material the TCN names for a seal position, if any."""
-    if not position or component == Component.SLEEVE:
+    if not position or component not in (Component.STATOR, Component.ROTOR):
         return ""
     seal = setup.positions.filter(role=position).first()
     if seal is None:
@@ -39,7 +39,8 @@ def create_result(test_run, user):
     with transaction.atomic():
         if TestResult.objects.filter(test_run=test_run).exists():
             raise ResultRuleError(f"Run {test_run.display_no} already has a Result.")
-        result = TestResult.objects.create(test_run=test_run, created_by=user, updated_by=user)
+        result = TestResult.objects.create(test_run=test_run, created_by=user, updated_by=user,
+                                           responsible_engineer=user)  # fmt: skip
         setup = run_configuration(test_run)
         for position, component in inspection.default_components(setup.arrangement):
             ResultComponent.objects.create(
@@ -87,29 +88,6 @@ def remove_component(component, user):
 def touch(result, user):
     result.updated_by = user
     result.save(update_fields=["updated_by", "updated_at"])
-
-
-def save_measurements(result, values, user):
-    """Store entered Pre/Post values: {(component pk, quantity code): (pre, post)}.
-
-    A pair with both values empty removes the stored measurement (not
-    measured); nothing is calculated or stored besides the entered values.
-    """
-    components = {c.pk: c for c in result.components.all()}
-    with transaction.atomic():
-        for (component_pk, code), (pre, post) in values.items():
-            component = components[component_pk]
-            definition = inspection.quantity(code)
-            if component.component not in definition.components:
-                raise ResultRuleError(f"{definition.label} is not measured on a {component.get_component_display()}.")
-            if pre is None and post is None:
-                InspectionMeasurement.objects.filter(component=component, quantity=code).delete()
-                continue
-            InspectionMeasurement.objects.update_or_create(
-                component=component, quantity=code,
-                defaults={"pre_value": pre, "post_value": post, "unit": definition.unit, "updated_by": user},
-            )
-        touch(result, user)
 
 
 def next_acceptance_order(result):

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Mapping · {{ batch.original_name }} · Run {{ run.display_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  {% include "execution/_log_import_head.html" %}
+  {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
+
+  {% if batch.sheet_names|length > 1 %}
+    <form method="post" class="inline-fields sheet-choice">
+      {% csrf_token %}<input type="hidden" name="action" value="sheet">
+      <label>Sheet <select name="sheet">{% for name in batch.sheet_names %}<option{% if name == batch.sheet_name %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <button type="submit" class="btn-sm">Read this sheet</button>
+    </form>
+  {% endif %}
+
+  {% include "execution/_log_import_header.html" %}
+
+  <form method="post" class="card import-mapping" novalidate>
+    {% csrf_token %}
+    <div class="card-head">
+      <h3>Column mapping</h3>
+      <span class="hint">{% if layout %}<span class="status status-issued">reviewed layout</span> this layout was reviewed by {{ layout.reviewed_by.get_full_name|default:layout.reviewed_by.username }} on {{ layout.reviewed_at|date:"d-M-Y" }} for this configuration — check it again{% else %}proposed from the headings, units and the run's configuration{% endif %}</span>
+    </div>
+    <p class="hint">Which manual-log field each column is, for {{ tcn.setup.configuration_display }}. Columns marked <span class="status map-review">Review required</span> cannot be known for sure from the heading: confirm them, or choose another field. Values are imported as recorded; nothing is converted. Running hours and leakage rates of the workbook are kept in the import record only: TestLab calculates its own.</p>
+    {% if problems %}<ul class="issue-errors">{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>{% endif %}
+    <div class="table-scroll">
+      <table class="list compact mapping-table">
+        <thead><tr><th>Col.</th><th>Group</th><th>Heading</th><th>Unit</th><th>First values</th><th>Manual-log field</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for column in columns %}
+            <tr class="map-row-{{ column.proposal.status }}">
+              <td class="id">{{ column.letter }}</td>
+              <td>{{ column.group }}</td>
+              <th>{{ column.label }}</th>
+              <td>{{ column.unit|default:"—" }}</td>
+              <td class="samples">{% for value in column.samples %}<code>{{ value|truncatechars:24 }}</code>{% if not forloop.last %} {% endif %}{% empty %}<span class="empty">empty</span>{% endfor %}</td>
+              <td>
+                <select name="target_{{ column.letter }}"{% if recording_refused %} disabled{% endif %}>
+                  {% for value, label in choices %}<option value="{{ value }}"{% if value == column.target %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+              </td>
+              <td>
+                <span class="status map-{{ column.proposal.status }}">{{ column.status_label }}</span>
+                {% if column.proposal.status == "review" %}<label class="review-tick"><input type="checkbox" name="reviewed_{{ column.letter }}" value="1"{% if column.reviewed %} checked{% endif %}> confirmed</label>{% endif %}
+                {% if column.proposal.reason %}<div class="hint">{{ column.proposal.reason }}</div>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if missing %}<p class="hint">Not in this workbook: {% for m in missing %}{{ m.full_label }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+    {% if not recording_refused %}
+    <div class="actions">
+      <label class="inline-check"><input type="checkbox" name="save_layout" value="1"{% if save_layout %} checked{% endif %}> Save this mapping for workbooks with the same layout</label>
+      <button type="submit" class="btn-primary">Confirm mapping and preview</button>
+    </div>
+    {% endif %}
+  </form>
+  {% if not recording_refused %}
+  <form method="post" action="{% url 'execution:log_import_discard' batch.pk %}" class="discard-form">
+    {% csrf_token %}<button type="submit" class="btn-ghost btn-sm">Discard this import</button>
+    <span class="hint">Nothing has been imported yet.</span>
+  </form>
+  {% endif %}
+{% endblock %}

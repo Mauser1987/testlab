@@ -1,8 +1,10 @@
 from django import template
 from django.urls import reverse
 
-from testlab.results import plots
+from testlab.results import formatting, measurement_summary, plots
 from testlab.results.acceptance import format_number
+from testlab.results.facemeasure import mahr
+from testlab.results.formatting import fixed, signed_fixed
 from testlab.results.models import ResultPlot, TestResult
 
 register = template.Library()
@@ -14,17 +16,7 @@ def number(value):
     return "" if value in (None, "") else format_number(value)
 
 
-@register.filter
-def signed(value):
-    """A difference with its sign: +0.066, −0.047, 0."""
-    if value in (None, ""):
-        return ""
-    text = format_number(abs(value))
-    if value > 0:
-        return f"+{text}"
-    if value < 0:
-        return f"−{text}"
-    return text
+register.filter("signed", formatting.signed)
 
 
 @register.inclusion_tag("results/_plot_to_result.html", takes_context=True)
@@ -47,6 +39,61 @@ def plot_to_result(context, dataset):
         "result": result,
         "plot": plot,
         "config": config,
-        "recording_refused": context.get("recording_refused"),
+        "recording_refused": context.get("result_refused"),  # the plot is added to the Result, not to the DCS data
         "csrf_token": context.get("csrf_token"),
     }
+
+
+register.filter("fixed", formatting.fixed)
+register.filter("signed_fixed", formatting.signed_fixed)
+register.filter("quantity_value", formatting.quantity_value)
+register.filter("quantity_delta", formatting.quantity_delta)
+
+
+@register.filter
+def slot_label(status):
+    return measurement_summary.STATUS_LABELS.get(status, status)
+
+
+@register.filter
+def measurement_brief(measurement):
+    """The headline values of a measurement, one line."""
+    analysis = measurement.analysis
+    if analysis is None:
+        return ""
+    if measurement.kind == "dimensional":
+        return f"{format_number(analysis.value)} {analysis.unit}"
+    if measurement.kind == "mahr":
+        parts = [f"taper {signed_fixed(analysis.taper_um, 4)} µm ({signed_fixed(analysis.taper_hlb, 3)} HLB)",
+                 analysis.classification]  # fmt: skip
+        if analysis.mean_ra_um is not None:
+            parts.append(f"Ra {fixed(analysis.mean_ra_um, 3)} µm")
+        return " · ".join(parts)
+    parts = []
+    if analysis.flatness_um is not None:
+        parts.append(f"FLTt {fixed(analysis.flatness_um, 3)} µm")
+    if analysis.check_result:
+        parts.append(analysis.check_result)
+    if analysis.lfd_pv_um is not None:
+        parts.append(f"LFD P–V {fixed(analysis.lfd_pv_um, 4)} µm")
+    if analysis.taper_um is not None:
+        parts.append(f"taper {signed_fixed(analysis.taper_um, 4)} µm" +
+                     (f" {analysis.classification}" if analysis.classification else ""))  # fmt: skip
+    return " · ".join(parts)
+
+
+@register.filter
+def mahr_direction(code):
+    return mahr.DIRECTIONS.get(code, code)
+
+
+@register.filter
+def mahr_view(code):
+    return mahr.VIEWS.get(code, code)
+
+
+@register.filter
+def subtract(value, other):
+    if value in (None, "") or other in (None, ""):
+        return None
+    return value - other

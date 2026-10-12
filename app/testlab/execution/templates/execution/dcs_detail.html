@@ -33,6 +33,167 @@
     </section>
   </div>
 
+  <section class="card dcs-mapping" id="mapping">
+    <div class="card-head">
+      <h2>Signal mapping</h2>
+      <span class="hint">
+        {% if dataset.mapping_reviewed %}
+          <span class="status status-issued">reviewed</span>
+          {{ dataset.mapping_reviewed_by.get_full_name|default:dataset.mapping_reviewed_by.username }} {{ dataset.mapping_reviewed_at|date:"d-M-Y H:i" }}{% if dataset.mapping_from %} · reused from the same export format{% endif %}
+        {% else %}
+          <span class="status status-draft">not reviewed</span> signals are not used as actual values until the mapping is reviewed
+        {% endif %}
+      </span>
+    </div>
+    <p class="hint">Which TestLab/TCN parameter each signal is. Only mapped signals of a reviewed mapping are used as actual values: speed for the shaft-running hours, the others for the min–max of the Result and report. Nothing is converted: when the units differ, confirm that the values are in the parameter's unit, or leave the signal unmapped.{% if known_map and not dataset.mapping_reviewed %} The same export format was reviewed before; review it here to use it for this run.{% endif %}</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <div class="table-scroll">
+        <table class="list compact mapping-table">
+          <thead><tr><th>Signal</th><th>Unit in file</th><th>TestLab / TCN parameter</th><th>Unit</th></tr></thead>
+          <tbody>
+            {% for row in mapping_rows %}
+              <tr>
+                <th>{{ row.signal.name }}</th>
+                <td>{{ row.signal.unit|default:"—" }}</td>
+                <td>
+                  <select name="mapping_{{ row.signal.column }}"{% if recording_refused %} disabled{% endif %}>
+                    <option value="">— not mapped —</option>
+                    {% for parameter in parameters %}<option value="{{ parameter.code }}"{% if parameter.code == row.code %} selected{% endif %}>{{ parameter.full_label }}</option>{% endfor %}
+                  </select>
+                </td>
+                <td>
+                  {% if row.parameter %}
+                    {% if row.unit_differs %}
+                      <label class="hint"><input type="checkbox" name="unit_{{ row.signal.column }}" value="1"{% if row.unit_confirmed %} checked{% endif %}{% if recording_refused %} disabled{% endif %}> values are in {{ row.parameter.unit }} (file says {{ row.signal.unit|default:"no unit" }})</label>
+                    {% else %}{{ row.parameter.unit }}{% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if not recording_refused %}<div class="actions"><button type="submit" class="btn-primary">Review mapping</button></div>{% endif %}
+    </form>
+  </section>
+
+  <section class="card dcs-running" id="running">
+    <div class="card-head">
+      <h2>Running intervals</h2>
+      <span class="hint">
+        {% if not running.determination %}<span class="status status-draft">not determined</span> map and review the speed signal first
+        {% elif running.provisional %}<span class="status status-draft">provisional</span> {{ running.status_label }}
+        {% elif running.status == "overridden" %}<span class="status status-issued">overridden</span> {{ running.determination.recorded_by.get_full_name|default:running.determination.recorded_by.username }} {{ running.determination.recorded_at|date:"d-M-Y H:i" }}
+        {% else %}<span class="status status-issued">confirmed</span> {{ running.determination.recorded_by.get_full_name|default:running.determination.recorded_by.username }} {{ running.determination.recorded_at|date:"d-M-Y H:i" }}{% endif %}
+      </span>
+    </div>
+    <p class="hint">The recording is kept complete; t = 0 and the time axis are unchanged. Running intervals are the stretches with the shaft genuinely rotating: they give the running hours and the scope of the operating statistics (start-up and stop transients included). Missing data is unknown, never a stopped shaft.</p>
+    <dl class="facts running-facts">
+      <dt>Recording</dt>
+      <dd>{% if running_recording_start %}{{ running_recording_start|date:"d-M-Y H:i:s" }} → {{ running_recording_end|date:"d-M-Y H:i:s" }}{% else %}{{ dataset.time_start_h|floatformat:4 }} → {{ dataset.time_end_h|floatformat:4 }} h{% endif %} · {{ dataset.duration_h|floatformat:2 }} h</dd>
+      {% if running.determination %}
+        <dt>Shaft running</dt>
+        <dd><strong>{{ running.running_h|floatformat:2 }} h</strong> · {{ running_intervals|length }} interval{{ running_intervals|length|pluralize }}</dd>
+        <dt>Basis</dt>
+        <dd>{{ running.basis }} <span class="hint">· dips ≤ {{ running.determination.max_dropout_s|floatformat:"-1" }} s bridged · runs &lt; {{ running.determination.min_run_s|floatformat:"-1" }} s ignored · sampling gaps &gt; {{ running.determination.gap_limit_s|floatformat:"-1" }} s unknown · {{ running.determination.method }} v{{ running.determination.method_version }}</span></dd>
+        {% if running.stale %}<dt>Stale</dt><dd class="text-warning">{{ running.stale|capfirst }}.</dd>{% endif %}
+        {% if running.determination.reason %}<dt>{% if running.status == "overridden" %}Override reason{% else %}Note{% endif %}</dt><dd>{{ running.determination.reason }}</dd>{% endif %}
+      {% endif %}
+    </dl>
+    {% if running.determination %}
+      <div class="table-scroll">
+        <table class="list compact running-table">
+          <thead><tr><th>#</th><th>Start</th><th>End</th><th class="number">Hours</th><th></th></tr></thead>
+          <tbody>
+            {% for i in running_intervals %}
+              <tr><td>{{ forloop.counter }}</td>
+                <td>{% if i.start %}{{ i.start|date:"d-M-Y H:i:s" }}{% endif %} <span class="hint">{{ i.start_h|floatformat:4 }} h</span></td>
+                <td>{% if i.end %}{{ i.end|date:"d-M-Y H:i:s" }}{% endif %} <span class="hint">{{ i.end_h|floatformat:4 }} h</span></td>
+                <td class="number">{{ i.hours|floatformat:2 }}</td>
+                <td class="hint">{{ i.notes|join:"; " }}</td></tr>
+            {% empty %}
+              <tr><td colspan="5" class="empty">No running interval: the shaft did not run during this recording.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if detected_intervals %}
+        <p class="hint">Detected automatically (kept beside the effective intervals):
+          {% for i in detected_intervals %}{% if i.start %}{{ i.start|date:"d-M H:i:s" }} → {{ i.end|date:"d-M H:i:s" }}{% else %}{{ i.start_h|floatformat:4 }} → {{ i.end_h|floatformat:4 }} h{% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}</p>
+      {% endif %}
+      {% if running_dropouts or running_spikes or running_gaps %}
+        <details class="running-details">
+          <summary>{{ running_dropouts|length }} dip{{ running_dropouts|length|pluralize }} bridged · {{ running_spikes|length }} spike{{ running_spikes|length|pluralize }} ignored · {{ running_gaps|length }} data gap{{ running_gaps|length|pluralize }}</summary>
+          <ul class="plain hint">
+            {% for x in running_dropouts %}<li>Dip below the threshold bridged: {% if x.start %}{{ x.start|date:"d-M H:i:s" }}{% else %}{{ x.start_h|floatformat:4 }} h{% endif %}, {{ x.seconds|floatformat:0 }} s</li>{% endfor %}
+            {% for x in running_spikes %}<li>Short run ignored: {% if x.start %}{{ x.start|date:"d-M H:i:s" }}{% else %}{{ x.start_h|floatformat:4 }} h{% endif %}, {{ x.seconds|floatformat:0 }} s</li>{% endfor %}
+            {% for x in running_gaps %}<li>No data (unknown): {% if x.start %}{{ x.start|date:"d-M H:i:s" }} → {{ x.end|date:"d-M H:i:s" }}{% else %}{{ x.start_h|floatformat:4 }} → {{ x.end_h|floatformat:4 }} h{% endif %}</li>{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+      {% if not recording_refused %}
+        <div class="actions running-actions">
+          {% if running.provisional %}
+            <form method="post" action="{% url 'execution:dcs_running' dataset.pk %}">{% csrf_token %}
+              <input type="hidden" name="action" value="confirm"><input type="hidden" name="determination" value="{{ running.determination.pk|default:'' }}">
+              <button type="submit" class="btn-primary">Confirm</button>
+            </form>
+          {% endif %}
+        </div>
+        <details class="running-edit">
+          <summary>Edit running intervals</summary>
+          <form method="post" action="{% url 'execution:dcs_running' dataset.pk %}" novalidate>{% csrf_token %}
+            <input type="hidden" name="action" value="override"><input type="hidden" name="determination" value="{{ running.determination.pk|default:'' }}">
+            <p class="hint">{% if dataset.recording_started_at %}Local date and time (seconds allowed) or hours since the recording start.{% else %}Hours since the recording start.{% endif %} Clear both fields to remove an interval. Data gaps stay unknown inside an entered interval.</p>
+            <table class="list compact">
+              <thead><tr><th>#</th><th>Start</th><th>End</th></tr></thead>
+              <tbody>
+                {% for row in running_edit_rows %}
+                  <tr><td>{{ forloop.counter }}</td>
+                    <td><input type="text" name="start_{{ forloop.counter0 }}" value="{{ row.start }}"><input type="hidden" name="shown_start_{{ forloop.counter0 }}" value="{{ row.start }}"><input type="hidden" name="start_h_{{ forloop.counter0 }}" value="{{ row.start_h }}"></td>
+                    <td><input type="text" name="end_{{ forloop.counter0 }}" value="{{ row.end }}"><input type="hidden" name="shown_end_{{ forloop.counter0 }}" value="{{ row.end }}"><input type="hidden" name="end_h_{{ forloop.counter0 }}" value="{{ row.end_h }}"></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <div class="field"><label for="override-reason">Reason (required)</label><textarea id="override-reason" name="reason" rows="2" required></textarea></div>
+            <div class="actions"><button type="submit">Save running intervals</button></div>
+          </form>
+        </details>
+        <details class="running-redetect">
+          <summary>Redetect</summary>
+          <form method="post" action="{% url 'execution:dcs_running' dataset.pk %}" class="inline-fields" novalidate>{% csrf_token %}
+            <input type="hidden" name="action" value="redetect"><input type="hidden" name="determination" value="{{ running.determination.pk|default:'' }}">
+            <div class="field"><label>Running threshold [rpm]</label><input type="text" name="threshold_rpm" value="{{ running.determination.threshold_rpm|floatformat:'-3' }}"></div>
+            <div class="field"><label>Max. dropout bridged [s]</label><input type="text" name="max_dropout_s" value="{{ running.determination.max_dropout_s|floatformat:'-3' }}"></div>
+            <div class="field"><label>Min. genuine run [s]</label><input type="text" name="min_run_s" value="{{ running.determination.min_run_s|floatformat:'-3' }}"></div>
+            <div class="field"><label>Note</label><input type="text" name="reason"></div>
+            <div class="actions"><button type="submit">Redetect</button></div>
+          </form>
+          <p class="hint">A new detection replaces the current one, which stays in the history; it has to be confirmed again.</p>
+        </details>
+      {% endif %}
+    {% endif %}
+    {% if running_history %}
+      <details class="running-history">
+        <summary>History ({{ running_history|length }} earlier determination{{ running_history|length|pluralize }})</summary>
+        <table class="list compact">
+          <thead><tr><th>Recorded</th><th>Status</th><th>Basis</th><th class="number">Intervals</th><th>Reason / note</th><th>Superseded</th></tr></thead>
+          <tbody>
+            {% for h in running_history %}
+              <tr><td>{{ h.recorded_at|date:"d-M-Y H:i" }} {{ h.recorded_by.get_full_name|default:h.recorded_by.username }}</td>
+                <td>{{ h.get_status_display }}</td>
+                <td>{{ h.speed_name }} ≥ {{ h.threshold_rpm|floatformat:"-3" }} rpm · {{ h.max_dropout_s|floatformat:"-1" }} s / {{ h.min_run_s|floatformat:"-1" }} s</td>
+                <td class="number">{{ h.effective_intervals|length }}</td>
+                <td>{{ h.reason|default:"—" }}</td>
+                <td>{{ h.superseded_at|date:"d-M-Y H:i" }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% endif %}
+  </section>
+
   <section class="card dcs-plot">
     <div class="card-head">
       <h2>Plot</h2>
@@ -43,6 +204,7 @@
         <button type="button" class="btn-sm" data-select="all">All</button>
         <button type="button" class="btn-sm" data-select="none">None</button>
         <span class="hint">Tick to show · L / R = left or right axis · drag to zoom, double-click to reset, slider below the plot to move</span>
+        {% if running_plot.intervals %}<span class="view-toggle" role="group" aria-label="Time window"><button type="button" class="btn-sm active" data-view="full">Full recording</button><button type="button" class="btn-sm" data-view="running">Running intervals</button></span>{% endif %}
       </div>
       <ul class="signal-list">
         {% for signal in signals %}
@@ -60,6 +222,7 @@
   </section>
 
   {{ signals|json_script:"dcs-signals" }}
+  {{ running_plot|json_script:"dcs-running" }}
   <script>
     window.TESTLAB_DCS = {
       dataUrl: "{% url 'execution:dcs_data' dataset.pk %}",

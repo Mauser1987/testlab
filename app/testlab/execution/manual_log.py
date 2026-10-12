@@ -11,17 +11,25 @@ leakage collection period. Known: who entered it (the logged-in user). Calculate
   elapsed hours count from the first reading and are marked provisional;
 * hours since the previous entry;
 * leakage rate [ml/h] = collected volume / collection period, where the
-  period is the clock time since the previous entry (legacy practice: the
-  cup is emptied at every reading) unless the technician entered the
-  period. Leakage is taken as logged, also when the shaft is not turning
-  (static leakage): nothing is filtered on speed.
+  period is the clock time since the previous reading (legacy practice:
+  the cups are emptied at every reading) unless the technician entered the
+  period. A reading is an entry with at least one value or an entered
+  period; an entry with only an event or a note does not end a
+  collection. At a reading a seal without a volume was not measured
+  (blank ≠ 0: an explicit 0 is a measured zero), and that seal's
+  collection period ending there is not covered. Leakage is taken as
+  logged, also when the shaft is not turning; whether a collection is
+  dynamic, static or mixed is decided from the run's running timeline
+  (results/runtime.py), not here.
 
-No rate is given — with the reason — for the first entry of a run without
-an entered period, for a period of zero, or without a volume. Rates are
-always derived from the stored values, so they follow corrections.
+No rate is given — with the reason — for a volume at the first reading of
+a run without an entered period, for a period of zero, or without a
+volume. Rates are always derived from the stored values, so they follow
+corrections.
 """
 
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -73,11 +81,17 @@ def timeline_origin(test_run):
 
 @dataclass
 class Leakage:
-    volume: Decimal | None
+    volume: Decimal | None  # None: not measured at this collection point
     hours: float | None  # collection period used
     period_source: str  # "entered", "since previous reading", ""
     rate: float | None  # ml/h
     note: str = ""  # why there is no rate
+    end: object = None  # datetime: the collection point
+    start: object = None  # datetime: start of the collection period, None when unknown
+
+    @property
+    def measured(self):
+        return self.volume is not None
 
 
 @dataclass
@@ -93,37 +107,52 @@ def _hours(delta):
     return delta.total_seconds() / 3600
 
 
-def leakage_for(volume, entered_hours, since_previous_h):
+def leakage_for(volume, entered_hours, since_previous_h, end=None):
     if entered_hours is not None:
         hours, source = float(entered_hours), "entered"
     elif since_previous_h is not None:
         hours, source = since_previous_h, "since previous reading"
     else:
-        return Leakage(volume, None, "", None, "first reading: collection period unknown")
+        return Leakage(volume, None, "", None, "first reading: collection period unknown", end=end)
+    start = end - timedelta(hours=hours) if end is not None else None
     if volume is None:
-        return Leakage(None, hours, source, None)
+        return Leakage(None, hours, source, None, "not measured", end=end, start=start)
     if hours <= 0:
-        return Leakage(volume, hours, source, None, "collection period is zero")
-    return Leakage(volume, hours, source, float(volume) / hours)
+        return Leakage(volume, hours, source, None, "collection period is zero", end=end, start=start)
+    return Leakage(volume, hours, source, float(volume) / hours, end=end, start=start)
+
+
+def is_reading(entry, values):
+    """An entry with a value or an entered collection period; an event or note alone is not a reading."""
+    return entry.leakage_hours is not None or bool(values)
 
 
 def log_rows(test_run, columns=None, origin=None):
     """Entries in time order with their calculated values; elapsed hours from `origin` (timeline_origin)."""
-    entries = list(test_run.manual_log_entries.select_related("entered_by").prefetch_related("measurements"))
+    entries = list(
+        test_run.manual_log_entries.select_related("entered_by", "source_row__batch__imported_by")
+        .prefetch_related("measurements")
+    )
     if columns is None:
         columns = log_columns(test_run, entries)
     leakage_codes = [m.code for m in columns if m.is_leakage]
     origin = origin or timeline_origin(test_run)
     zero = origin.at or (entries[0].observed_at if entries else None)
-    rows, previous = [], None
+    rows, previous, reading = [], None, None
     for entry in entries:
         values = {value.code: value for value in entry.measurements.all()}
         since_previous = _hours(entry.observed_at - previous.observed_at) if previous else None
         leakage = {}
-        for code in leakage_codes:
-            value = values.get(code)
-            if value is not None or entry.leakage_hours is not None:
-                leakage[code] = leakage_for(value.value if value else None, entry.leakage_hours, since_previous)
+        if is_reading(entry, values):
+            since_reading = _hours(entry.observed_at - reading.observed_at) if reading else None
+            for code in leakage_codes:
+                value = values.get(code)
+                if value is None and since_reading is None and entry.leakage_hours is None:
+                    continue  # the first reading: nothing collected before it, nothing missing
+                leakage[code] = leakage_for(
+                    value.value if value else None, entry.leakage_hours, since_reading, entry.observed_at
+                )
+            reading = entry
         rows.append(LogRow(entry, values, _hours(entry.observed_at - zero), since_previous, leakage))
         previous = entry
     return rows

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Import manual log · Run {{ run.display_no }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% include "execution/_run_head.html" %}
+  <p><a href="{% url 'execution:log' run.pk %}">‹ Manual log</a></p>
+
+  {% if recording_refused %}
+    <p class="alert alert-warning">{{ recording_refused }}</p>
+  {% else %}
+  <form method="post" enctype="multipart/form-data" class="card fields upload">
+    {% csrf_token %}
+    <h2>Import Excel manual log</h2>
+    <p class="hint">The workbook's columns are matched to this run's manual log by their headings, units and the run's configuration ({{ tcn.setup.configuration_display }}). You review the mapping and every row before anything is imported. Existing readings are never changed.</p>
+    <div class="field">
+      {{ form.file.label_tag }}{{ form.file }}
+      <small>{{ form.file.help_text }}</small>
+      {{ form.file.errors }}
+    </div>
+    <div class="actions"><button type="submit" class="btn-primary">Upload and map columns</button></div>
+  </form>
+  {% endif %}
+
+  <div class="card-head log-head"><h2>Imports of this run</h2></div>
+  {% if imports %}
+    <div class="table-card table-scroll">
+      <table class="list register">
+        <thead><tr><th class="text wide">Workbook</th><th>Status</th><th>Uploaded</th><th>Imported</th><th>Undone</th><th></th></tr></thead>
+        <tbody>
+          {% for batch in imports %}
+            <tr>
+              <td class="text wide id"><a href="{% url 'execution:log_import_detail' batch.pk %}">{{ batch.original_name }}</a> <span class="hint">{{ batch.sheet_name }}</span></td>
+              <td><span class="status import-status-{{ batch.status }}">{{ batch.get_status_display }}</span></td>
+              <td>{{ batch.uploaded_at|date:"d-M-Y H:i" }} {{ batch.uploaded_by.get_full_name|default:batch.uploaded_by.username }}</td>
+              <td>{% if batch.imported_at %}{{ batch.imported_at|date:"d-M-Y H:i" }} {{ batch.imported_by.get_full_name|default:batch.imported_by.username }}{% endif %}</td>
+              <td>{% if batch.undone_at %}{{ batch.undone_at|date:"d-M-Y H:i" }} {{ batch.undone_by.get_full_name|default:batch.undone_by.username }}{% endif %}</td>
+              <td class="row-actions">
+                {% if batch.status == "mapping" %}<a class="button btn-sm" href="{% url 'execution:log_import_mapping' batch.pk %}">Continue</a>
+                {% elif batch.status == "preview" %}<a class="button btn-sm" href="{% url 'execution:log_import_preview' batch.pk %}">Continue</a>
+                {% else %}<a class="button btn-sm" href="{% url 'execution:log_import_detail' batch.pk %}">Record</a>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="alert">No workbook imported into this run yet.</p>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ requirement.ref }} · Test Program · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> › <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+    <a href="{% url 'projects:program' project.pk %}">Test Program</a> › {{ requirement.ref }}
+  </nav>
+{% endblock %}
+{% block content %}
+  <form method="post" class="card" novalidate>
+    {% csrf_token %}
+    <h2>Requirement {{ requirement.ref }}</h2>
+    <p class="hint">A change applies to every Draft Result of the project; final reports keep the requirement as it was when they were finalized.</p>
+    {% include "projects/_requirement_fields.html" %}
+    <div class="actions">
+      <button type="submit" class="btn-primary">Save</button>
+      <a class="button" href="{% url 'projects:program' project.pk %}#requirements">Cancel</a>
+      <span class="spacer"></span>
+      <button type="submit" name="delete" value="1" class="btn-danger" formnovalidate>Delete requirement</button>
+    </div>
+  </form>
+{% endblock %}

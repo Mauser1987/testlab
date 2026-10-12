@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Test Program · {{ project.project_no }} · TestLab{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> › <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> › Test Program
+  </nav>
+{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <h1>Test Program</h1>
+    <p class="meta">{{ project.project_no }} · {{ project.description }}</p>
+  </div>
+  <p class="hint">PROGRAM = planned. Title and objective are quoted in each Test Run Report; the requirements are the baseline acceptance requirements of every run of the project. An issued TCN can replace a requirement for its run, make it not applicable, or add one. Operating set points (speed, pressure, duration on the TCN) are instructions, not acceptance limits.</p>
+
+  <form method="post" class="card fields">
+    {% csrf_token %}
+    <h2>Program</h2>
+    {% for field in form %}
+      <div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>
+    {% endfor %}
+    <div class="actions"><button type="submit" class="btn-primary">Save</button></div>
+  </form>
+
+  <section class="card" id="requirements">
+    <div class="card-head"><h2>Acceptance requirements</h2><span class="hint">numbers never change: results and reports refer to them</span></div>
+    {% if requirements %}
+      <div class="table-scroll">
+        <table class="list compact">
+          <thead><tr><th>Ref.</th><th>Criterion</th><th>Compared with</th><th>Applies to</th><th>Requirement</th><th></th></tr></thead>
+          <tbody>
+            {% for r in requirements %}
+              <tr>
+                <th>{{ r.ref }}</th>
+                <td>{{ r.criterion }}</td>
+                <td>{{ r.get_basis_display }}</td>
+                <td>{% if r.basis == "leakage_rate" or r.basis == "wear_rate" %}{{ r.get_position_display|default:"each seal under test" }}{% if r.face %} · {{ r.get_face_display }}{% endif %}{% else %}—{% endif %}</td>
+                <td>{% if r.comparison %}{{ r.get_comparison_display }} {{ r.limit.normalize }} {{ r.unit }}{% endif %}{% if r.comparison and r.requirement_text %} — {% endif %}{{ r.requirement_text }}</td>
+                <td class="row-actions"><a class="button btn-sm" href="{% url 'projects:program_requirement' r.pk %}">Edit</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">— No acceptance requirements yet.</p>
+    {% endif %}
+    <details class="add-criterion"{% if requirement_form.errors %} open{% endif %}>
+      <summary>Add requirement</summary>
+      <form method="post" action="{% url 'projects:program_requirement_add' project.pk %}" novalidate>
+        {% csrf_token %}
+        {% include "projects/_requirement_fields.html" with form=requirement_form %}
+        <div class="actions"><button type="submit" class="btn-primary">Add requirement</button></div>
+      </form>
+    </details>
+  </section>
+{% endblock %}

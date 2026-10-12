@@ -1,4 +1,4 @@
-"""TestResult, components and Pre/Post measurements (M2B)."""
+"""TestResult and its components (M2B); Pre/Post values come from measurements (M2D)."""
 
 from decimal import Decimal
 
@@ -8,10 +8,10 @@ from django.db.models import ProtectedError
 
 from testlab.projects.models import SealPosition
 from testlab.results import services
-from testlab.results.models import InspectionMeasurement, ResultComponent, TestResult
+from testlab.results.models import ResultComponent, TestResult
 from testlab.tcn.services import TcnRuleError, delete_draft
 
-from .helpers import configure, make_run
+from .helpers import configure, face_length, make_run
 
 pytestmark = pytest.mark.django_db
 
@@ -48,7 +48,7 @@ def test_single_starts_with_the_test_seal_and_offers_the_plug_seal(user):
     result = services.create_result(run, user)
     assert labels(result) == ["Test Stator", "Test Rotor"]
     addable = [c for p, c in services.addable_components(result) if p == "plug"]
-    assert addable == ["stator", "rotor"]
+    assert addable == ["sleeve", "stator", "rotor", "backing_ring"]
     rotor = services.add_component(result, "plug", "rotor", user)
     assert rotor.label == "Plug Rotor" and rotor.material == "TC"  # from the TCN Plug Seal
     assert labels(result) == ["Test Stator", "Test Rotor", "Plug Rotor"]
@@ -64,49 +64,16 @@ def test_plug_faces_are_not_offered_without_a_plug_seal(user):
 def test_sleeve_is_a_cartridge_component_without_position(user):
     result = services.create_result(make_run(user), user)
     sleeve = services.add_component(result, "", "sleeve", user)
-    assert sleeve.label == "Sleeve" and sleeve.quantities() == []
+    # optional dimensional readings; Mahr/ROUNDPAK not applicable unless overridden
+    assert sleeve.label == "Sleeve" and sleeve.applicable_kinds() == ["dimensional"]
+    assert sleeve.applicability("dimensional") == "optional" and sleeve.applicability("mahr") == "not_applicable"
     with pytest.raises(IntegrityError), transaction.atomic():
         ResultComponent.objects.create(result=result, position="", component="rotor")
 
 
-def measure(result, user, label, code, pre, post):
-    component = next(c for c in result.components.all() if c.label == label)
-    to_decimal = lambda v: None if v is None else Decimal(v)  # noqa: E731
-    services.save_measurements(result, {(component.pk, code): (to_decimal(pre), to_decimal(post))}, user)
-    return InspectionMeasurement.objects.filter(component=component, quantity=code).first()
-
-
-def test_pre_and_post_are_stored_as_entered_and_delta_is_calculated(user):
-    result = services.create_result(make_run(user), user)
-    stored = measure(result, user, "IB Stator", "face_waviness", "0.323", "0.389")
-    assert (stored.pre_value, stored.post_value, stored.unit) == (Decimal("0.323"), Decimal("0.389"), "µm")
-    assert stored.delta == Decimal("0.066") and stored.wear is None
-    length = measure(result, user, "OB Stator", "face_length", "1.25037", "1.25025")
-    assert length.delta == Decimal("-0.00012") and length.wear == Decimal("0.00012")
-    assert not hasattr(InspectionMeasurement, "delta_value")  # derived, never a column
-
-
-def test_missing_pre_or_post_is_allowed_and_blank_pair_removes_it(user):
-    result = services.create_result(make_run(user), user)
-    only_pre = measure(result, user, "OB Stator", "face_length", "1.25037", None)
-    assert only_pre.post_value is None and only_pre.delta is None and only_pre.wear is None
-    assert measure(result, user, "OB Stator", "face_length", None, None) is None  # not measured
-    with pytest.raises(IntegrityError), transaction.atomic():
-        InspectionMeasurement.objects.create(
-            component=result.components.first(), quantity="face_taper", unit="µm", updated_by=user
-        )
-
-
-def test_a_quantity_cannot_be_put_on_a_component_it_does_not_apply_to(user):
-    result = services.create_result(make_run(user), user)
-    sleeve = services.add_component(result, "", "sleeve", user)
-    with pytest.raises(services.ResultRuleError, match="not measured on a Sleeve"):
-        services.save_measurements(result, {(sleeve.pk, "face_length"): (Decimal(1), None)}, user)
-
-
 def test_component_with_evidence_cannot_be_removed(user):
     result = services.create_result(make_run(user), user)
-    measure(result, user, "IB Rotor", "face_taper", "0.174", "0.251")
+    face_length(result, user, "IB Rotor", "0.5", "0.4999")
     rotor = next(c for c in result.components.all() if c.label == "IB Rotor")
     with pytest.raises(services.ResultRuleError, match="cannot be removed"):
         services.remove_component(rotor, user)

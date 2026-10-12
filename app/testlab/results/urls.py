@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import measurement_views, report_views, views
 
 app_name = "results"
 
@@ -10,7 +10,18 @@ urlpatterns = [
     path("runs/<int:run_pk>/result/components/", views.ComponentsView.as_view(), name="components"),
     path("runs/<int:run_pk>/result/components/add/", views.ComponentAddView.as_view(), name="component_add"),
     path("result/components/<int:pk>/remove/", views.ComponentRemoveView.as_view(), name="component_remove"),
-    path("runs/<int:run_pk>/result/measurements/", views.MeasurementsView.as_view(), name="measurements"),
+    path("runs/<int:run_pk>/result/measurement-plan/", views.MeasurementPlanView.as_view(), name="measurement_plan"),
+    path("result/components/<int:pk>/measurements/add/", measurement_views.MeasurementAddView.as_view(),
+         name="measurement_add"),
+    path("result/measurements/<int:pk>/", measurement_views.MeasurementView.as_view(), name="measurement"),
+    path("result/measurements/<int:pk>/<str:action>/", measurement_views.MeasurementActionView.as_view(),
+         name="measurement_action"),
+    path("result/measurements/<int:pk>/options", measurement_views.MeasurementOptionsView.as_view(),
+         name="measurement_options"),
+    path("result/measurements/<int:pk>/delete", measurement_views.MeasurementDeleteView.as_view(),
+         name="measurement_delete"),
+    path("result/measurements/<int:pk>/files/<str:role>", measurement_views.MeasurementFileView.as_view(),
+         name="measurement_file"),
     path("runs/<int:run_pk>/result/pictures/", views.ImageUploadView.as_view(), name="image_upload"),
     path("runs/<int:run_pk>/result/compare/<int:component_pk>/", views.CompareView.as_view(), name="compare"),
     path("result/pictures/<int:pk>/edit/", views.ImageEditView.as_view(), name="image_edit"),
@@ -26,6 +37,20 @@ urlpatterns = [
     path("result/plots/<int:pk>/caption/", views.PlotCaptionView.as_view(), name="plot_caption"),
     path("result/plots/<int:pk>/move/", views.PlotMoveView.as_view(), name="plot_move"),
     path("result/plots/<int:pk>/delete/", views.PlotDeleteView.as_view(), name="plot_delete"),
-    path("runs/<int:run_pk>/result/report/preview/", views.ReportPreviewView.as_view(), name="report_preview"),
+    path("runs/<int:run_pk>/result/report/preview/", report_views.ReportPreviewView.as_view(), name="report_preview"),
+    path("runs/<int:run_pk>/result/report/profile/<str:profile>/", report_views.ReportContentsView.as_view(),
+         name="report_contents"),
+    path("runs/<int:run_pk>/result/report/profile/<str:profile>/preview/", report_views.ReportPreviewView.as_view(),
+         name="report_profile_preview"),
+    path("runs/<int:run_pk>/result/report/profile/<str:profile>/issue/", report_views.IssueDocumentView.as_view(),
+         name="report_issue"),
+    path("result/documents/<int:pk>/", report_views.DocumentDownloadView.as_view(), name="document"),
+    path("result/documents/<int:pk>/withdraw/", report_views.WithdrawDocumentView.as_view(), name="document_withdraw"),
+    path("runs/<int:run_pk>/result/report/details/", views.ReportDetailsView.as_view(), name="report_details"),
+    path("runs/<int:run_pk>/result/report/finalize/", views.FinalizeView.as_view(), name="finalize"),
+    path("runs/<int:run_pk>/result/report/final/", report_views.FinalReportView.as_view(), name="report_final"),
+    path("runs/<int:run_pk>/result/report/revise/", views.ReviseView.as_view(), name="revise"),
+    path("result/components/<int:pk>/observations/", views.ComponentObservationsView.as_view(),
+         name="component_observations"),
     path("runs/<int:run_pk>/result/conclusion/", views.NarrativeView.as_view(), name="narrative"),
 ]

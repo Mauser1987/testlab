@@ -239,7 +239,7 @@ def create_revision(tcn, user):
             error = new_revision_error(tcn)
             if error:
                 raise TcnRuleError(error)
-            return TcnRevision.objects.create(
+            revision = TcnRevision.objects.create(
                 test_run=tcn.test_run,
                 revision=tcn.test_run.next_revision_no(),
                 setup=tcn.setup.clone(),
@@ -250,6 +250,9 @@ def create_revision(tcn, user):
                 created_by=user,
                 updated_by=user,
             )
+            for change in tcn.requirement_changes.all():  # the run's requirement changes stay in force
+                change.clone_to(revision)
+            return revision
     except IntegrityError:
         # Another user created the draft revision at the same time (one draft per run).
         draft = tcn.test_run.revisions.filter(status=TcnRevision.Status.DRAFT).first()

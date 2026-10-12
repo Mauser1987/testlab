@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Requirement change · {{ tcn }} · {{ project.project_no }} · TestLab{% endblock %}
+{% block breadcrumbs %}
+  <nav class="breadcrumbs">
+    <a href="{% url 'projects:list' %}">Projects</a> › <a href="{% url 'projects:detail' project.pk %}">{{ project.project_no }}</a> ›
+    <a href="{% url 'tcn:edit' tcn.pk %}">{{ tcn }}</a> › Acceptance requirement change
+  </nav>
+{% endblock %}
+{% block content %}
+  <form method="post" class="card" novalidate>
+    {% csrf_token %}
+    <h2>Acceptance requirement change · {{ tcn }}</h2>
+    {% include "tcn/_requirement_change_fields.html" %}
+    {% if not tcn.is_locked %}
+      <div class="actions">
+        <button type="submit" class="btn-primary">Save</button>
+        <a class="button" href="{% url 'tcn:edit' tcn.pk %}#requirement-changes">Cancel</a>
+        <span class="spacer"></span>
+        <button type="submit" name="delete" value="1" class="btn-danger" formnovalidate>Delete change</button>
+      </div>
+    {% endif %}
+  </form>
+{% endblock %}

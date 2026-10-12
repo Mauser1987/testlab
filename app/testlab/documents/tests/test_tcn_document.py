@@ -1,18 +1,15 @@
 """TCN document regressions (M1 spec §9, §11): AT-2, AT-3, AT-16 (document part).
 
-Run against the text of the rendered document template of every renderer:
-the HTML template (WeasyPrint, the default), the Chromium template bundle
-(under validation) and the Word template (transitional).
+Run against the text of the rendered TCN document template (the Chromium
+template bundle); the PDF itself is checked in test_chromium_render.py.
 """
 
-import io
 from pathlib import Path
 
 import pytest
 from django.conf import settings
-from docx import Document
 
-from testlab.documents.render import ChromiumTemplate, HtmlTemplate, render_docx, template_path
+from testlab.documents.render import ChromiumTemplate, template_path
 from testlab.documents.tcn_context import build_tcn_context, format_date
 from testlab.projects.arrangements import Arrangement
 from testlab.tcn.services import create_tcn
@@ -21,8 +18,7 @@ from testlab.tcn.tests.factories import make_project
 from testlab.tcn.tests.test_at5_copy_chain import load_defaults
 
 from . import data_2025rsd02tl
-from .docx_text import docx_lines, normalized
-from .html_text import html_lines
+from .html_text import html_lines, normalized
 
 pytestmark = pytest.mark.django_db
 
@@ -30,27 +26,32 @@ FIXTURES = Path(settings.APP_DIR) / "tests" / "fixtures"
 DRAFT_MARK = "DRAFT — not issued"
 
 
-@pytest.fixture(params=["html", "chromium", "docx"])
-def render(request):
+@pytest.fixture
+def tcn001(db, user):
+    """2026RSD03TL TCN001 (AT-2 data)."""
+    row = data_2026rsd03tl.ROWS[1]
+    project = make_project(user, project_no="2026RSD03TL", description=row["ProjName"])
+    load_defaults(project, 1)
+    return create_tcn(project, 1, user)
+
+
+@pytest.fixture
+def render():
     """Lines of the rendered TCN document template: render(tcn, **context_overrides)."""
 
     def render(tcn, **overrides):
         context = build_tcn_context(tcn)
         context.update(overrides)
-        if request.param == "html":
-            return html_lines(HtmlTemplate.load("tcn").render_html(context))
-        if request.param == "chromium":
-            # Chromium fills in the page number and count; the template holds only "Page  of ".
-            lines = html_lines(ChromiumTemplate.load("tcn_chromium").render_html(context))
-            return [line.replace(" Page of ", " ") for line in lines]
-        return docx_lines(render_docx(template_path("tcn.docx"), context))
+        # Chromium fills in the page number and count; the template holds only "Page  of ".
+        lines = html_lines(ChromiumTemplate.load("tcn").render_html(context))
+        return [line.replace(" Page of ", " ") for line in lines]
 
     return render
 
 
 def test_template_is_configurable(settings, tmp_path):
     settings.TESTLAB_TEMPLATE_DIR = tmp_path
-    assert template_path("tcn.docx") == tmp_path / "tcn.docx"
+    assert template_path("tcn") == tmp_path / "tcn"
 
 
 def test_at2_tcn001_regression(user, render):
@@ -81,29 +82,12 @@ def test_at2_tcn001_regression(user, render):
     assert [line for line in draft if line != DRAFT_MARK] == issued_look
 
 
-def test_at2_run_description_indent_levels_html(user):
+def test_at2_run_description_indent_levels(tcn001):
     """Run description lines keep their characters; leading spaces become indent classes."""
-    row = data_2026rsd03tl.ROWS[1]
-    project = make_project(user, project_no="2026RSD03TL", description=row["ProjName"])
-    load_defaults(project, 1)
-    tcn = create_tcn(project, 1, user)
-    html = HtmlTemplate.load("tcn").render_html(build_tcn_context(tcn))
+    html = ChromiumTemplate.load("tcn").render_html(build_tcn_context(tcn001))
     assert '<p class="run-line level-0">• Pre-test work required on stationary and rotating seal faces.</p>' in html
     assert '<p class="run-line level-1">- Waviness measurement on 1 location</p>' in html
     assert "{%" not in html and "{{" not in html
-
-
-def test_at2_run_description_indent_levels(user):
-    """Run description lines keep their characters; leading spaces become paragraph styles."""
-    row = data_2026rsd03tl.ROWS[1]
-    project = make_project(user, project_no="2026RSD03TL", description=row["ProjName"])
-    load_defaults(project, 1)
-    tcn = create_tcn(project, 1, user)
-    document = Document(io.BytesIO(render_docx(template_path("tcn.docx"), build_tcn_context(tcn))))
-    styles = {p.text: p.style.name for p in document.paragraphs if p.text}
-    assert styles["• Pre-test work required on stationary and rotating seal faces."] == "TCN Run Description"
-    assert styles["- Waviness measurement on 1 location"] == "TCN Run Description 2"
-    assert not any("{%" in text or "{{" in text for text in styles)
 
 
 def single_plug_project(user):
