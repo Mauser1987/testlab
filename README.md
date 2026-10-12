@@ -7,6 +7,8 @@ laboratory. Milestone M1 replaces the Excel/VBA TCN generator; see
 
 ## Status
 
+What comes next and what is still open: see [ROADMAP.md](ROADMAP.md).
+
 M1 is implemented commit by commit following §14 of the M1 specification.
 
 | #      | Commit                                                                                                                                                                                                                                        | State                                 |
