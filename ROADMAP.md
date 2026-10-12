@@ -11,8 +11,16 @@ at the end of each working session.
   DCS data, running intervals, Excel log import), Test Result (components,
   pictures, plots, seal-face measurements, acceptance), Test Run Report
   (Customer and Engineering profiles, issued documents, Result revisions).
-- Not built: **Test Summary** and **Final Report**, the last two steps of
-  the lifecycle.
+- The **Test Summary** step is covered by the Test Run Report: it has the
+  content of the old Word "Dynamic Test Run Summary" (objective, seal
+  configuration, conditions and results, leakage, logged data,
+  measurements, pictures, conclusion). To confirm: that no separate Test
+  Summary document is wanted.
+- Not built: the **Final Report**, the customer document for a whole
+  project (introduction, executive summary with a table over all runs,
+  field and test conditions, each run's results, appendices). The Test
+  Program holds acceptance requirements only; its texts, which the Final
+  Report reuses, are not in the app.
 - Validated on Windows: up to M2D and the Chromium report (2026-10-05).
   M2E, running intervals, log import, M2F-a, B1 and B2 are not.
 - `data/` is **test data and can be thrown away**, but it is made from
@@ -21,7 +29,8 @@ at the end of each working session.
   counts as working when it works on that data, not only in the automated
   tests.
 - `data/` is on this machine only and kept out of git because of its size
-  (about 60 MB for one full run, mostly photos and DCS data).
+  (about 60 MB for one full run, mostly original photos and DCS data;
+  screens and reports already use a reduced copy of each photo).
 
 ## How we work
 
@@ -32,11 +41,13 @@ at the end of each working session.
 
 ## Agreed plan, in order
 
-1. **Tests on Windows at every push.** A GitHub configuration file that
-   runs the test suite on Windows. No application code changes.
-2. **Rough Test Summary and Final Report.** A crude version of both, so the
-   whole lifecycle exists end to end. Their needs decide the form of the
-   changes below.
+1. **Tests on Windows at every push.** `.github/workflows/tests.yml` runs
+   the test suite on a fresh checkout on Windows and Linux. Added
+   2026-10-12.
+2. **Rough Final Report.** A crude version, so the whole lifecycle exists
+   end to end: pick final Results of a project, order them, generated
+   summary table over the runs, a few free texts, one PDF. Proposal first.
+   Its needs decide the form of the changes below.
 3. **Decide on evidence corrections, with real cases in hand.** Today the
    manual log, DCS data and running intervals are locked for good after the
    first Final. The alternative: a correction is a new entry that replaces
@@ -52,7 +63,6 @@ Then, in no fixed order:
 | One change log for the whole app (who changed what, when) | Medium | New table, hooked into every save |
 | Locks in one place instead of per-table checks | Small | `results/models.py`, `tcn/models.py` |
 | Backup of `data/` to another disk, needed once the app holds records that must be kept | Small | Run script or a scheduled job |
-| Reduced-size photo copies for screens and reports; original kept once | Small | Picture upload, report building |
 | "On record" from an explicit list of what each revision froze, instead of by time added | Small | `results/models.py`, `results/records.py` |
 
 ## Left alone
