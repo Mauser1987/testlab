@@ -15,12 +15,13 @@ at the end of each working session.
   the lifecycle.
 - Validated on Windows: up to M2D and the Chromium report (2026-10-05).
   M2E, running intervals, log import, M2F-a, B1 and B2 are not.
-- `data/` holds **real data of active projects** (for example 2026RSD06TL
-  TCN001, from start to finish), not disposable test data. Trials and
-  migration checks are done on a scratch copy, never on `data/` itself.
-- `data/` is on this machine only. It is kept out of git because of its
-  size (about 60 MB for one full run, mostly photos and DCS data) and has
-  no backup yet.
+- `data/` is **test data and can be thrown away**, but it is made from
+  real material: real projects (for example 2026RSD06TL TCN001, from start
+  to finish), real DCS exports, measurement files and photos. A change
+  counts as working when it works on that data, not only in the automated
+  tests.
+- `data/` is on this machine only and kept out of git because of its size
+  (about 60 MB for one full run, mostly photos and DCS data).
 
 ## How we work
 
@@ -31,14 +32,12 @@ at the end of each working session.
 
 ## Agreed plan, in order
 
-1. **Backup of `data/` to another disk.** It holds real project data and
-   exists once. Run script or a scheduled job.
-2. **Tests on Windows at every push.** A GitHub configuration file that
+1. **Tests on Windows at every push.** A GitHub configuration file that
    runs the test suite on Windows. No application code changes.
-3. **Rough Test Summary and Final Report.** A crude version of both, so the
+2. **Rough Test Summary and Final Report.** A crude version of both, so the
    whole lifecycle exists end to end. Their needs decide the form of the
    changes below.
-4. **Decide on evidence corrections, with real cases in hand.** Today the
+3. **Decide on evidence corrections, with real cases in hand.** Today the
    manual log, DCS data and running intervals are locked for good after the
    first Final. The alternative: a correction is a new entry that replaces
    the old one, with a reason, and a Result revision may then correct
@@ -52,6 +51,7 @@ Then, in no fixed order:
 | Requirements flow one way, Program → TCN → Result, instead of being synced from the Result side | Medium | `results/requirements.py`, Test Program, TCN requirement changes |
 | One change log for the whole app (who changed what, when) | Medium | New table, hooked into every save |
 | Locks in one place instead of per-table checks | Small | `results/models.py`, `tcn/models.py` |
+| Backup of `data/` to another disk, needed once the app holds records that must be kept | Small | Run script or a scheduled job |
 | Reduced-size photo copies for screens and reports; original kept once | Small | Picture upload, report building |
 | "On record" from an explicit list of what each revision froze, instead of by time added | Small | `results/models.py`, `results/records.py` |
 
