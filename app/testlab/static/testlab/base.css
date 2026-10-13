@@ -637,8 +637,6 @@ tr.cls-row-duplicate > td, tr.cls-row-empty > td { color: var(--text-muted); }
 .raw-cells summary { cursor: pointer; color: var(--text-muted); }
 .raw-cells table td { padding: 1px 8px 1px 0; }
 .text-danger { color: var(--danger); }
-.header-check tr.hc-mismatch > td { background: var(--danger-bg); }
-label.ack { display: block; margin-top: 10px; font-weight: 600; }
 td.imported .import-mark { margin-left: 4px; text-decoration: none; color: var(--text-faint); }
 .sticky-actions { position: sticky; bottom: 0; background: var(--bg); padding: 10px 0; z-index: 2; }
 .discard-form { margin-top: 12px; }

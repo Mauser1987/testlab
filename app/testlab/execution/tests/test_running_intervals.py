@@ -345,14 +345,14 @@ def test_manual_evidence_that_contradicts_the_dcs_is_listed(run, dataset, user):
     blank = {"note": "", "category": "", "leakage_hours": None}
     manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=40), "category": "stop"}, columns_, user)
     manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=50), "speed": Decimal(0)}, columns_, user)
-    manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=84), "speed": Decimal(2980)}, columns_, user)
-    manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=17), "category": "stop"}, columns_, user)
+    manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=3), "speed": Decimal(2980)}, columns_, user)
+    manual_log.save_entry(run, {**blank, "observed_at": start + timedelta(minutes=23), "category": "stop"}, columns_, user)
     found = evidence.collect(run, None)["discrepancies"]
     messages = [d.message for d in found]
-    assert len(messages) == 3, messages  # the Stop 2 min after the DCS start is within the margin: not listed
-    assert messages[0].startswith("Manual Stop event at") and "inside a DCS running interval" in messages[0]
-    assert messages[1].startswith("Manual speed reading 0 rpm") and "below 50 rpm" in messages[1]
-    assert "the DCS shows the shaft stopped" in messages[2]
+    assert len(messages) == 3, messages  # the Stop 8 min after the DCS start is within the margin: not listed
+    assert "the DCS shows the shaft stopped" in messages[0]  # 12 min before the DCS start
+    assert messages[1].startswith("Manual Stop event at") and "inside a DCS running interval" in messages[1]
+    assert messages[2].startswith("Manual speed reading 0 rpm") and "below 50 rpm" in messages[2]
 
 
 # --- viewer and lifecycle ----------------------------------------------------------------------

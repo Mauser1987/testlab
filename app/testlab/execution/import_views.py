@@ -11,7 +11,7 @@ from django.views import View
 from testlab.tcn.permissions import can_undo_log_import
 
 from .forms import LogImportUploadForm
-from .log_import import header_check, mapping, service
+from .log_import import mapping, service
 from .models import ManualLogEntry, ManualLogImport
 from .views import get_run, recording_refusal, run_context
 
@@ -31,15 +31,7 @@ def step_url(batch):
 
 
 def batch_context(batch, step):
-    checks = batch.header_checks.get("items") or header_check.check(batch.test_run, batch.header_items)
-    return {
-        **run_context(batch.test_run, "log"),
-        "batch": batch,
-        "step": step,
-        "header_items": checks,
-        "mismatches": header_check.mismatches(checks),
-        "acknowledged": batch.header_checks.get("acknowledged"),
-    }
+    return {**run_context(batch.test_run, "log"), "batch": batch, "step": step}
 
 
 class LogImportView(View):

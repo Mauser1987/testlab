@@ -1,15 +1,15 @@
 # TestLab
 
 Internal Test Lifecycle Management application for the wet-seal test
-laboratory. Milestone M1 replaces the Excel/VBA TCN generator; see
-`docs/requirements/11-m1-specification.md` (requirements index:
-`docs/requirements/README.md`).
+laboratory. Milestone M1 replaces the Excel/VBA TCN generator.
 
 ## Status
 
 What comes next and what is still open: see [ROADMAP.md](ROADMAP.md).
 
-M1 is implemented commit by commit following §14 of the M1 specification.
+M1 was implemented commit by commit following the M1 specification (the
+requirement documents of September 2026, removed on 2026-10-13 and kept in
+the git history; section numbers in code comments refer to it).
 
 | #      | Commit                                                                                                                                                                                                                                        | State                                 |
 |--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------|
@@ -20,7 +20,7 @@ M1 is implemented commit by commit following §14 of the M1 specification.
 | 5      | TestRun / TCN revision models (constraints, immutability guard; no screens yet)                                                                                                                                                               | done                                  |
 | 6      | Create & copy TCN (project page / register, new TCN, draft edit, optimistic locking)                                                                                                                                                          | done                                  |
 | 7      | Differences vs source (“changed — was: …” markers, difference list)                                                                                                                                                                           | done                                  |
-| 8      | TCN Word template & Preview DOCX (PDF since 10a)                                                                                                                                                                                              | done                                  |
+| 8      | TCN document template & preview (PDF since 10a)                                                                                                                                                                                               | done                                  |
 | 9      | Issue & lock (issue confirmation, stored document (PDF since 10a) + hashes + snapshot, read-only view, download, project-number lock)                                                                                                         | done                                  |
 | 10     | Revisions, cancel, delete draft (new revision from S9, cancel with reason S10, delete draft with confirmation)                                                                                                                                | done                                  |
 | 10a    | Stabilization (spec §17): controlled TCN document is a PDF; registration with corporate email domain and administrator approval                                                                                                               | done                                  |
@@ -104,10 +104,10 @@ What works today:
 - **Manual Log Import (M2F)** — *Import Excel…* on the Manual log: Upload →
   Mapping → Preview → Confirm. Only `.xlsx`: open a legacy `.xls` in Excel
   and save it as `.xlsx` first.
-  - The workbook is stored byte for byte with its SHA-256; the import record keeps its header, the column headings, every data row's cells (values, numbers as stored in the file, formulas) and what TestLab made of them.
+  - The workbook is stored byte for byte with its SHA-256; the import record keeps the column headings, every data row's cells (values, numbers as stored in the file, formulas) and what TestLab made of them.
   - **Mapping**: columns are matched to the run's manual-log fields by their headings (two-row/grouped headings too), units and the run's configuration, never by column letters. What a heading does not say for sure is marked **Review required** and must be confirmed — e.g. whether a "Job" or "Plug" flow/temperature circuit is the Flush/Barrier/Buffer or the Process circuit, or what "Seal Press" is. A confirmed mapping is saved per layout (fingerprint of the headings in column order) and configuration and proposed again for the same layout, still reviewable; each import keeps its own copy. Running hours and leakage rates of the workbook are never imported: TestLab calculates its own.
   - **Values** are imported exactly as recorded (to Excel's 15 significant digits): 0 is a reading, an empty cell is not measured, nothing is corrected. A mapped cell that cannot be read (text, an Excel error, more decimals than stored) makes the whole row an **Error**: skip it, or correct the workbook and import again. "Over [hours]": a formula is the workbook's default (not imported), a typed period is imported; when the leakages of one row have different typed periods the engineer chooses.
-  - **Preview**: each row is **New** (imported), **Possible duplicate** (same minute and same values as an existing reading; skipped) or **Conflict** (another reading in the same minute; the engineer decides: skip, or import as an additional entry). Existing readings are never changed. Workbook header information (project, run, test unit, speed, pressure, medium, seal type, face numbers…) is compared with the run; differences must be acknowledged and never change the run or its TCN.
+  - **Preview**: each row is **New** (imported), **Possible duplicate** (same minute and same values as an existing reading; skipped) or **Conflict** (another reading in the same minute; the engineer decides: skip, or import as an additional entry). Existing readings are never changed. Only the log table is imported: what is written above its headings (project, run, test unit, speed, seal type, torques…) is not read.
   - **Events** are suggestions only: a category from the note's words ("Start RPM" → Start; "Start/Stop recording" is not a shaft start/stop), a separate event at a time named in the note ("9:36 Changed …"), or a separate Stop after the reading for "after … stop" (time entered by the engineer).
   - **Confirm** creates all entries in one transaction (or none; if the log changed since the preview the rows are classified again). Each entry links to its workbook row; "By" in the log then shows the operator as written in the workbook, the importer is the TestLab user.
   - **Undo** (reason required; permission `can_undo_log_import`, the rule of finalizing a Result) removes all entries of an import; the record and the file stay. A final Result closes imports like all other run evidence.
@@ -166,7 +166,7 @@ What works today:
   project page): one page with Summary, Plots, Measurements, Pictures,
   Acceptance, Conclusion and Report. The Summary is derived, never typed
   (M2E rules):
-  - **elapsed clock time** (t = 0 to the last evidence) and **shaft-running hours** separately. Running hours come only from evidence: the running intervals of a DCS recording (see *DCS running intervals*; inside the recording's coverage, outside an interval the shaft is stopped, a data gap is unknown), else the manual log between two entries whose ends agree (speed reading ≥ `TESTLAB_RUNNING_SPEED_RPM` or Start/Stop event). Anything else is *unknown*, shown, and never counted as running. Manual entries that contradict the DCS (a Stop event or a reading below the threshold inside a running interval, a running reading where the DCS shows the shaft stopped; more than 5 min from a DCS start/stop) are listed for review, never resolved automatically;
+  - **elapsed clock time** (t = 0 to the last evidence) and **shaft-running hours** separately. Running hours come only from evidence: the running intervals of a DCS recording (see *DCS running intervals*; inside the recording's coverage, outside an interval the shaft is stopped, a data gap is unknown), else the manual log between two entries whose ends agree (speed reading ≥ `TESTLAB_RUNNING_SPEED_RPM` or Start/Stop event). Anything else is *unknown*, shown, and never counted as running. Manual entries that contradict the DCS (a Stop event or a reading below the threshold inside a running interval, a running reading where the DCS shows the shaft stopped; more than 10 min from a DCS start/stop) are listed for review, never resolved automatically;
   - **leakage per seal**: each collection (since the previous reading, or the entered period) is dynamic (running throughout), static (stopped throughout), mixed (both: its own mixed-period collection rate, never called dynamic) or not used (running state unknown, first reading without period, blank = not measured; 0 is a measured zero). **Average dynamic leakage = Σ dynamic volumes / Σ their running hours** — the same intervals above and below the line, never a mean of interval rates and never partial collections over the whole runtime. Running hours not covered by a dynamic collection are shown;
   - **face wear**: Δ = Post − Pre (signed, as measured) and wear = Pre − Post face length (material removed); wear rate = wear / shaft-running hours between the Pre and Post inspections, unavailable while part of that period is unknown. Taper, roughness and flatness changes are not wear;
   - **actual min–max** of each logged parameter over the shaft-running readings (transients included, not a steady-state range), with its source (reviewed DCS signal, else the manual log); stopped readings are a separate static summary. Every DCS statistic states its scope: `running_intervals` (samples inside the effective intervals — the operating values) or `full_recording` (shown for reference); a steady-state scope is not implemented. In the Test Run Report the table is *Parameter | Unit | TCN (Instructed) | Actual | Source*, the actual at report precision (speed whole rpm; pressure, temperature, flow, torque, leakage rate 1 decimal; hours 2), with a compact source such as “DCS · X22 Process Syst Press”; acceptance is assessed in the Leakage, Face wear and Acceptance sections, not in this table.
@@ -443,7 +443,7 @@ app/
     │   ├── labview.py          LabVIEW/DCS export parser (content-based)
     │   ├── datasets.py         import/storage, column cache, min/max decimation for plots
     │   ├── log_import/         Excel manual-log import (M2F): xlsx → SourceSheet, mapping, interpret,
-    │   │                       matching, events, header_check, service (upload/stage/commit/undo)
+    │   │                       matching, events, service (upload/stage/commit/undo)
     │   └── views.py, import_views.py, urls.py, templates/execution/, tests/
     ├── results/                M2B Test Result of a TestRun
     │   ├── models.py           TestResult, ResultComponent, InspectionMeasurement, ResultImage, ResultPlot, AcceptanceItem
@@ -469,7 +469,6 @@ app/
         ├── pdf.py              PdfConversionError, PDF content type
         ├── checks.py           system check: Chromium for Playwright installed (testlab.W003)
         └── tests/
-docs/requirements/              requirements and M1 specification
 scripts/                        devenv.py (shared setup/start logic) + setup.sh/.bat, run_app.sh/.bat
 reference/                      historical source documents (read-only)
 ```
@@ -497,7 +496,7 @@ reference/                      historical source documents (read-only)
 | `TESTLAB_RUNNING_SPEED_RPM`             | `50`                                    | Speed at or above which the shaft counts as running: manual log readings, and the default threshold of a new DCS running-interval detection (stored per detection) |
 | `TESTLAB_RUNNING_MAX_DROPOUT_S`         | `60`                                    | Default for a new detection: longest dip below the threshold bridged between running stretches                                                                     |
 | `TESTLAB_RUNNING_MIN_RUN_S`             | `120`                                   | Default for a new detection: shorter runs above the threshold are ignored as spikes                                                                                |
-| `TESTLAB_RUNNING_DISCREPANCY_MIN`       | `5`                                     | Manual entries this close to a DCS start/stop are not listed as disagreeing with the DCS                                                                           |
+| `TESTLAB_RUNNING_DISCREPANCY_MIN`       | `10`                                    | Manual entries this close to a DCS start/stop are not listed as disagreeing with the DCS                                                                           |
 | `TESTLAB_ALLOWED_EMAIL_DOMAINS`         | *(empty: registration closed)*          | Comma-separated email domains that may register, e.g. `example.com`                                                                                                |
 | `TESTLAB_EXECUTION_REQUIRES_ISSUED_TCN` | `0`                                     | `1`: manual log readings, DCS imports and Result changes only once the run's TCN is issued (production, see *Temporary policy* below); `0` also allows drafts      |
 | `TESTLAB_DCS_MAX_UPLOAD_MB`             | `200`                                   | Largest LabVIEW/DCS export accepted for import                                                                                                                     |

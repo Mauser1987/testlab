@@ -30,7 +30,7 @@ RESULT = actual
 - No microservices.
 - Local/internal deployment.
 - SQLite initially.
-- DOCX generation is template-based.
+- Documents are HTML templates rendered to PDF (Chromium).
 - Engineering conclusions remain engineer-controlled.
 - Do not add AI-generated engineering conclusions in V1.
 - Do not implement features outside the approved milestone.

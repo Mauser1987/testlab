@@ -162,7 +162,7 @@ TESTLAB_RUNNING_MAX_DROPOUT_S = float(os.environ.get("TESTLAB_RUNNING_MAX_DROPOU
 TESTLAB_RUNNING_MIN_RUN_S = float(os.environ.get("TESTLAB_RUNNING_MIN_RUN_S", "120"))
 # A manual Stop event or speed reading this close [min] to a DCS start/stop is not reported as a
 # discrepancy with the DCS running intervals (clocks and minute-resolution log times differ).
-TESTLAB_RUNNING_DISCREPANCY_MIN = float(os.environ.get("TESTLAB_RUNNING_DISCREPANCY_MIN", "5"))
+TESTLAB_RUNNING_DISCREPANCY_MIN = float(os.environ.get("TESTLAB_RUNNING_DISCREPANCY_MIN", "10"))
 
 # Seal-face instrument files (results/seal_faces.py: Mahr TXT, ROUNDPAK CSV): largest accepted file.
 # Stored unchanged as the evidence of the measurement.

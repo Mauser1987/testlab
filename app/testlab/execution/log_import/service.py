@@ -27,7 +27,7 @@ from django.utils import timezone
 from testlab.tcn.permissions import can_undo_log_import
 
 from ..models import ManualLogEntry, ManualLogImport, ManualLogImportRow, ManualMeasurement
-from . import events, header_check, interpret, mapping, matching, xlsx
+from . import events, interpret, mapping, matching, xlsx
 
 Status = ManualLogImport.Status
 Classification = ManualLogImportRow.Classification
@@ -116,7 +116,6 @@ def _sheet_fields(source):
         "header_row": source.header_row,
         "group_row": source.group_row,
         "columns": columns,
-        "header_items": source.header_items,
         "ignored_rows": source.ignored_rows,
         "warnings": source.warnings,
         "layout_fingerprint": mapping.fingerprint(columns),
@@ -151,7 +150,6 @@ def change_sheet(batch, sheet, user):
             setattr(batch, name, value)
         batch.status = Status.MAPPING
         batch.mapping_confirmed_by = batch.mapping_confirmed_at = None
-        batch.header_checks = {}
         batch.save()
         _create_rows(batch, source)
         _propose(batch)
@@ -219,8 +217,6 @@ def stage(batch):
         rows, ["interpreted", "source_operator", "suggestions", "classification", "matched_entry", "match_details",
                "decision", "choices"],  # fmt: skip
     )
-    batch.header_checks = {"items": header_check.check(batch.test_run, batch.header_items)}
-    batch.save(update_fields=["header_checks"])
 
 
 def _local(row):
@@ -276,14 +272,6 @@ def save_choices(batch, data, user):
         choices["events"] = chosen_events
         row.choices = choices
     ManualLogImportRow.objects.bulk_update(rows, ["decision", "choices"])
-    checks = dict(batch.header_checks)
-    if data.get("acknowledge_mismatches"):
-        checks["acknowledged"] = checks.get("acknowledged") or {"by": user.get_full_name() or user.username,
-                                                                "at": timezone.now().isoformat()}
-    else:
-        checks.pop("acknowledged", None)
-    batch.header_checks = checks
-    batch.save(update_fields=["header_checks"])
 
 
 def _event_time(row, choice):
@@ -328,9 +316,6 @@ def problems(batch):
                                  "manual log.")  # fmt: skip
     if not importing:
         found.append("No row is selected for import.")
-    checks = batch.header_checks or {}
-    if header_check.mismatches(checks.get("items", [])) and not checks.get("acknowledged"):
-        found.append("The workbook header differs from the run: acknowledge the differences.")
     return found
 
 
@@ -366,8 +351,6 @@ def commit(batch, user):
             if found:
                 raise LogImportError(found)
             created = _create_entries(batch, rows, codes, user)
-            batch.header_checks = {**batch.header_checks,
-                                   "items": header_check.check(batch.test_run, batch.header_items)}  # fmt: skip
             batch.status = Status.IMPORTED
             batch.imported_by, batch.imported_at = user, timezone.now()
             batch.save()

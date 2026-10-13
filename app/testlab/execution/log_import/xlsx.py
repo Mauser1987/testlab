@@ -7,8 +7,8 @@ The sheet is read as it is, nothing is interpreted here:
   the row above it is a group row ("Job", "PLUG") when it holds short
   headings and no "label:" cells; its headings apply to their merged range,
   and to the following columns with a unit until the next heading;
-* everything above holds the run's header information: "label:" cells with
-  the value next to them, a yes/no next to a text, or free text;
+* everything above (project number, seal types, torques…) is not read: only
+  the log table is imported;
 * data rows are the rows below the header with at least one typed value;
   rows that are empty or hold only formulas (prepared, unused rows) are
   ignored and listed.
@@ -32,7 +32,7 @@ from datetime import date, datetime, time, timedelta
 from xml.etree import ElementTree
 
 import openpyxl
-from openpyxl.utils import get_column_letter, range_boundaries
+from openpyxl.utils import get_column_letter
 
 MAX_ROWS = 20000
 MAX_COLUMNS = 200
@@ -48,7 +48,6 @@ _HEADER_WORDS = {
     "leak", "note", "notes", "by", "hours", "over", "rate", "face", "fi", "fo", "inlet", "outlet",
 }  # fmt: skip
 _UNIT_PATTERN = re.compile(r"[\[(]([^\[\]()]*)[\])]\s*$")
-_YES_NO = {"yes", "no", "y", "n", "ja", "nee", "true", "false", "x"}
 
 
 class WorkbookError(Exception):
@@ -75,7 +74,6 @@ class SourceSheet:
     header_row: int
     group_row: int | None
     columns: list  # [SourceColumn]
-    header_items: list  # [{"cell", "label", "value", "value_cell"}]
     rows: list  # [(sheet row, {letter: cell})]
     ignored_rows: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
@@ -206,62 +204,6 @@ def _split_unit(header):
     return text, ""
 
 
-def _list_sources(sheet):
-    """Cells that hold the choices of a drop-down list (data validation) on this sheet: not header values."""
-    cells = set()
-    for validation in sheet.data_validations.dataValidation:
-        if validation.type != "list" or not validation.formula1:
-            continue
-        reference = validation.formula1.split("!")[-1].replace("$", "")
-        try:
-            min_col, min_row, max_col, max_row = range_boundaries(reference)
-        except (TypeError, ValueError):
-            continue  # a literal list ("yes,no") or a named range
-        if None in (min_col, min_row, max_col, max_row):
-            continue
-        cells.update((row, column) for row in range(min_row, max_row + 1) for column in range(min_col, max_col + 1))
-    return cells
-
-
-def _header_items(sheet, last_row, max_column, merged):
-    """Label/value pairs and free text above the log table, in reading order.
-
-    The choices of a drop-down list kept on the sheet are listed as such (role "list"), never as the
-    value of the text next to them.
-    """
-    list_cells = _list_sources(sheet)
-    items = []
-    for row in range(1, last_row + 1):
-        cells, choices = [], []
-        for column in range(1, max_column + 1):
-            if merged.get((row, column), (row, column)) != (row, column):
-                continue  # inside a merged range: the value is in its top-left cell
-            value = sheet.cell(row, column).value
-            if value is None or not _text(value).strip():
-                continue
-            ref = f"{get_column_letter(column)}{row}"
-            if (row, column) in list_cells:
-                choices.append({"cell": ref, "label": "", "value": _text(value), "value_cell": "", "role": "list"})
-            else:
-                cells.append((ref, _text(value)))
-        index = 0
-        while index < len(cells):
-            ref, text = cells[index]
-            following = cells[index + 1] if index + 1 < len(cells) else None
-            is_label = text.strip().endswith(":")
-            if following and not following[1].strip().endswith(":") and (
-                is_label or following[1].strip().lower() in _YES_NO
-            ):
-                items.append({"cell": ref, "label": text, "value": following[1], "value_cell": following[0]})
-                index += 2
-            else:
-                items.append({"cell": ref, "label": text if is_label else "", "value": "" if is_label else text,
-                              "value_cell": ""})  # fmt: skip
-                index += 1
-        items += choices
-    return items
-
-
 def read_sheet(content, name=None):
     """The SourceSheet of sheet `name`, or of the first sheet with a log table."""
     check_format(content)
@@ -363,7 +305,6 @@ def _read(content, names, formula_sheet, sheet, header_row, max_column):
         header_row=header_row,
         group_row=group_row,
         columns=columns,
-        header_items=_header_items(sheet, (group_row or header_row) - 1, max_column, merged),
         rows=rows,
         ignored_rows=ignored,
         warnings=found_warnings,

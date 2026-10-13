@@ -17,7 +17,6 @@
   </section>
   {% endif %}
 
-  {% include "execution/_log_import_header.html" %}
 
   {% if batch.undo_details.removed %}
     <p class="hint">Undo removed {{ batch.undo_details.removed|length }} entr{{ batch.undo_details.removed|length|pluralize:"y,ies" }}{% if batch.undo_details.edited %}, {{ batch.undo_details.edited|length }} of them edited after the import{% endif %}.</p>

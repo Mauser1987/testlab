@@ -5,7 +5,7 @@ It reads the TCN revision and its own run setup (the snapshot taken when
 the TCN was created) — never the project defaults. The project number is
 read from the project: it cannot change once a TCN has been issued (§3, V2).
 
-Returns plain strings and lists, so the Word template needs no logic
+Returns plain strings and lists, so the template needs no logic
 beyond loops.
 """
 

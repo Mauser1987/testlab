@@ -25,7 +25,6 @@ from .test_views import edit_url, messages_of
 pytestmark = pytest.mark.django_db
 
 Status = TcnRevision.Status
-DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 @pytest.fixture
@@ -78,7 +77,7 @@ def test_preview_conversion_failure_returns_to_draft_with_message(logged_in, pro
 
 def test_issue_stores_pdf_and_its_hash(project, user, file_storage):
     tcn = issue(ready_tcn(project, user), user)
-    assert stored_files(file_storage) == ["projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.pdf"]  # no DOCX
+    assert stored_files(file_storage) == ["projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.pdf"]
     on_disk = (file_storage / tcn.issued_document.name).read_bytes()
     assert on_disk.startswith(b"%PDF-")
     assert tcn.issued_document_sha256 == hashlib.sha256(on_disk).hexdigest()
@@ -127,24 +126,22 @@ def test_issued_download_returns_pdf(logged_in, project, user):
     assert content == stored_bytes(tcn) and content.startswith(b"%PDF-")
 
 
-def test_no_docx_is_exposed(logged_in, project, user, file_storage):
+def test_only_pdf_is_exposed(logged_in, project, user, file_storage):
     tcn = ready_tcn(project, user)
     preview = logged_in.get(reverse("tcn:preview", args=[tcn.pk]))
     tcn = issue(TcnRevision.objects.get(pk=tcn.pk), user)
     response, _ = document(logged_in, tcn)
     for served in (preview, response):
-        assert served["Content-Type"] != DOCX_CONTENT_TYPE and ".docx" not in served["Content-Disposition"]
+        assert served["Content-Type"] == "application/pdf" and served["Content-Disposition"].endswith('.pdf"')
     assert not [name for name in stored_files(file_storage) if not name.endswith(".pdf")]
-    for page in [edit_url(tcn), reverse("projects:detail", args=[project.pk])]:
-        assert "DOCX" not in logged_in.get(page).content.decode()
 
 
 def test_a_stored_non_pdf_is_never_served(logged_in, project, user, file_storage):
-    # A record pointing to a DOCX (e.g. one issued before the PDF decision) offers no download.
+    # A record pointing to anything but a PDF offers no download.
     tcn = ready_tcn(project, user)
-    name = "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.docx"
+    name = "projects/2026RSD03TL/tcn/2026RSD03TL-TCN001.txt"
     (file_storage / name).parent.mkdir(parents=True)
-    (file_storage / name).write_bytes(b"PK docx")
+    (file_storage / name).write_bytes(b"not a pdf")
     tcn.issued_document.name = name
     model_issue(tcn, user)  # directly on the model, bypassing the issue service
     response, _ = document(logged_in, tcn)

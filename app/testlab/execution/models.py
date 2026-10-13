@@ -310,7 +310,6 @@ class ManualLogImport(models.Model):
     header_row = models.PositiveIntegerField()
     group_row = models.PositiveIntegerField(null=True, blank=True)
     columns = models.JSONField(default=list)  # [{"letter", "group", "label", "unit", "header"}] as read
-    header_items = models.JSONField(default=list)  # [{"cell", "label", "value", "value_cell"}] above the table
     ignored_rows = models.JSONField(default=list)  # sheet rows without typed values (empty, formulas only)
     warnings = models.JSONField(default=list)
 
@@ -324,7 +323,6 @@ class ManualLogImport(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     mapping_confirmed_at = models.DateTimeField(null=True, blank=True)
-    header_checks = models.JSONField(default=dict)  # {"items": [...], "acknowledged": {"by", "at"}}
 
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     uploaded_at = models.DateTimeField(auto_now_add=True)

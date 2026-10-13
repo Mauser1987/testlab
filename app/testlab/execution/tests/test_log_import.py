@@ -19,7 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from testlab.execution import manual_log
-from testlab.execution.log_import import header_check, interpret, mapping, service, xlsx
+from testlab.execution.log_import import interpret, mapping, service, xlsx
 from testlab.execution.models import ManualLogEntry, ManualLogImport, ManualLogLayoutMap, ManualMeasurement
 from testlab.results import services as result_services
 from testlab.results.models import FinalResultError, TestResult
@@ -120,17 +120,6 @@ def test_tcn01_two_row_header_rows_and_trailing_formula_rows():
     assert (columns["J"].group, columns["J"].label, columns["J"].unit) == ("Job", "Job FI Temp.", "°C")
     assert columns["Q"].group == "Job" and columns["T"].group == "PLUG"  # carried to the columns with a unit
     assert columns["V"].label == "Notes:" and columns["V"].unit == ""
-
-
-@needs_tcn01
-def test_tcn01_header_items_keep_labels_and_dropdown_choices():
-    items = xlsx.read_sheet(TCN01.read_bytes()).header_items
-    by_cell = {i["cell"]: i for i in items}
-    assert by_cell["A1"]["label"] == "Test Project Number: " and by_cell["A1"]["value"] == "2025RSD02TL"
-    # "Data not Logged" is text without a value; Z1:Z2 are the choices of the "Aligned" drop-down list
-    assert by_cell["V1"] == {"cell": "V1", "label": "", "value": "Data not Logged", "value_cell": ""}
-    assert by_cell["Z1"]["role"] == "list" and by_cell["Z2"]["role"] == "list"
-    assert by_cell["F3"]["label"] == "Aligned" and by_cell["F3"]["value"] == "yes"
 
 
 @needs_tcn01
@@ -341,32 +330,17 @@ def test_rows_without_values_or_note_are_not_imported(run, user):
     assert row.classification == "empty" and row.decision == "skip"
 
 
-# --- the run check ---------------------------------------------------------------------------------
+# --- the rows above the log table ------------------------------------------------------------------
 
 
-def test_header_differences_must_be_acknowledged_and_never_change_the_run(run, user):
+def test_what_is_written_above_the_log_table_is_not_read(run, user):
     meta = [("Test Project Number:", "2025RSD02TL"), ("Run no.:", "TCN002"), ("Test Unit:", "A"),
             ("Speed:", "1100 CW"), ("Stat Face:", "C0625623AP"), ("Data not Logged", None)]  # fmt: skip
     batch = staged(run, user, [reading(2, time(8, 0))], meta=meta)
-    checks = {i["label"]: i for i in batch.header_checks["items"]}
-    assert checks["Test Project Number:"]["status"] == "match"
-    assert checks["Run no.:"]["status"] == "mismatch" and checks["Test Unit:"]["status"] == "mismatch"
-    assert checks["Speed:"]["status"] == "match" and checks["Stat Face:"]["status"] == "match"
-    assert any("acknowledge the differences" in p for p in service.problems(batch))
-    service.save_choices(batch, {"acknowledge_mismatches": "1"}, user)
-    batch.refresh_from_db()
-    assert batch.header_checks["acknowledged"]["by"] == "Maria Geerts" and service.problems(batch) == []
-    service.commit(batch, user)
+    assert service.problems(batch) == []  # another run number and test unit above the table: not looked at
+    assert service.commit(batch, user) == 1
     setup = manual_log.run_setup(run)
     assert (setup.test_unit, setup.speed, run.run_no) == ("B", "1100", 1)
-
-
-def test_header_items_without_a_testlab_field_are_information_only(run):
-    checked = header_check.check(run, [{"cell": "V1", "label": "", "value": "Data not Logged", "value_cell": ""},
-                                       {"cell": "A2", "label": "Barrier Medium:", "value": "Demi water",
-                                        "value_cell": "C2"}])  # fmt: skip
-    assert checked[0]["status"] == "info" and checked[0]["value"] == "Data not Logged"
-    assert checked[1]["field"] == "Medium" and checked[1]["status"] == "no_value"  # the TCN has no medium
 
 
 # --- duplicates and conflicts --------------------------------------------------------------------
