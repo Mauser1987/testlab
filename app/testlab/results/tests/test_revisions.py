@@ -2,8 +2,9 @@
 
 A final Result is corrected by opening the next revision with a reason: a Draft again, finalized as
 revision N+1 with its own frozen record and Engineering document. Earlier revisions and their PDFs never
-change; the run's execution evidence stays locked; what was on record in a final revision is never
-deleted, only superseded (a new measurement) or left out of a report.
+change; the run's execution evidence can be corrected with the rest of the Result, each revision keeping
+its own copy; what was on record in a final revision is never deleted, only superseded (a new
+measurement) or left out of a report.
 """
 
 from decimal import Decimal
@@ -84,21 +85,33 @@ def test_opening_changes_no_record_and_no_document(user, final):
 # ---- a revision in progress ---------------------------------------------------------------------------
 
 
-def test_the_result_can_change_but_the_execution_evidence_stays_locked(client, user, revising):
+def test_the_result_and_the_execution_evidence_can_change(client, user, revising):
     run, result = revising
-    assert result_refusal(run) == "" and "has a final revision" in recording_refusal(run)
+    assert result_refusal(run) == "" and recording_refusal(run) == ""
     client.force_login(user)
     client.post(reverse("results:narrative", args=[run.pk]),
                 {"observations": "", "conclusion": "Corrected conclusion.", "recommendation": ""})  # fmt: skip
     assert TestResult.objects.get(pk=result.pk).conclusion == "Corrected conclusion."
+    count = ManualLogEntry.objects.filter(test_run=run).count()
     entry = ManualLogEntry.objects.filter(test_run=run).first()
     client.post(reverse("execution:entry_delete", args=[entry.pk]))
     client.post(reverse("execution:log", args=[run.pk]), {"observed_at": "2026-06-30 10:00", "speed": "1"})
-    assert ManualLogEntry.objects.filter(test_run=run).count() == 2
+    assert not ManualLogEntry.objects.filter(pk=entry.pk).exists()
+    assert ManualLogEntry.objects.filter(test_run=run).count() == count
+
+
+def test_corrected_evidence_is_in_the_next_revision_only_and_locked_again(user, revising):
+    run, result = revising
+    before = records.read_record(result.revisions.get(number=0))
+    ManualLogEntry.objects.create(test_run=run, observed_at=run.manual_log_entries.last().observed_at,
+                                  note="Gauge re-read after the run", entered_by=user, updated_by=user)  # fmt: skip
+    again = finalization.finalize(TestResult.objects.get(pk=result.pk), user)
+    assert records.read_record(again.revisions.get(number=0)) == before
+    assert "Gauge re-read" not in str(before)
+    assert "Gauge re-read" in str(records.read_record(again.revisions.get(number=1)))
+    assert "is final" in recording_refusal(run)
     with pytest.raises(FinalResultError, match="manual log and DCS data cannot change"), transaction.atomic():
-        entry.delete()
-    log_page = client.get(reverse("execution:log", args=[run.pk])).content.decode()
-    assert "has a final revision" in log_page
+        ManualLogEntry.objects.filter(test_run=run).first().delete()
 
 
 def test_a_measurement_on_record_is_superseded_not_deleted_or_reopened(user, revising):

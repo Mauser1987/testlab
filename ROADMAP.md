@@ -1,6 +1,6 @@
 # TestLab roadmap
 
-Where the project stands and what comes next. Written 2026-10-12, last updated 2026-10-13; update it at the end of
+Where the project stands and what comes next. Written 2026-10-12, last updated 2026-10-14; update it at the end of
 each working session.
 
 ## Where we are
@@ -57,12 +57,13 @@ each working session.
      sturdier.
    - Only one run of the real data is final, so the report over several
      runs is proven by the automated tests only.
-3. **Decide on evidence corrections, with real cases in hand.** Today the
-   manual log, DCS data and running intervals are locked for good after the
-   first Final. The alternative: a correction is a new entry that replaces
-   the old one, with a reason, and a Result revision may then correct
-   evidence too. About one milestone of work; only worth it if correcting
-   evidence after Final is really needed.
+3. **Evidence corrections.** Decided and done 2026-10-14, the simple way:
+   the manual log, DCS data, running intervals and log imports are locked
+   while the Result is Final and open again, like the rest of the Result,
+   while a revision is in progress. The revision reason says why; each final
+   revision keeps its own frozen copy of the evidence, so earlier revisions
+   and their documents never change. No per-correction entries with their
+   own reason ("not vaccine manufacturing: change is not harmful").
 
 Then, in no fixed order:
 

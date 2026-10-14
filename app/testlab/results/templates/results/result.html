@@ -20,7 +20,7 @@
     {% endif %}
   </div>
   {% if recording_refused %}<p class="alert alert-warning">{{ recording_refused }}</p>{% endif %}
-  {% if result.is_revising %}<p class="alert alert-warning" id="revision"><strong>Revision {{ revision_no }} in progress</strong> — opened {{ result.revision_opened_at|date:"d-M-Y H:i" }} by {{ result.revision_opened_by|initials }}: {{ result.revision_reason }}<br>The Result can be corrected and is finalized again as revision {{ revision_no }}. The manual log and DCS data stay locked. What was on record in an earlier revision cannot be deleted: add a new measurement to replace one, leave a picture or plot out under Report contents. The documents already issued stay valid until revision {{ revision_no }} is final.</p>{% endif %}
+  {% if result.is_revising %}<p class="alert alert-warning" id="revision"><strong>Revision {{ revision_no }} in progress</strong> — opened {{ result.revision_opened_at|date:"d-M-Y H:i" }} by {{ result.revision_opened_by|initials }}: {{ result.revision_reason }}<br>The Result can be corrected, its manual log and DCS data included, and is finalized again as revision {{ revision_no }}. What was on record in an earlier revision cannot be deleted: add a new measurement to replace one, leave a picture or plot out under Report contents. The documents already issued stay valid until revision {{ revision_no }} is final.</p>{% endif %}
 
   {# ---- Summary: derived from the manual log and DCS data, nothing typed ---- #}
   <section id="summary" class="result-section">
@@ -462,7 +462,7 @@
               {% csrf_token %}
               <div class="field"><label for="revision-reason">Reason for revision {{ revision_no|add:1 }} (required)</label><input id="revision-reason" type="text" name="reason" required maxlength="500" placeholder="What is corrected and why"></div>
               <div class="actions"><button type="submit">Open revision {{ revision_no|add:1 }}…</button></div>
-              <p class="hint">For a correction of the Result: measurements, pictures, plots, assessments, conclusion. The manual log and DCS data stay locked. To present the same record differently, change the report contents and issue the document again instead.</p>
+              <p class="hint">For a correction of the Result: measurements, pictures, plots, assessments, conclusion, and the run's manual log and DCS data. To present the same record differently, change the report contents and issue the document again instead.</p>
             </form>
           {% endif %}
         {% else %}

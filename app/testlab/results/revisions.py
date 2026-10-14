@@ -4,14 +4,14 @@
 
 A final Result is never edited in place. A correction opens the next revision with a reason: the
 Result is a Draft again and its measurements, pictures, plots, assessments, conclusion and report
-details can change; finalizing (finalization.py) freezes the complete record again as revision N+1
+details can change, and so can the run's execution evidence (manual log, DCS data, running
+intervals, log imports); finalizing (finalization.py) freezes the complete record again as revision N+1
 and issues its Engineering report.
 
 What does not change, ever:
 
-* earlier revisions: their frozen records, frozen assets and stored PDFs (models guards);
-* the run's execution evidence — manual log, DCS data, running intervals, log imports — locked from
-  the first final revision on, also while a revision is in progress;
+* earlier revisions: their frozen records, frozen assets and stored PDFs (models guards), which hold
+  the execution evidence as it was when they were finalized;
 * what was on record in a final revision: a picture, plot or measurement (with its instrument files)
   cannot be deleted and a reviewed measurement cannot be reopened. A measurement is superseded by a
   new reviewed one; a picture or plot is left out of a report (report contents).

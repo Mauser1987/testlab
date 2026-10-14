@@ -33,7 +33,7 @@ the git history; section numbers in code comments refer to it).
 | M2F    | Manual Log Import: an Excel (.xlsx) manual log into a run's log — header mapping with engineer review, preview (new / possible duplicate / conflict / error), atomic import, audited undo                                                     | under review                          |
 | M2F-a  | Seal Face Flatness v5: engines mahr-2 / roundpak-2 (skip first points, Flat/Convex/Concave at ± 0.25 HLB, ROUNDPAK radial taper and UPR harmonics, light-band gauge, lenient Mahr reading, drag and drop)                                     | under review                          |
 | M2F-B1 | Report profiles (Customer / Engineering), per-profile content selection, frozen record (revision 0) and controlled report documents (Issued / Superseded / Withdrawn)                                                                         | under review                          |
-| M2F-B2 | Result revisions: a final Result is corrected by opening revision N+1 with a reason; execution evidence stays locked; documents of earlier revisions become Superseded                                                                        | under review                          |
+| M2F-B2 | Result revisions: a final Result is corrected by opening revision N+1 with a reason; execution evidence can be corrected; documents of earlier revisions become Superseded                                                                    | under review                          |
 | FR-0   | Final Report, rough version: texts, included runs, generated summary table and one section per run from the frozen records; draft PDF only                                                                                                    | under review                          |
 
 What works today:
@@ -247,8 +247,8 @@ What works today:
   measurements, pictures, plots, assessments, conclusion and report details
   can be corrected, and *Finalize* freezes the complete record again as
   revision N+1 (`records/r<N+1>/`) and issues `…-R<N+1>-E`. The manual log,
-  DCS data, running intervals and log imports stay locked from the first
-  final revision on. What was on record in a final revision is never
+  DCS data, running intervals and log imports can be corrected too while a
+  revision is in progress; earlier revisions keep their own frozen copy. What was on record in a final revision is never
   deleted: a measurement is superseded by a new reviewed one (it cannot be
   deleted or reopened), a picture or plot is left out under *Report
   contents*. While a revision is in progress the documents of the earlier

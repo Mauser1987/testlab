@@ -39,7 +39,8 @@ Revision (M2F-B2, revisions.py): a final Result is corrected by opening the
 next revision with a reason. The Result is a Draft again (revision N in
 progress) until it is finalized as revision N; earlier revisions, their
 frozen records and their documents never change. The run's execution
-evidence stays locked from the first final revision on, and what was on
+evidence can be corrected again while a revision is in progress (each
+revision's frozen record keeps its own copy), and what was on
 record in a final revision (pictures, plots, measurements with their
 instrument files) is never deleted: it is superseded by a new measurement
 or left out of the report.
@@ -906,8 +907,8 @@ for _model in GUARDED:
 
 def _guard_final_run_evidence(sender, instance, update_fields=None, **kwargs):
     """The manual log and DCS data (with their running intervals) of a run with a final Result are part of
-    that record, and so are the manual-log imports (M2F) that produced its entries. They stay locked
-    while a later revision of the Result is in progress: a revision corrects the Result, not the run."""
+    that record, and so are the manual-log imports (M2F) that produced its entries. A revision in progress
+    opens them again with the rest of the Result: each final revision holds its own frozen copy."""
     if sender is DcsDataset and update_fields is not None and set(update_fields) <= {"columns_file"}:
         return  # the derived column cache may be rebuilt from the unchanged raw file
     if sender is ManualMeasurement:
@@ -918,10 +919,8 @@ def _guard_final_run_evidence(sender, instance, update_fields=None, **kwargs):
         run_ids = DcsDataset.objects.filter(pk=instance.dataset_id).values_list("test_run_id", flat=True)
     else:
         run_ids = [instance.test_run_id]
-    if TestResult.objects.filter(Q(status=TestResult.Status.FINAL) | Q(revisions__isnull=False),
-                                 test_run_id__in=list(run_ids)).exists():  # fmt: skip
-        raise FinalResultError("The run's Result is final or has a final revision: its manual log and DCS data "
-                               "cannot change.")  # fmt: skip
+    if TestResult.objects.filter(status=TestResult.Status.FINAL, test_run_id__in=list(run_ids)).exists():
+        raise FinalResultError("The run's Result is final: its manual log and DCS data cannot change.")
 
 
 for _model in (ManualLogEntry, ManualMeasurement, DcsDataset, DcsRunningDetermination, ManualLogImport,

@@ -48,18 +48,15 @@ def recording_refusal(test_run):
     """Why execution evidence (manual log, DCS data) cannot be recorded or changed for the run, or "".
 
     The single lifecycle/authorization check for recording execution evidence. A final Result closes
-    the run's evidence for good: it stays closed while a later revision of the Result is in progress
-    (M2F-B2), because a revision corrects the Result, not what was recorded during the run.
+    the run's evidence; opening a revision of the Result (M2F-B2) opens it again with the rest of the
+    Result. Earlier revisions keep their own frozen copy of it, so a correction never changes them.
     """
-    from testlab.results.models import ResultRevision, TestResult  # the Result app builds on this one
+    from testlab.results.models import TestResult  # the Result app builds on this one
 
     result = TestResult.objects.filter(test_run=test_run).first()
     if result is not None and result.is_final:
         return (f"The Result of Run {test_run.display_no} is final: its manual log, DCS data, measurements and "
                 "assessments are part of the controlled record and cannot change.")  # fmt: skip
-    if result is not None and ResultRevision.objects.filter(result=result).exists():
-        return (f"The Result of Run {test_run.display_no} has a final revision: the manual log and DCS data are "
-                "part of the controlled record and cannot change, also while the Result is being revised.")  # fmt: skip
     return _tcn_refusal(test_run)
 
 

@@ -6,7 +6,7 @@ Each section saves on its own and returns to its place on the page, so the
 engineer never fills one enormous form. Every change goes through the same
 lifecycle/authorization check (result_refusal), which refuses every change
 once the Result is final — until a revision is opened (M2F-B2), which makes
-the Result a Draft again while the manual log and DCS data stay locked. The
+the Result a Draft again, its manual log and DCS data included. The
 Report section previews the Draft report, lists what blocks finalization,
 finalizes, serves the stored final PDF and opens the next revision.
 """
