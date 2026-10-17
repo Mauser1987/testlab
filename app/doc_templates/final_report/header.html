@@ -19,8 +19,8 @@
     <tr>
       <td class="logo"><img src="{% bundle_data_uri "logo.jpg" %}" alt="Flowserve"></td>
       <td class="doc-title">Final Test Report</td>
-      <td class="numbers">Report No.: {{ report_no }}<br>Project No.: {{ project.project_no }}</td>
+      <td class="numbers">Report No.: {{ document.identity|default:report_no }}<br>Project No.: {{ project.project_no }}</td>
     </tr>
   </table>
-  <p class="draft">DRAFT — not an issued document</p>
+  {% if is_draft %}<p class="draft">DRAFT — not an issued document</p>{% endif %}
 </header>

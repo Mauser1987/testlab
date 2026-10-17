@@ -34,7 +34,7 @@ the git history; section numbers in code comments refer to it).
 | M2F-a  | Seal Face Flatness v5: engines mahr-2 / roundpak-2 (skip first points, Flat/Convex/Concave at ± 0.25 HLB, ROUNDPAK radial taper and UPR harmonics, light-band gauge, lenient Mahr reading, drag and drop)                                     | under review                          |
 | M2F-B1 | Report profiles (Customer / Engineering), per-profile content selection, frozen record (revision 0) and controlled report documents (Issued / Superseded / Withdrawn)                                                                         | under review                          |
 | M2F-B2 | Result revisions: a final Result is corrected by opening revision N+1 with a reason; execution evidence can be corrected; documents of earlier revisions become Superseded                                                                    | under review                          |
-| FR-0   | Final Report, rough version: texts, included runs, generated summary table and one section per run from the frozen records; draft PDF only                                                                                                    | under review                          |
+| FR-0   | Final Report: texts, included runs, generated summary table and one section per run from the frozen records; draft PDF; issued as R0, R1, … stored once                                                                                     | under review                          |
 
 What works today:
 
@@ -231,16 +231,25 @@ What works today:
   reason. Issued PDFs are never overwritten and are served byte for byte
   against their SHA-256. Migration 0008 turns an M2E final into revision 0
   + R0-E with the same PDF file and SHA-256.
-- **Final Report, rough version (FR-0)** — project page → *Final Report*:
+- **Final Report (FR-0)** — project page → *Final Report*:
   the customer report over the runs of a project, numbered `<project>R`.
   The engineer ticks the Results to include (those with a final revision),
   orders them and writes the introduction, executive summary, field
   conditions, test conditions and conclusion. The summary table (one row
   per run) and each run's section come from the frozen record of the run's
   latest final revision, presented with its Customer report contents — the
-  same data as its Customer Test Run Report, never live data. *Draft PDF*
-  renders it on request; nothing is stored, issued or frozen yet, and
-  there are no appendices.
+  same data as its Customer Test Run Report, never live data; its
+  identification names that source instead of a report status. *Draft PDF*
+  renders it on request and stores nothing. *Issue* (permission
+  `can_issue_report`) stores the PDF once as `<project>R-R<n>` under
+  `projects/<project>/final_report/`, with its SHA-256, the texts and the
+  runs with their Result revisions; from R1 a reason is required and the
+  earlier issue becomes Superseded. Issuing is refused while an included
+  run has a Result revision in progress. The texts and runs stay editable
+  after issuing; the page lists what changed since the issued document.
+  The PDF carries a document history (document, revision, date, status);
+  reasons and names stay on the page, as for Customer Test Run Reports.
+  No appendices yet.
 - **Result revisions (M2F-B2)** — a final Result is never edited in place.
   *Open revision N+1* (Result → Test Run Report, reason required,
   permission `can_revise_result`) makes the Result a Draft again:
@@ -457,7 +466,7 @@ app/
     │   ├── images.py           picture storage: original unchanged + display copy
     │   ├── plots.py            DCS plots: definition checked against the dataset + report image
     │   └── services.py, forms.py, views.py, urls.py, templates/results/, tests/
-    ├── reports/                Final Report of a project (rough version)
+    ├── reports/                Final Report of a project
     │   ├── models.py           FinalReport (texts), FinalReportRun (included Results, in order)
     │   ├── assembly.py         summary table and run sections from the frozen records; draft PDF
     │   └── forms.py, views.py, urls.py, templates/reports/, tests/

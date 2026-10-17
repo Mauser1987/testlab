@@ -6,7 +6,7 @@ each working session.
 ## Where we are
 
 - `main` on GitHub holds everything up to M2F-B2 (Result revisions), the
-  test workflow and the rough Final Report (832 tests pass with it).
+  test workflow and the rough Final Report (840 tests pass with it).
 - Built: Project, Test Program (minimal), TCN, Test Execution (manual log,
   DCS data, running intervals, Excel log import), Test Result (components,
   pictures, plots, seal-face measurements, acceptance), Test Run Report
@@ -16,12 +16,14 @@ each working session.
   configuration, conditions and results, leakage, logged data,
   measurements, pictures, conclusion). Confirmed 2026-10-13: the Test Run
   Report replaces the Test Summary; there is no separate summary document.
-- The **Final Report** exists in a rough version (2026-10-12, project page
-  → Final Report): texts, included runs, generated summary table, one
-  section per run from the frozen records, draft PDF. Missing: issuing and
-  freezing, revisions, appendices (drawings, P&ID), and the Test Program
-  texts it could start from (the Test Program holds acceptance
-  requirements only).
+- The **Final Report** (project page → Final Report): texts, included runs,
+  generated summary table, one section per run from the frozen records,
+  draft PDF, and since 2026-10-14 issuing: `<project>R-R0`, `-R1`, … stored
+  once, the earlier one Superseded, a reason from R1, refused while an
+  included run has a Result revision in progress. The texts stay editable
+  after issuing; the page says what changed since the issue. Missing:
+  appendices (drawings, P&ID) and the Test Program texts it could start
+  from (the Test Program holds acceptance requirements only).
 - Validated on Windows: up to M2D and the Chromium report (2026-10-05).
   M2E, running intervals, log import, M2F-a, B1 and B2 are not.
   The automated tests pass on Windows and Linux on GitHub for 3fe4635
@@ -49,9 +51,10 @@ each working session.
    2026-10-12.
 2. **Rough Final Report.** Done 2026-10-12, to be tried on real projects.
    What it showed so far:
-   - The run sections reuse the Customer Test Run Report as it is, so its
-     per-run status line ("Preview", "Customer report") appears inside the
-     Final Report; a Final Report profile of the run section may be wanted.
+   - The run sections reuse the Customer Test Run Report as it is; their
+     status line ("Preview", "Customer report") was replaced by a Source
+     line (the Customer document, else "Final Result", and the Result
+     revision) on 2026-10-14.
    - The summary table reads speed, medium and pressure from the
      conditions table by row name; a record field for them would be
      sturdier.

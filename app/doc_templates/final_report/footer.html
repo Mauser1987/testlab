@@ -12,9 +12,9 @@
 <footer class="report-footer">
   <table>
     <tr>
-      <td class="status">{{ report_no }} · DRAFT</td>
+      <td class="status">{% if is_draft %}{{ report_no }} · DRAFT{% else %}{{ document.identity }} · Issued{% endif %}</td>
       <td class="page-number">Page <span class="pageNumber"></span> of <span class="totalPages"></span></td>
-      <td class="generated">Draft generated {{ generated }}</td>
+      <td class="generated">{% if is_draft %}Draft generated {{ generated }}{% else %}Issued {{ document.issued_on }}{% endif %}</td>
     </tr>
   </table>
 </footer>

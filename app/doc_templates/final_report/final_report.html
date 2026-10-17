@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Final Report {{ report_no }}</title>
+<title>Final Report {{ document.identity|default:report_no }}</title>
 <meta name="author" content="TestLab">
 <style>
   {# Same declarations (same data) as header.html and footer.html; see report.css. #}
@@ -13,8 +13,8 @@
 <link rel="stylesheet" href="report.css">
 <link rel="stylesheet" href="final_report.css">
 </head>
-<body class="draft">
-<div class="watermark" aria-hidden="true">DRAFT</div>
+<body{% if is_draft %} class="draft"{% endif %}>
+{% if is_draft %}<div class="watermark" aria-hidden="true">DRAFT</div>{% endif %}
 <main>
   <section class="identification">
     <h1>Final Test Report</h1>
@@ -22,8 +22,16 @@
     <table class="facts">
       <colgroup><col class="label"><col class="value"><col class="label"><col class="value"></colgroup>
       <tr><th>Report No.</th><td>{{ report_no }}</td><th>Customer</th><td>{{ project.customer|default:"—" }}</td></tr>
-      <tr><th>Project No.</th><td>{{ project.project_no }}</td><th>Report status</th><td><strong>DRAFT</strong> <span class="note">not an issued document</span></td></tr>
+      <tr><th>Project No.</th><td>{{ project.project_no }}</td><th>Report status</th><td>{% if is_draft %}<strong>DRAFT</strong> <span class="note">not an issued document</span>{% else %}<strong>Issued</strong> <span class="note">{{ document.issued_on }}</span><br><span class="doc-id">{{ document.identity }}</span>{% endif %}</td></tr>
     </table>
+    {% if document.history %}
+    <table class="grid history">
+      <thead><tr><th>Document</th><th>Revision</th><th>Issued</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for h in document.history %}<tr><td>{{ h.identity }}</td><td>R{{ h.revision }}</td><td>{{ h.issued_on }}</td><td>{{ h.status }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </section>
 
   <section>

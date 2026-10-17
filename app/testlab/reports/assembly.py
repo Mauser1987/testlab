@@ -1,4 +1,4 @@
-"""Assemble the Final Report of a project (rough version).
+"""Assemble the Final Report of a project.
 
     cover block and numbers      the project
     summary table                one row per included run, from its frozen record
@@ -9,7 +9,8 @@ A run's section is rendered by the Test Run Report template from the frozen
 record and assets of the revision (results/records.py), with the run's
 Customer report contents: the same data and the same selection as its
 Customer Test Run Report, so the two cannot differ. Nothing is read from
-live Result data. The report is a draft: rendered on request, never stored.
+live Result data. A draft is rendered on request and never stored; issuing
+(publication.py) renders the same context with the document's identity.
 """
 
 import re
@@ -117,6 +118,7 @@ def _run_section(template, result, index, assets):
     revision = result.revision
     record = records.read_record(revision)
     ctx = present(record, PROFILE, publication.stored_selection(result, PROFILE), document=_document(revision))
+    ctx["in_final_report"] = True  # the identification names its source instead of a report status
     number = f"{RESULTS_SECTION}.{index}"
     # Section numbers of the run become 5.<n>.<m>: headings and the references to them stay consistent.
     ctx["sections"] = {name: f"{number}.{value}" for name, value in ctx["sections"].items() if value}
@@ -129,21 +131,27 @@ def _run_section(template, result, index, assets):
         raise AssemblyError("The Test Run Report template has no <main> part; the report was not generated.")
     html = body.group(1).replace("<h1>Run ", f"<h1>{number} Run ", 1)
     return {"html": html, "summary": summary_row(ctx, number), "revision": revision.number,
-            "document": ctx["document"].get("identity", "")}  # fmt: skip
+            "document": ctx["document"].get("identity", ""), "result": result.pk}  # fmt: skip
 
 
-def build(project):
-    """(context, assets, template) of the project's Final Report draft."""
+def build(project, document=None):
+    """(context, assets, template) of the project's Final Report: a draft, or the issue `document` describes
+    ({"identity", "revision", "issued_on", "history"})."""
     report = FinalReport.objects.filter(project=project).first()
     results = included(report)
     if not results:
         raise AssemblyError("No run is included yet: tick the final Results the report covers and save.")
+    revising = [result.test_run.display_no for result in results if result.is_revising]
+    if document is not None and revising:
+        raise AssemblyError(f"A revision of the Result of Run {', '.join(revising)} is in progress: the Final "
+                            "Report is issued once it is final, or without that run.")  # fmt: skip
     template = final_report_template()
     run_template = run_report_template()
     assets = {}
     runs = [_run_section(run_template, result, index, assets) for index, result in enumerate(results, start=1)]
     context = {
-        "is_draft": True,
+        "is_draft": document is None,
+        "document": document or {},
         "generated": _datetime(timezone.now()),
         "report_no": report.report_no,
         "project": {"project_no": project.project_no, "description": project.description,

@@ -1,4 +1,4 @@
-"""Final Report of a project (rough version): texts, included runs, draft PDF."""
+"""Final Report of a project: texts, included runs, draft PDF, issued documents."""
 
 from django.contrib import messages
 from django.db import transaction
@@ -10,9 +10,9 @@ from testlab.documents.pdf import PDF_CONTENT_TYPE, PdfConversionError
 from testlab.projects.models import Project
 from testlab.results.models import RecordIntegrityError
 
-from . import assembly
+from . import assembly, publication
 from .forms import FinalReportForm
-from .models import FinalReport, FinalReportRun
+from .models import FinalReport, FinalReportDocument, FinalReportRun
 
 
 def chosen_runs(post, candidates):
@@ -60,8 +60,13 @@ class FinalReportView(View):
         rows = [{"result": result, "run": result.test_run, "revision": result.revision,
                  "revising": result.is_revising, "position": positions.get(result.pk)}
                 for result in assembly.candidates(project)]  # fmt: skip
+        documents = list(report.documents.select_related("issued_by").order_by("-revision")) if report else []
+        issued = next((doc for doc in documents if doc.status == FinalReportDocument.Status.ISSUED), None)
         context = {"project": project, "report": report, "form": form, "rows": rows,
-                   "report_no": f"{project.project_no}R", "included": len(positions)}  # fmt: skip
+                   "report_no": f"{project.project_no}R", "included": len(positions), "documents": documents,
+                   "issued": issued, "changed": publication.changed_since(issued) if issued else [],
+                   "next_identity": publication.identity(report, len(documents)) if report else "",
+                   "revising": [row["run"].display_no for row in rows if row["position"] and row["revising"]]}  # fmt: skip
         return render(request, self.template_name, context)
 
 
@@ -78,4 +83,33 @@ class FinalReportPreviewView(View):
         response = HttpResponse(content, content_type=PDF_CONTENT_TYPE)
         response["Content-Disposition"] = f'inline; filename="{project.project_no}R-FinalReport-DRAFT.pdf"'
         response["Cache-Control"] = "no-store"
+        return response
+
+
+class FinalReportIssueView(View):
+    """Issue the next revision of the Final Report, from what is saved."""
+
+    def post(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        report = get_object_or_404(FinalReport, project=project)
+        try:
+            document = publication.issue(report, request.user, request.POST.get("reason", ""))
+        except (publication.PublicationError, PdfConversionError, RecordIntegrityError) as error:
+            messages.error(request, f"The Final Report was not issued. {error}")
+        else:
+            messages.success(request, f"{document.identity} issued.")
+        return redirect("reports:final_report", project.pk)
+
+
+class FinalReportDocumentView(View):
+    """An issued (or superseded) Final Report, byte for byte; never rendered again."""
+
+    def get(self, request, pk, document_pk):
+        document = get_object_or_404(FinalReportDocument, pk=document_pk, report__project_id=pk)
+        try:
+            content = publication.document_bytes(document)
+        except RecordIntegrityError as error:
+            return HttpResponse(str(error), status=500, content_type="text/plain; charset=utf-8")
+        response = HttpResponse(content, content_type=PDF_CONTENT_TYPE)
+        response["Content-Disposition"] = f'attachment; filename="{document.identity}.pdf"'
         return response
