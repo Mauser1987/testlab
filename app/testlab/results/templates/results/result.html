@@ -286,6 +286,7 @@
       {% csrf_token %}
       {{ identity_formset.management_form }}
       <h3 class="card-title">Components</h3>
+      <datalist id="face-conditions">{% for value in face_conditions %}<option value="{{ value }}">{% endfor %}</datalist>
       <div class="table-scroll">
         <table class="list compact form-table components-table">
           <thead>

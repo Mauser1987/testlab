@@ -114,15 +114,23 @@ def summary_row(ctx, number):
     }
 
 
-def _run_section(template, result, index, assets):
+def presented(result):
+    """(context, assets) of an included run: its latest final revision's frozen record and files, with its
+    Customer report contents. The Final Report and the slides (slides.py) both show a run this way."""
     revision = result.revision
     record = records.read_record(revision)
     ctx = present(record, PROFILE, publication.stored_selection(result, PROFILE), document=_document(revision))
+    return ctx, records.read_assets(revision, {a["path"] for a in ctx["assets"]})
+
+
+def _run_section(template, result, index, assets):
+    revision = result.revision
+    ctx, own_assets = presented(result)
     ctx["in_final_report"] = True  # the identification names its source instead of a report status
     number = f"{RESULTS_SECTION}.{index}"
     # Section numbers of the run become 5.<n>.<m>: headings and the references to them stay consistent.
     ctx["sections"] = {name: f"{number}.{value}" for name, value in ctx["sections"].items() if value}
-    for path, content in records.read_assets(revision, {a["path"] for a in ctx["assets"]}).items():
+    for path, content in own_assets.items():
         if assets.get(path, content) != content:
             raise AssemblyError(f"Two runs name different files {path}; the report was not generated.")
         assets[path] = content

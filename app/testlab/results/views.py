@@ -29,6 +29,7 @@ from . import (
     acceptance, evidence, finalization, images, measurement_summary, plots, requirements, revisions, services,
 )  # fmt: skip
 from .forms import (
+    FACE_CONDITIONS,
     AcceptanceItemForm,
     AddComponentForm,
     ComponentFormSet,
@@ -140,6 +141,7 @@ def render_result(request, test_run, result, **forms):
         }
     )
     context["identity_rows"] = sorted(context["identity_formset"].forms, key=lambda form: form.instance.sort_key)
+    context["face_conditions"] = FACE_CONDITIONS
     for card in context["measurement_cards"]:
         card["observations_form"] = context["observation_forms"][card["component"].pk]
     return render(request, "results/result.html", context)

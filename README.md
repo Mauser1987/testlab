@@ -258,6 +258,19 @@ What works today:
   The PDF carries a document history (document, revision, date, status);
   reasons and names stay on the page, as for Customer Test Run Reports.
   No appendices yet.
+- **Slides (.pptx)** — Final Report page → *Slides (.pptx)*: the included
+  runs as PowerPoint slides, an editable copy made on request and never
+  stored. Title (with the current tester drawing), test matrix, parts
+  (Face condition and New = Y/N: Y for "New", N for any other condition),
+  then per run a divider, test conditions with the conclusion and the
+  seal cross section, one slide per DCS plot, leakage and acceptance with
+  the cumulative leakage chart, and every picture of the Customer Test Run
+  Report, four per slide. Same data and selection as the Final Report.
+  Seal-face measurements are not on the slides yet. The company template
+  is a `.pptx` kept out of git: `data/slides-template.pptx` (or the file
+  `TESTLAB_SLIDES_TEMPLATE` names); its slides are removed and its layouts used (the first for the title, a
+  "Section…" layout for the runs, a title-only layout for the content).
+  Without it the slides are plain widescreen slides.
 - **Result revisions (M2F-B2)** — a final Result is never edited in place.
   *Open revision N+1* (Result → Test Run Report, reason required,
   permission `can_revise_result`) makes the Result a Draft again:
@@ -478,6 +491,7 @@ app/
     ├── reports/                Final Report of a project
     │   ├── models.py           FinalReport (texts), FinalReportRun (included Results, in order)
     │   ├── assembly.py         summary table and run sections from the frozen records; draft PDF
+    │   ├── slides.py           the included runs as PowerPoint slides (python-pptx), never stored
     │   └── forms.py, views.py, urls.py, templates/reports/, tests/
     └── documents/
         ├── tcn_context.py      TCN render context: labels, units, NA rule, column sets

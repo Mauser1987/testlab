@@ -156,6 +156,12 @@ TESTLAB_RESULT_IMAGE_MAX_MB = int(os.environ.get("TESTLAB_RESULT_IMAGE_MAX_MB", 
 # stored unchanged; a picture also gets a display copy.
 TESTLAB_DRAWING_MAX_MB = int(os.environ.get("TESTLAB_DRAWING_MAX_MB", "50"))
 
+# PowerPoint slides of a project's tests (reports/slides.py): the company template, a .pptx kept
+# out of git (it changes every year). By default data/slides-template.pptx when that file exists;
+# without a template the slides are plain widescreen slides.
+TESTLAB_SLIDES_TEMPLATE = os.environ.get("TESTLAB_SLIDES_TEMPLATE", "")
+TESTLAB_SLIDES_TEMPLATE_DEFAULT = DATA_DIR / "slides-template.pptx"
+
 # Shaft running (results/runtime.py): a speed at or above this value [rpm] counts as running.
 # Manual log readings use it directly (the value used is in the final report snapshot). For a DCS
 # recording it is only the default of a new running-interval determination

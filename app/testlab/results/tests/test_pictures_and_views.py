@@ -252,6 +252,15 @@ def test_components_identity_is_saved(logged_in, run, result):
     assert set(result.components.values_list("condition", flat=True)) == {"New"}
 
 
+def test_face_condition_offers_suggestions_but_stays_free_text(logged_in, run, result):
+    page = logged_in.get(reverse("results:result", args=[run.pk])).content.decode()
+    assert '<datalist id="face-conditions"><option value="New"><option value="Reused"><option value="Re-lapped">' in page
+    assert re.search(r'name="form-0-condition"[^>]*list="face-conditions"', page)
+    component = result.components.first()
+    component.condition = "Excellent"
+    component.full_clean()
+
+
 def test_manual_log_records_an_event_category(logged_in, run):
     response = logged_in.post(reverse("execution:log", args=[run.pk]),
                               {"observed_at": "2026-06-29T10:00", "category": "stop", "note": ""})  # fmt: skip

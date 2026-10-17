@@ -45,8 +45,9 @@
     <div class="actions">
       <button type="submit" class="btn-primary">Save</button>
       {% if included %}<a class="button" href="{% url 'reports:preview' project.pk %}" target="_blank" rel="noopener">Draft PDF</a>{% endif %}
+      {% if included %}<a class="button" href="{% url 'reports:slides' project.pk %}" title="The included runs as PowerPoint slides, to adjust in PowerPoint; never stored">Slides (.pptx)</a>{% endif %}
     </div>
-    {% if report %}<p class="hint">Last saved {{ report.updated_at|date:"d-M-Y H:i" }} by {{ report.updated_by.get_full_name|default:report.updated_by.username }}. The draft PDF shows what is saved.</p>{% endif %}
+    {% if report %}<p class="hint">Last saved {{ report.updated_at|date:"d-M-Y H:i" }} by {{ report.updated_by.get_full_name|default:report.updated_by.username }}. The draft PDF and the slides show what is saved.</p>{% endif %}
   </form>
 
   {% if report %}

@@ -55,6 +55,14 @@ def print_pdf(files, document, header, footer, base_url):
         "footer": footer,
         "timeout_ms": timeout * 1000,
     }
+    output = _run_worker(job, timeout, "the PDF", "print the PDF")
+    if not output.startswith(b"%PDF-"):
+        raise PdfConversionError("Chromium did not produce a PDF.")
+    return output
+
+
+def _run_worker(job, timeout, what, action):
+    """Run one job in chromium_print.py; its stdout. `what` and `action` name the work in messages."""
     try:
         # The job is handed over as a file, not through a pipe: on Windows, writing a pipe the worker does
         # not read blocks without regard to the timeout, so a worker stuck before reading would never be ended.
@@ -65,10 +73,10 @@ def print_pdf(files, document, header, footer, base_url):
                                     timeout=timeout)  # fmt: skip
     except subprocess.TimeoutExpired as error:
         raise PdfConversionError(
-            f"Chromium did not finish the PDF within {timeout} seconds (TESTLAB_PDF_TIMEOUT)."
+            f"Chromium did not finish {what} within {timeout} seconds (TESTLAB_PDF_TIMEOUT)."
         ) from error
     except OSError as error:
-        raise PdfConversionError(f"The Chromium PDF worker could not be started: {error}") from error
+        raise PdfConversionError(f"The Chromium worker could not be started: {error}") from error
 
     message = result.stderr.decode("utf-8", "replace").strip()
     if result.returncode == chromium_print.EXIT_NOT_INSTALLED:
@@ -76,10 +84,27 @@ def print_pdf(files, document, header, footer, base_url):
     if result.returncode != 0:
         if "missing dependencies" in message or "error while loading shared libraries" in message:
             raise PdfConversionError(f"{_LINUX_LIBRARIES_HINT} ({_first_lines(message)})")
-        raise PdfConversionError(f"Chromium could not print the PDF: {_first_lines(message) or 'no reason given'}")
-    if not result.stdout.startswith(b"%PDF-"):
-        raise PdfConversionError("Chromium did not produce a PDF.")
+        raise PdfConversionError(f"Chromium could not {action}: {_first_lines(message) or 'no reason given'}")
     return result.stdout
+
+
+def screenshots(files, document, element_ids, base_url, scale=2):
+    """PNG pictures of the elements `element_ids` of `document` (a path in `files`), at `scale` pixels per
+    CSS pixel: {element id: PNG bytes}. Same worker, same restrictions as print_pdf."""
+    timeout = settings.TESTLAB_PDF_TIMEOUT
+    job = {
+        "base_url": base_url,
+        "document": document,
+        "files": {path: base64.b64encode(data).decode("ascii") for path, data in files.items()},
+        "screenshots": list(element_ids),
+        "scale": scale,
+        "timeout_ms": timeout * 1000,
+    }
+    output = _run_worker(job, timeout, "the pictures", "make the pictures")
+    try:
+        return {name: base64.b64decode(data) for name, data in json.loads(output).items()}
+    except ValueError as error:
+        raise PdfConversionError("Chromium did not produce the pictures.") from error
 
 
 def chromium_available():

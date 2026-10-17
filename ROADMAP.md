@@ -78,10 +78,20 @@ Then, in no fixed order:
 | Backup of `data/` to another disk, needed once the app holds records that must be kept | Small | Run script or a scheduled job |
 | "On record" from an explicit list of what each revision froze, instead of by time added | Small | `results/models.py`, `results/records.py` |
 | Tester drawing and system P&ID in the Project Defaults (below) — **built 2026-10-17, under review** | Small | `projects/` model and Project Defaults screen |
-| New (Y/N) per Result component | Small | `results/models.py`, Result components screen, frozen record |
-| PowerPoint slides of a project's tests, filled from the frozen records (below) | Medium | New export next to `reports/`; template path in the settings, not in git |
+| PowerPoint slides of a project's tests, filled from the frozen records (below) — **built 2026-10-17 without the measurements slide, under review** | Medium | New export next to `reports/`; template path in the settings, not in git |
 
-### PowerPoint slides (proposed 2026-10-17, not started)
+### PowerPoint slides (built 2026-10-17, under review)
+
+Built (`reports/slides.py`): *Slides (.pptx)* on the Final Report page, all
+slides below except the measurements; the run's results slide shows running
+time, leakage and acceptance with the leakage chart. Template from
+`data/slides-template.pptx` or `TESTLAB_SLIDES_TEMPLATE` (layouts picked by name and placeholders), else
+plain widescreen slides. New libraries: `python-pptx`, `pypdfium2` (a PDF
+tester drawing as a picture). The cumulative leakage chart is on a run's
+slide only when it is selected for the Customer report, as in the Final
+Report.
+
+Proposal as written before building:
 
 Example: `reference/ACWA Seal Testing.pptx` (Flowserve 2025 template,
 13.33 × 7.5 in), filled by hand today. Proposed: an *Export slides* button
@@ -131,8 +141,10 @@ Answered 2026-10-17:
 Answered 2026-10-17 (second round):
 - Tester drawing and system P&ID go in the **Project Defaults**; the
   tester does not change from one run to another.
-- New/Reused: a small summary table with New = Y or N per part. Recorded
-  on the Result component (a field, frozen with the record).
+- New/Reused: a small summary table with New = Y or N per part, taken
+  from the existing *Face condition* of the Result components (already
+  frozen with the record); no new field. Damage during the test shows in
+  the acceptance and the pictures, not here.
 - Measurements (taper, Ra, waviness): **on hold** until the engineer has
   compared the values; the measurements slide waits for that, the other
   slides do not.

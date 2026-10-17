@@ -186,7 +186,10 @@ class ResultComponent(models.Model):
     # As fitted for the run (legacy "Seal Configuration" table).
     part_no = models.CharField("Part drawing", max_length=60, blank=True)
     material = models.CharField("Material", max_length=100, blank=True)
-    condition = models.CharField("Face condition", max_length=60, blank=True, help_text="e.g. New, Re-lapped")
+    # Before the test; free text with suggestions. "New" is New = Y on the slides, any other text N.
+    condition = models.CharField(
+        "Face condition", max_length=60, blank=True, help_text="Before the test: New, Reused or Re-lapped"
+    )
     observations = models.TextField(
         "Inspection observations", blank=True, help_text="What was seen on this part at the Pre/Post inspection."
     )

@@ -7,8 +7,10 @@ Playwright, never Django.
 
 stdin: JSON {"base_url", "document" (path of the page in "files"),
 "files" ({bundle path: base64}), "header", "footer" (HTML of Chromium's
-header/footer templates), "timeout_ms"}.
-stdout: the PDF bytes. On failure: exit status 2 and one line of
+header/footer templates), "timeout_ms"}; or, instead of "header" and
+"footer", "screenshots": [element id, …] and "scale" for PNG pictures of
+those elements of the page.
+stdout: the PDF bytes; with "screenshots", JSON {element id: base64 PNG}. On failure: exit status 2 and one line of
 explanation on stderr (exit status 3: Chromium is not installed).
 
 Every request of the page is answered from "files" or refused; any refused
@@ -91,7 +93,8 @@ def print_pdf(job):
         except Error as error:
             raise Failed(str(error).strip()) from error
         try:
-            context = browser.new_context(service_workers="block", java_script_enabled=True)
+            context = browser.new_context(service_workers="block", java_script_enabled=True,
+                                          device_scale_factor=job.get("scale", 1))  # fmt: skip
             page = context.new_page()
             page.set_default_timeout(timeout)
             page.route("**/*", route)
@@ -107,6 +110,11 @@ def print_pdf(job):
                 problems.append(f"image(s) not loaded: {', '.join(result['broken'])}")
             if problems:
                 raise Failed("; ".join(dict.fromkeys(problems)))
+
+            if "screenshots" in job:
+                shots = {name: base64.b64encode(page.locator(f"#{name}").screenshot()).decode("ascii")
+                         for name in job["screenshots"]}  # fmt: skip
+                return json.dumps(shots).encode("ascii")
 
             pdf = page.pdf(
                 prefer_css_page_size=True,  # @page size 210mm 297mm: Chromium's format="A4" is rounded

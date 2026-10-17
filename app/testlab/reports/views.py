@@ -10,7 +10,7 @@ from testlab.documents.pdf import PDF_CONTENT_TYPE, PdfConversionError
 from testlab.projects.models import Project
 from testlab.results.models import RecordIntegrityError
 
-from . import assembly, publication
+from . import assembly, publication, slides
 from .forms import FinalReportForm
 from .models import FinalReport, FinalReportDocument, FinalReportRun
 
@@ -82,6 +82,22 @@ class FinalReportPreviewView(View):
             return redirect("reports:final_report", project.pk)
         response = HttpResponse(content, content_type=PDF_CONTENT_TYPE)
         response["Content-Disposition"] = f'inline; filename="{project.project_no}R-FinalReport-DRAFT.pdf"'
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class SlidesView(View):
+    """The included runs as PowerPoint slides: an editable copy, made now and never stored."""
+
+    def get(self, request, pk):
+        project = get_object_or_404(Project, pk=pk)
+        try:
+            content = slides.build(project)
+        except (slides.SlidesError, assembly.AssemblyError, PdfConversionError, RecordIntegrityError) as error:
+            messages.error(request, f"The slides could not be made. {error}")
+            return redirect("reports:final_report", project.pk)
+        response = HttpResponse(content, content_type=slides.CONTENT_TYPE)
+        response["Content-Disposition"] = f'attachment; filename="{slides.file_name(project)}"'
         response["Cache-Control"] = "no-store"
         return response
 

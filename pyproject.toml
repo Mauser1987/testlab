@@ -13,6 +13,10 @@ dependencies = [
     "pillow>=10",
     # Excel manual-log import (.xlsx only; legacy .xls must be saved as .xlsx first).
     "openpyxl>=3.1",
+    # PowerPoint slides of a project's tests (an editable copy, never a controlled document).
+    "python-pptx>=1.0",
+    # A PDF tester drawing drawn as a picture on the slides.
+    "pypdfium2>=4.30",
 ]
 
 [project.optional-dependencies]

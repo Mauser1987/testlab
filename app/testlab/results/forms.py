@@ -9,6 +9,9 @@ from .inspection import Applicability, MeasurementKind
 from .models import AcceptanceItem, Assessment, ResultComponent, ResultImage, TestResult
 
 
+FACE_CONDITIONS = ["New", "Reused", "Re-lapped"]  # suggestions only: the field stays free text
+
+
 class ComponentForm(forms.ModelForm):
     """Identity of a component as fitted (legacy "Seal Configuration"), its face dimensions and
     its measurement plan: blank follows the Result (seal faces), or for a sleeve or backing ring
@@ -33,6 +36,7 @@ class ComponentForm(forms.ModelForm):
             self.fields[name].choices = [("", f"Default ({Applicability(default).label.lower()})")] + list(
                 Applicability.choices
             )
+        self.fields["condition"].widget.attrs.update(list="face-conditions", title=self.fields["condition"].help_text)
         for name in ("face_od", "face_id"):
             value = getattr(component, name)
             if value is not None:

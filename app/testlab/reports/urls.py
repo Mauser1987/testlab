@@ -7,6 +7,7 @@ app_name = "reports"
 urlpatterns = [
     path("projects/<int:pk>/final-report/", views.FinalReportView.as_view(), name="final_report"),
     path("projects/<int:pk>/final-report/preview/", views.FinalReportPreviewView.as_view(), name="preview"),
+    path("projects/<int:pk>/final-report/slides/", views.SlidesView.as_view(), name="slides"),
     path("projects/<int:pk>/final-report/issue/", views.FinalReportIssueView.as_view(), name="issue"),
     path("projects/<int:pk>/final-report/documents/<int:document_pk>/", views.FinalReportDocumentView.as_view(),
          name="document"),
