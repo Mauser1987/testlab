@@ -422,3 +422,45 @@ class ProgramRequirement(AcceptanceRequirementFields):
     @property
     def ref(self):
         return f"P{self.number}"
+
+
+class ProjectDrawing(models.Model):
+    """A drawing of the project: the tester drawing or the system P&ID (Project Defaults).
+
+    Project-wide, never copied into a TCN: the tester and the system do not
+    change from one run to another. The uploaded file is kept byte for byte
+    (sha256). A new upload of the same kind becomes the current drawing; the
+    earlier ones stay as its history (drawings.py).
+    """
+
+    class Kind(models.TextChoices):
+        TESTER = "tester", "Tester drawing"
+        PID = "pid", "System P&ID"
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="drawings")
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    drawing_no = models.CharField("Drawing no.", max_length=60)
+    revision = models.CharField("Revision", max_length=20, blank=True)
+
+    file = models.FileField(max_length=255)
+    original_name = models.CharField(max_length=255)
+    size = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64)
+    file_format = models.CharField(max_length=10)  # as detected: PDF, TIFF, JPEG, PNG
+    preview_file = models.CharField(max_length=255, blank=True)  # display copy of a picture; none for a PDF
+
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["project", "kind", "-uploaded_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(condition=Q(kind__in=["tester", "pid"]), name="project_drawing_kind_valid"),
+        ]
+
+    def __str__(self):
+        return f"{self.drawing_no}{f' rev {self.revision}' if self.revision else ''}"
+
+    @property
+    def is_pdf(self):
+        return self.file_format == "PDF"

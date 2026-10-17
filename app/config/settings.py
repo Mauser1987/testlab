@@ -152,6 +152,10 @@ TESTLAB_LOG_IMPORT_MAX_MB = int(os.environ.get("TESTLAB_LOG_IMPORT_MAX_MB", "20"
 # stored unchanged; a display copy is derived from it.
 TESTLAB_RESULT_IMAGE_MAX_MB = int(os.environ.get("TESTLAB_RESULT_IMAGE_MAX_MB", "40"))
 
+# Project drawings (projects/drawings.py): largest accepted tester drawing or P&ID. The file is
+# stored unchanged; a picture also gets a display copy.
+TESTLAB_DRAWING_MAX_MB = int(os.environ.get("TESTLAB_DRAWING_MAX_MB", "50"))
+
 # Shaft running (results/runtime.py): a speed at or above this value [rpm] counts as running.
 # Manual log readings use it directly (the value used is in the final report snapshot). For a DCS
 # recording it is only the default of a new running-interval determination

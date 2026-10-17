@@ -670,3 +670,12 @@ td.imported .import-mark { margin-left: 4px; text-decoration: none; color: var(-
 .status-issued { background: var(--success-bg); border-color: var(--success-border); color: var(--success); }
 .status-superseded { background: var(--surface); border-color: var(--border); color: var(--text-muted, #536b79); }
 .status-withdrawn { background: var(--surface); border-color: var(--danger-border); color: var(--danger); }
+
+/* Project drawings (Project Defaults) */
+.drawing-card .drawing-thumb { display: block; max-width: 100%; max-height: 220px; margin: 0 0 10px; border: 1px solid var(--border); background: #fff; }
+.drawing-card .actions { margin-top: 10px; }
+.drawing-card .actions form { margin: 0; }
+.drawing-card .drawing-history { margin-top: 10px; }
+.drawing-card .drawing-history ul { margin: 6px 0 0; padding-left: 18px; }
+.drawing-card form.upload { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.drawing-card form.upload h4 { margin: 0 0 6px; }

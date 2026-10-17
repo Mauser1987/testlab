@@ -103,3 +103,18 @@ class ProgramRequirementForm(RequirementFieldsForm):
         model = ProgramRequirement
         fields = RequirementFieldsForm.REQUIREMENT_FIELDS
         labels = {"comparison": "Limit"}
+
+
+class DrawingUploadForm(forms.Form):
+    """A tester drawing or system P&ID for the Project Defaults (drawings.py checks the file)."""
+
+    drawing_no = forms.CharField(label="Drawing no.", max_length=60)
+    revision = forms.CharField(label="Revision", max_length=20, required=False)
+    file = forms.FileField(label="File")
+
+    def __init__(self, *args, kind, **kwargs):
+        super().__init__(*args, prefix=kind, **kwargs)
+        self.kind = kind
+        self.fields["file"].widget.attrs["accept"] = (
+            ".pdf,.tif,.tiff,.jpg,.jpeg,.png" if kind == "tester" else ".pdf"
+        )

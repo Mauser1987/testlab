@@ -47,6 +47,14 @@ What works today:
   - conditions per circuit: common (test unit, duration, speed) · process (the Plug Seal operating conditions; only with a Plug Seal) · seal support (Barrier / Buffer / Flush — a single seal may have a flush circuit);
   - parameters to log (process pressure, temperature and flow are logged with the Plug Seal; Plug Seal face temperature and leakage);
   - switching arrangement or Plug Seal asks for confirmation before any non-empty data is discarded; seal-support values are never cleared.
+- **Drawings** — on the Project defaults page: the **tester drawing** (PDF,
+  TIFF, JPEG or PNG) and the **system P&ID** (PDF), each with drawing no.
+  and revision. For the whole project, never copied into a TCN. The file is
+  stored unchanged with its SHA-256 (the format is read from the content);
+  a picture also gets a display copy, since browsers do not show TIFF. A new
+  upload becomes the current drawing and the earlier ones are kept as its
+  history; only the current one can be deleted (a wrong upload). The
+  project page links the current drawings.
 - **Project page and TCN register** — one row per Test Run (its current
   revision), with Open and Copy to new TCN.
 - **New TCN** — from the project defaults or as a copy of a TCN of the same
@@ -426,7 +434,8 @@ app/
     ├── static/testlab/         CSS, dcs_plot.js; static/vendor/plotly/ (local Plotly, no CDN)
     ├── accounts/               registration, email login backend, user admin with approval
     ├── projects/
-    │   ├── models.py           Project, RunSetup, SealPosition; TestProgram, ProgramRequirement (M2E)
+    │   ├── models.py           Project, RunSetup, SealPosition; TestProgram, ProgramRequirement (M2E); ProjectDrawing
+    │   ├── drawings.py         tester drawing and system P&ID: stored unchanged, display copy, current + history
     │   ├── arrangements.py     arrangement / Plug Seal rules, labels, monitored parameters
     │   ├── conditions.py       condition field groups per circuit, unit clean-up
     │   ├── forms.py            project form

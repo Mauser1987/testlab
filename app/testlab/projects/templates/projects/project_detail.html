@@ -35,6 +35,10 @@
           <dd>{% if setup.test_unit %}{{ setup.test_unit }}{% else %}<span class="empty">—</span>{% endif %}
             · {% if setup.speed %}{{ setup.speed }} rpm{% else %}<span class="empty">—</span>{% endif %}
             · {% if setup.duration %}{{ setup.duration }} hours{% else %}<span class="empty">—</span>{% endif %}</dd>
+          {% for entry in drawing_sets %}
+            <dt>{{ entry.label }}</dt>
+            <dd>{% if entry.current %}<a href="{% if entry.current.is_pdf %}{% url 'projects:drawing_file' entry.current.pk %}{% else %}{% url 'projects:drawing_preview' entry.current.pk %}{% endif %}" target="_blank" rel="noopener">{{ entry.current }}</a>{% else %}<span class="empty">—</span>{% endif %}</dd>
+          {% endfor %}
         </dl>
         <p class="hint card-note">New TCNs start from these values; changing them never alters an existing TCN.</p>
       </section>
@@ -60,7 +64,7 @@
         <h2>Final Report</h2>
         <a class="button btn-sm" href="{% url 'reports:final_report' project.pk %}">Open</a>
       </div>
-      <p class="hint card-note">The customer report over the runs of the project, from their final Results. Draft only for now.</p>
+      <p class="hint card-note">The customer report over the runs of the project, from their final Results. Draft PDF, issued as R0, R1, …</p>
     </section>
   </div>
 

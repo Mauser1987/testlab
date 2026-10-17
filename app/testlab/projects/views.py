@@ -1,6 +1,9 @@
+import mimetypes
+
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Count, Max, Prefetch, ProtectedError, Q
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -9,8 +12,9 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView
 from testlab.tcn.models import TcnRevision
 
 from .arrangements import seal_support_label
-from .forms import ProgramRequirementForm, ProjectForm, TestProgramForm
-from .models import ProgramRequirement, Project, TestProgram, project_no_format_warning
+from . import drawings
+from .forms import DrawingUploadForm, ProgramRequirementForm, ProjectForm, TestProgramForm
+from .models import ProgramRequirement, Project, ProjectDrawing, TestProgram, project_no_format_warning
 from .setup_forms import RunSetupEditor
 
 
@@ -88,7 +92,7 @@ class ProjectDetailView(DetailView):
                     "pending_draft": draft if draft != current else None,
                 }
             )
-        return super().get_context_data(register=register, **kwargs)
+        return super().get_context_data(register=register, drawing_sets=drawings.drawing_sets(self.object), **kwargs)
 
 
 class ProjectFormMixin:
@@ -148,8 +152,77 @@ class ProjectDefaultsView(View):
                     return redirect("projects:defaults", pk=project.pk)
         return self.render(request, project, editor)
 
-    def render(self, request, project, editor):
-        return render(request, self.template_name, {"project": project, "editor": editor})
+    def render(self, request, project, editor, upload_forms=None):
+        upload_forms = upload_forms or {}
+        sets = drawings.drawing_sets(project)
+        for entry in sets:
+            current = entry["current"]
+            initial = {"drawing_no": current.drawing_no} if current else None
+            entry["form"] = upload_forms.get(entry["kind"]) or DrawingUploadForm(kind=entry["kind"], initial=initial)
+        return render(request, self.template_name, {"project": project, "editor": editor, "drawing_sets": sets})
+
+
+# ---- Project drawings: tester drawing and system P&ID (Project Defaults) ----------------------
+
+
+def drawings_url(project):
+    return reverse("projects:defaults", args=[project.pk]) + "#drawings"
+
+
+class DrawingUploadView(View):
+    def post(self, request, pk, kind):
+        project = get_object_or_404(Project, pk=pk)
+        if kind not in ProjectDrawing.Kind.values:
+            return redirect(drawings_url(project))
+        form = DrawingUploadForm(request.POST, request.FILES, kind=kind)
+        if form.is_valid():
+            try:
+                drawing = drawings.add_drawing(
+                    project, kind, form.cleaned_data["file"], request.user,
+                    form.cleaned_data["drawing_no"], form.cleaned_data["revision"],
+                )  # fmt: skip
+            except drawings.DrawingUploadError as error:
+                form.add_error("file", str(error))
+            else:
+                messages.success(request, f"{drawing.get_kind_display()} {drawing} added.")
+                return redirect(drawings_url(project))
+        view = ProjectDefaultsView()
+        return view.render(request, project, RunSetupEditor(project.default_setup), upload_forms={kind: form})
+
+
+def get_drawing(pk):
+    return get_object_or_404(ProjectDrawing.objects.select_related("project"), pk=pk)
+
+
+class DrawingFileView(View):
+    """The drawing as uploaded, byte for byte (inline, or ?download=1), or the display copy of a picture."""
+
+    preview = False
+
+    def get(self, request, pk):
+        drawing = get_drawing(pk)
+        if self.preview and not drawing.is_pdf:
+            name = drawings.preview_name(drawing)
+            return FileResponse(drawing.file.storage.open(name, "rb"), content_type="image/jpeg")
+        content_type = mimetypes.guess_type(drawing.original_name)[0] or "application/octet-stream"
+        return FileResponse(
+            drawing.file.open("rb"), filename=drawing.original_name, content_type=content_type,
+            as_attachment=request.GET.get("download") == "1",
+        )  # fmt: skip
+
+
+class DrawingDeleteView(View):
+    def post(self, request, pk):
+        drawing = get_drawing(pk)
+        project = drawing.project
+        label = f"{drawing.get_kind_display()} {drawing}"
+        try:
+            drawings.delete_drawing(drawing)
+        except drawings.DrawingUploadError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"{label} deleted.")
+        return redirect(drawings_url(project))
 
 
 # ---- Test Program: title, objective, baseline acceptance requirements --------------------------

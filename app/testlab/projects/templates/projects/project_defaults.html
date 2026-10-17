@@ -21,4 +21,58 @@
       <a class="button btn-ghost" href="{% url 'projects:detail' project.pk %}">Close</a>
     </div>
   </form>
+
+  <h2 id="drawings">Drawings</h2>
+  <p class="hint">For the whole project, never copied into a TCN: the tester and the system do not change from one run to another. Each file is stored unchanged; a new upload becomes the current drawing and the earlier ones are kept.</p>
+  <div class="card-grid drawings">
+    {% for entry in drawing_sets %}
+      <section class="card drawing-card">
+        <div class="card-head"><h3>{{ entry.label }}</h3></div>
+        {% with d=entry.current %}
+          {% if d %}
+            {% if not d.is_pdf %}
+              <a href="{% url 'projects:drawing_preview' d.pk %}" target="_blank" rel="noopener"><img class="drawing-thumb" src="{% url 'projects:drawing_preview' d.pk %}" alt="{{ entry.label }} {{ d }}"></a>
+            {% endif %}
+            <dl class="facts">
+              <dt>Drawing no.</dt><dd>{{ d.drawing_no }}</dd>
+              <dt>Revision</dt><dd>{% if d.revision %}{{ d.revision }}{% else %}<span class="empty">—</span>{% endif %}</dd>
+              <dt>File</dt><dd>{{ d.original_name }} <span class="hint">{{ d.file_format }} · {{ d.size|filesizeformat }}</span></dd>
+              <dt>Uploaded</dt><dd>{{ d.uploaded_at|date:"Y-m-d H:i" }} · {{ d.uploaded_by.get_full_name|default:d.uploaded_by.username }}</dd>
+            </dl>
+            <div class="actions">
+              <a class="button btn-sm" href="{% if d.is_pdf %}{% url 'projects:drawing_file' d.pk %}{% else %}{% url 'projects:drawing_preview' d.pk %}{% endif %}" target="_blank" rel="noopener">Open</a>
+              <a class="button btn-sm" href="{% url 'projects:drawing_file' d.pk %}?download=1">Download original</a>
+              <span class="spacer"></span>
+              <form method="post" action="{% url 'projects:drawing_delete' d.pk %}" onsubmit="return confirm('Delete {{ entry.label|lower }} {{ d }} ({{ d.original_name }})? Use this for a wrong upload only.{% if entry.earlier %} The previous drawing becomes current again.{% endif %}');">
+                {% csrf_token %}<button type="submit" class="btn-sm btn-danger">Delete</button>
+              </form>
+            </div>
+          {% else %}
+            <p class="empty">— None yet.</p>
+          {% endif %}
+        {% endwith %}
+        {% if entry.earlier %}
+          <details class="drawing-history">
+            <summary>Earlier drawings ({{ entry.earlier|length }})</summary>
+            <ul>
+              {% for e in entry.earlier %}
+                <li><a href="{% url 'projects:drawing_file' e.pk %}?download=1">{{ e }}</a> <span class="hint">{{ e.original_name }} · {{ e.uploaded_at|date:"Y-m-d" }}</span></li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% endif %}
+        {% with form=entry.form %}
+          <form method="post" action="{% url 'projects:drawing_add' project.pk entry.kind %}" enctype="multipart/form-data" class="fields upload">
+            {% csrf_token %}
+            <h4>{% if entry.current %}Replace with a new drawing{% else %}Add{% endif %}</h4>
+            {{ form.non_field_errors }}
+            <div class="field">{{ form.drawing_no.label_tag }}{{ form.drawing_no }}{{ form.drawing_no.errors }}</div>
+            <div class="field">{{ form.revision.label_tag }}{{ form.revision }}{{ form.revision.errors }}</div>
+            <div class="field">{{ form.file.label_tag }}{{ form.file }}<small>{{ entry.accepted }}.</small>{{ form.file.errors }}</div>
+            <div class="actions"><button type="submit" class="btn-primary btn-sm">Upload</button></div>
+          </form>
+        {% endwith %}
+      </section>
+    {% endfor %}
+  </div>
 {% endblock %}

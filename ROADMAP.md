@@ -77,7 +77,7 @@ Then, in no fixed order:
 | Locks in one place instead of per-table checks | Small | `results/models.py`, `tcn/models.py` |
 | Backup of `data/` to another disk, needed once the app holds records that must be kept | Small | Run script or a scheduled job |
 | "On record" from an explicit list of what each revision froze, instead of by time added | Small | `results/models.py`, `results/records.py` |
-| Tester drawing and system P&ID in the Project Defaults (below) | Small | `projects/` model and Project Defaults screen |
+| Tester drawing and system P&ID in the Project Defaults (below) — **built 2026-10-17, under review** | Small | `projects/` model and Project Defaults screen |
 | New (Y/N) per Result component | Small | `results/models.py`, Result components screen, frozen record |
 | PowerPoint slides of a project's tests, filled from the frozen records (below) | Medium | New export next to `reports/`; template path in the settings, not in git |
 
@@ -139,15 +139,17 @@ Answered 2026-10-17 (second round):
 
 ### Tester drawing and system P&ID (needed by the slides)
 
-TestLab has neither. Both go in the Project Defaults: a drawing number and
-the file (picture or PDF) for each, stored unchanged with its SHA-256,
-like the other stored files. Used on the deck's front page and as the
-Final Report appendices that are still missing (drawings, P&ID).
+Built 2026-10-17 (`projects/drawings.py`, migration projects 0008), under
+review: on the Project defaults page, a drawing no., revision and file for
+each; tester drawing PDF, TIFF, JPEG or PNG, P&ID PDF only; stored
+unchanged with its SHA-256, pictures with a display copy. A new upload
+becomes the current drawing, the earlier ones are kept as its history
+(as the first requirements asked: "current P&ID + possible revisions");
+only the current one can be deleted, for a wrong upload.
 
-Open: if a drawing is replaced on the project later, documents already
-issued keep the file they were issued with (never silently updated);
-whether a new file replaces the old one or is added as a new revision of
-the drawing is to be decided when this is built.
+Not yet: nothing uses the drawings yet (deck front page, Final Report
+appendices). When a document uses one, it must keep the file it was made
+with, and that drawing can no longer be deleted.
 
 ## Left alone
 
