@@ -1,6 +1,6 @@
 # TestLab roadmap
 
-Where the project stands and what comes next. Written 2026-10-12, last updated 2026-10-14; update it at the end of
+Where the project stands and what comes next. Written 2026-10-12, last updated 2026-10-17; update it at the end of
 each working session.
 
 ## Where we are
@@ -77,6 +77,77 @@ Then, in no fixed order:
 | Locks in one place instead of per-table checks | Small | `results/models.py`, `tcn/models.py` |
 | Backup of `data/` to another disk, needed once the app holds records that must be kept | Small | Run script or a scheduled job |
 | "On record" from an explicit list of what each revision froze, instead of by time added | Small | `results/models.py`, `results/records.py` |
+| Tester drawing and system P&ID in the Project Defaults (below) | Small | `projects/` model and Project Defaults screen |
+| New (Y/N) per Result component | Small | `results/models.py`, Result components screen, frozen record |
+| PowerPoint slides of a project's tests, filled from the frozen records (below) | Medium | New export next to `reports/`; template path in the settings, not in git |
+
+### PowerPoint slides (proposed 2026-10-17, not started)
+
+Example: `reference/ACWA Seal Testing.pptx` (Flowserve 2025 template,
+13.33 × 7.5 in), filled by hand today. Proposed: an *Export slides* button
+on the Final Report page that writes a `.pptx` from the same frozen records
+and Customer contents as the Final Report. It is an editable presentation
+copy, never a controlled document: not issued, not stored, not numbered.
+The engineer adjusts it in PowerPoint where needed, so the generator places
+the content well but does not have to solve every fit.
+
+Slides:
+
+| Slide | Content | From |
+|---|---|---|
+| Project 1 | Title, date, tester drawing | Project, Final Report, tester drawing (needs the item below) |
+| Project 2 | Test matrix: run, faces, fluid, speed, temperature, pressure | Final Report summary table |
+| Project 3 | Parts: position, part number, material, New or Reused | Result components of the included runs |
+| Per run 1 | Divider: run title, part, `<project> Test N<run>` | Run, TCN |
+| Per run 2 | Test conditions, conclusion, seal cross section | TCN conditions, Result conclusion, cross-section picture |
+| Per run, one per DCS plot | The saved plot with its caption | Saved Result plots (PNG) |
+| Per run 3 | Pre/post radial taper and Ra (Mahr), waviness (ROUNDPAK); run time, total leakage and rate per seal; cumulative leakage chart | Seal-face analyses, running hours, leakage, leakage chart |
+| Per run, as many as needed | Every photo of the run's Customer Test Run Report, with its caption, a fixed number per slide | Result pictures selected for the Customer report |
+
+Template: kept **outside the repository**. The company template changes
+every year, so the export takes a `.pptx` template from a path in the
+settings and uses its layouts (title, section, title-only). Without one
+it writes barebone slides (plain title and content on a blank widescreen
+deck), which the engineer can move onto the current template.
+
+Notes:
+- Slides have no page flow: tables and photos are split over extra slides
+  at a fixed number of rows or photos; long texts are left for the
+  engineer to shorten.
+- Charts and figures are SVG; `python-pptx` cannot insert SVG, so they are
+  turned into PNG with Chromium first. The DCS plots are PNG already.
+
+Answered 2026-10-17:
+1. Photos: all the photos of the run's Test Run Report.
+2. Measurements: radial taper and Ra from the Mahr profile, waviness from
+   ROUNDPAK.
+3. Parts: a summary table of part details, part number and condition (New,
+   or Reused from a previous run).
+4. One slide per DCS plot; the deck is editable, the engineer adjusts.
+5. The tester drawing is missing from TestLab as a whole: add it to
+   TestLab first (item below), then to the front page of the deck.
+6. The template stays out of git; barebone slides are acceptable.
+
+Answered 2026-10-17 (second round):
+- Tester drawing and system P&ID go in the **Project Defaults**; the
+  tester does not change from one run to another.
+- New/Reused: a small summary table with New = Y or N per part. Recorded
+  on the Result component (a field, frozen with the record).
+- Measurements (taper, Ra, waviness): **on hold** until the engineer has
+  compared the values; the measurements slide waits for that, the other
+  slides do not.
+
+### Tester drawing and system P&ID (needed by the slides)
+
+TestLab has neither. Both go in the Project Defaults: a drawing number and
+the file (picture or PDF) for each, stored unchanged with its SHA-256,
+like the other stored files. Used on the deck's front page and as the
+Final Report appendices that are still missing (drawings, P&ID).
+
+Open: if a drawing is replaced on the project later, documents already
+issued keep the file they were issued with (never silently updated);
+whether a new file replaces the old one or is added as a new revision of
+the drawing is to be decided when this is built.
 
 ## Left alone
 
